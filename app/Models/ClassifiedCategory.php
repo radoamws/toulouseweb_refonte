@@ -13,7 +13,7 @@ class ClassifiedCategory extends Model
 {
     use HasSlug;
 
-    protected $fillable = ['parent_id', 'name', 'slug', 'order', 'is_active'];
+    protected $fillable = ['parent_id', 'name', 'slug', 'order', 'is_active', 'legacy_id'];
 
     protected $casts = ['is_active' => 'boolean'];
 

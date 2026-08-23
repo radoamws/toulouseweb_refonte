@@ -10,9 +10,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /** Association salle/film/langue (remplace t_cine_projection). */
 class Screening extends Model
 {
-    protected $fillable = ['cinema_id', 'movie_id', 'language_id', 'preview', 'staff_pick', 'legacy_id'];
+    protected $fillable = ['cinema_id', 'movie_id', 'language_id', 'start_date', 'end_date', 'preview', 'staff_pick', 'legacy_id'];
 
-    protected $casts = ['preview' => 'boolean', 'staff_pick' => 'boolean'];
+    protected $casts = ['preview' => 'boolean', 'staff_pick' => 'boolean', 'start_date' => 'date', 'end_date' => 'date'];
 
     public function cinema(): BelongsTo
     {

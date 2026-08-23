@@ -79,7 +79,7 @@ class ListingResource extends Resource
                     ->columns(2)
                     ->schema([
                         Forms\Components\TextInput::make('address')->label('Adresse')->maxLength(255),
-                        Forms\Components\TextInput::make('phone')->label('Téléphone')->tel()->maxLength(30),
+                        Forms\Components\TextInput::make('phone')->label('Téléphone')->tel()->maxLength(255),
                         Forms\Components\TextInput::make('city')->label('Ville')->maxLength(255),
                         Forms\Components\TextInput::make('postal_code')->label('Code postal')->maxLength(10),
                     ]),

@@ -79,7 +79,10 @@ return new class extends Migration
             $table->unsignedBigInteger('legacy_id')->nullable()->index();
             $table->timestamps();
 
-            $table->index(['day', 'time']);
+            // Pas d'index composite ici : `day` est remplacé par `weekday`
+            // dans 2026_08_24_090400_adjust_cinema_schedule_columns.php, qui
+            // pose son propre index — un index sur une colonne aussitôt
+            // supprimée casse la reconstruction de table SQLite (tests).
         });
 
         Schema::create('screening_screening_type', function (Blueprint $table) {

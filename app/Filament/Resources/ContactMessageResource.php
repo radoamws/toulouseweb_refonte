@@ -34,7 +34,7 @@ class ContactMessageResource extends Resource
                     ->maxLength(255),
                 Forms\Components\TextInput::make('phone')
                     ->tel()
-                    ->maxLength(30)
+                    ->maxLength(255)
                     ->default(null),
                 Forms\Components\TextInput::make('subject')
                     ->maxLength(255)

@@ -11,7 +11,7 @@ class NewsCategory extends Model
 {
     use HasSlug;
 
-    protected $fillable = ['name', 'slug', 'legacy_id'];
+    protected $fillable = ['name', 'slug', 'legacy_id', 'legacy_code'];
 
     public function getSlugOptions(): SlugOptions
     {

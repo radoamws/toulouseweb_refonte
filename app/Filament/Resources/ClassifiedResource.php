@@ -54,7 +54,7 @@ class ClassifiedResource extends Resource
                 SpatieMediaLibraryFileUpload::make('photos')->collection('photos')->image()->multiple(),
                 Forms\Components\TextInput::make('price')->label('Prix')->numeric()->prefix('€'),
                 Forms\Components\TextInput::make('location')->label('Localisation')->maxLength(255),
-                Forms\Components\TextInput::make('contact_phone')->label('Téléphone')->tel()->maxLength(30),
+                Forms\Components\TextInput::make('contact_phone')->label('Téléphone')->tel()->maxLength(255),
                 Forms\Components\TextInput::make('contact_email')->label('Email')->email()->maxLength(255),
                 Forms\Components\Toggle::make('is_featured')->label('Mise en avant'),
                 Forms\Components\DateTimePicker::make('expires_at')->label('Expire le'),

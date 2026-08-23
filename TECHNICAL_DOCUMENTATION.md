@@ -13,8 +13,9 @@
 | 2. Architecture technique et base de données | ✅ Terminé (§7-11) |
 | 3. Design system & layout | 🟡 Palette/typographies/composants Blade de base livrés (§13), pages de contenu (annuaire/agenda/cinéma...) pas encore construites |
 | 4. Administration | 🟡 18 ressources Filament créées et testées (§13), à compléter (relation managers cinéma, page paramètres du site, dashboard stats) |
-| 10. Homepage | 🟡 Première version fonctionnelle livrée (§13) — slider, sections par domaine, tracking de clics câblé ; contenu réel manquant (Phase 5) |
-| 5-9, 11-14 | Non démarrées |
+| 5. Migration des données | ✅ Terminé — 10 commandes `migrate:*` exécutées avec succès contre `toulouseweb_old` réelle (§13), toutes les données non explicitement exclues sont dans `toulouseweb` |
+| 10. Homepage | 🟡 Fonctionnelle et vérifiée avec les vraies données migrées (slider, actus, agenda, cinéma, annuaire ; annonces vide, module non migré — voir §13) |
+| 6-9, 11-14 | Non démarrées |
 
 Le dossier `old/` contient l'ancien site (backend Laravel 7 + frontend Nuxt 2), conservé en lecture seule pour référence. La base `toulouseweb_old` contient les données de production, non migrées. La base `toulouseweb` porte désormais le **schéma cible complet** (§9) et un compte admin. Voir §14 pour le détail de ce qui est réellement codé à date.
 
@@ -350,6 +351,58 @@ Tous les modèles du schéma cible existent dans `app/Models/` avec leurs relati
 - **`DemoContentSeeder`** (`database/seeders/DemoContentSeeder.php`) : jeu de données fictif (restaurants, événements, films, actus, annonces, slider, partenaires) pour valider visuellement la homepage/admin en local. **Ne jamais exécuter en production** — à vider avant la vraie migration (Phase 5).
 - Tests : `tests/Feature/HomepageTest.php` (rendu à vide + avec contenu, toutes sections).
 
+### Migration des données (Phase 5)
+
+10 commandes Artisan sous `app/Console/Commands/Migration/`, exécutées dans l'ordre contre la vraie base `toulouseweb_old` (connexion `legacy`), idempotentes (rejouables sans dupliquer, via `legacy_id`/`legacy_code`) et journalisées dans `storage/logs/migration/<domaine>.log` :
+
+| Commande | Domaine | Table(s) source | Notes |
+|---|---|---|---|
+| `migrate:reference-data` | Catégories, lieux, équipements, catégories agenda/annonces/actus, langues/types cinéma | `t_category`, `t_areas`, `t_icone`, `t_agenda_categories`, `t_cine_lang`, `t_cine_type_projection`, `t_annonce_category`, `t_news_cat` | Doit tourner en premier (toutes les autres en dépendent) |
+| `migrate:listings` | Fiches annuaire | `t_article`, `t_art_categ`, `t_encadre_icone`, `t_carousel` | Images de galerie **non transférées** (fichiers absents du dépôt, voir §16 du brief) |
+| `migrate:events` | Agenda | `t_agendas`, `t_agenda_cat` | Corrige le bug FK legacy `id_area` ; statut dérivé du flag ET de la date réelle |
+| `migrate:cinema` | Salles, films, séances, horaires, commentaires | `t_cine`, `t_cine_film`, `t_cine_projection`, `t_cine_proj_heures`, `t_cine_proj_types`, `t_cine_comment` | Voir correction de schéma ci-dessous (horaires hebdomadaires récurrents) |
+| `migrate:news` | Actualités + commentaires | `t_news`, `t_news_comment` | Catégorie résolue via `legacy_code` (le legacy utilise des codes texte, pas des IDs numériques) |
+| `migrate:sliders` | Sliders homepage/pages | `t_sliders`, `t_slider_place`, `t_slider_page` | |
+| `migrate:contacts` | Messages de contact actifs | `t_contact_us` | `t_contacts` (2001-2014, obsolète) volontairement exclu, voir audit §4 |
+| `migrate:seo` | Métadonnées SEO par entité | `t_seo_entity`, `t_seo_groupe` | Voir mapping des 8 groupes dans le code ; les blocs `ext_*`/`se_h1..h6` (remplissage SEO 2010-2015) ne sont pas repris |
+| `migrate:redirects` | Amorce des redirections 301 | `slug_old`/`slug` de `t_article`/`t_news`/`t_cine_film`/`t_category` | Portée volontairement limitée — audit complet des URLs à faire en Phase 11 (voir avertissement affiché par la commande) |
+| `migrate:click-stats --truncate` | Historique de clics | `t_stat_counter` (~2,78M lignes) | Insertion brute par lots de 1000, query log désactivé — la seule commande qui nécessite `--truncate` pour être rejouée |
+
+**Corrections de schéma découvertes en migrant les vraies données** (au-delà de la conception initiale, §9) :
+- **Cinéma — modèle horaire corrigé** : le legacy ne stocke pas des séances à date fixe mais un gabarit hebdomadaire récurrent. `t_cine_projection` porte une fenêtre de validité (`start_date`/`end_date`, absente du schéma initial — ajoutée sur `screenings`) et `t_cine_proj_heures.jour` est un **index de jour de semaine (0-6)**, pas une date calendaire (`screening_times.day` renommé `weekday`, cast date retiré). La contrainte unique `(cinema_id, movie_id, language_id)` posée initialement était trop stricte (le legacy a plusieurs projections pour un même triplet, distinguées par leur fenêtre de validité) — remplacée par un index simple.
+- **Largeurs de colonnes** élargies après rejet SQL par la vraie donnée : `areas.phone`/`listings.phone`/`contact_messages.phone`/`classifieds.contact_phone` (30→255, certains champs "téléphone" legacy contiennent du texte libre), `areas.address`/`listings.address` (255→500), `listings.reservation_url`/`click_collect_url` (255→500), `event_categories.color` (20→50, valeurs `rgba(...)`), `events.booking_url` et `screening_times.booking_url` (255→500/1000, URLs de billetterie avec paramètres UTM longs).
+- **Coordonnées GPS invalides** : une salle de cinéma avait une longitude corrompue (`3492220`) — filtrée et mise à `null` avec avertissement au lieu de planter l'import (`MigrateCinema::validCoordinate()`).
+- **Bug évité** : `migrate:seo` aurait initialement créé une page "accueil" en double (collision avec la page `home` déjà migrée) — corrigé pour réutiliser la page existante par slug avant d'en créer une nouvelle.
+
+**Bonne surprise sur l'encodage** : contrairement à la crainte de l'audit (§3.1), les tables InnoDB/utf8mb4 examinées en détail (`t_article`, `t_agendas`) se sont révélées **correctement encodées** une fois vérifiées octet par octet (apostrophes typographiques ’, tirets – etc. corrects) — l'apparence de mojibake constatée pendant l'audit initial provenait de l'affichage dans le terminal Windows/Git Bash, pas d'une corruption réelle en base. `LegacyCleaner::text()` reste en place comme filet de sécurité pour les tables MyISAM/latin1 réellement suspectes (non vérifiées individuellement), mais la perte de données par corruption est probablement bien moindre que redouté.
+
+**Hypothèses de mapping de statut posées faute de documentation métier** (à confirmer avec le client, ajustables en une ligne dans chaque commande) :
+- `t_article.statut` : 0→archived, 1→published, 2→pending.
+- `t_news.is_enabled` : D→archived, T→published, F→pending, S→archived (pas d'équivalent "rejected" pour les news).
+- `t_agendas.status` : 1→published (si date future), sinon expired/draft selon la date réelle ; 5/6→cancelled.
+
+**Bug corrigé après coup — normalisation des emplacements de sliders** : les noms de page côté legacy (`t_slider_page.name`) sont français/abrégés (`accueil`, `bannonces`, `lanuit`, `rencontres`, `billboardG`/`billboardD`...), différents de la convention du nouveau site (`home`, `annonces`...). `MigrateSliders::PAGE_MAP` les normalise, en mappant explicitement à `null` (donc ignorés) les emplacements qui n'ont plus de sens dans le nouveau design (`rencontres` : module archivé ; `billboardG`/`billboardD` : skyscrapers de l'ancienne homepage 3-colonnes, absents de la nouvelle). **Piège PHP rencontré et corrigé** : `self::PAGE_MAP[$name] ?? $name` ne fonctionne PAS pour mapper vers `null` — l'opérateur `??` traite une valeur `null` explicite comme "absente" et retombe sur `$name` ; il faut `array_key_exists($name, PAGE_MAP) ? PAGE_MAP[$name] : $name`. À garder en tête pour tout futur mapping legacy avec des cibles `null` intentionnelles.
+
+### Résultat final de la migration (vérifié en base, 2026-08-23)
+
+| Table | Lignes migrées | Table | Lignes migrées |
+|---|---|---|---|
+| `categories` | 1 447 | `news` | 6 191 |
+| `areas` | 3 845 | `news_comments` | 2 (12 ignorés, marqués supprimés en legacy) |
+| `amenities` | 19 | `sliders` | 135 |
+| `listings` | 2 978 | `slider_placements` | 810 |
+| `listing_category` | 9 414 | `contact_messages` | 54 |
+| `listing_amenity` | 391 | `seo_meta` | 1 294 |
+| `event_categories` | 25 | `redirects` | 6 710 (amorce, voir limite ci-dessus) |
+| `events` | 18 724 (299 ignorés, date invalide) | `click_events` | 2 454 647 (332 099 ignorés, type/entité non résolus) |
+| `cinemas` | 28 | `pages` | 17 |
+| `movies` | 17 304 | `classifieds` | 0 (volontaire, module non migré) |
+| `screenings` | 40 740 | | |
+| `screening_times` | 305 913 | | |
+| `movie_comments` | 8 | | |
+
+Tous les tests automatisés (31) passent après migration, y compris avec les corrections de schéma ci-dessus.
+
 ### Ce qui n'existe PAS encore
 
-Les pages de contenu par domaine (listing annuaire, agenda, fiche cinéma, annonces, actualité, contact) n'existent pas encore — seule la homepage est construite. Aucun scraper. Aucun script de migration `migrate:*` (§10) exécuté (les données actuelles sont 100% fictives, voir `DemoContentSeeder`). Aucun sitemap/robots.txt généré. Pas de module "Paramètres du site" pour administrer le JSON-LD Organization (actuellement en dur dans le layout).
+Les pages de contenu par domaine (listing annuaire, agenda, fiche cinéma, annonces, actualité, contact) n'existent pas encore — seule la homepage est construite (elle affiche déjà les vraies données migrées). Aucun scraper (le cinéma est à jour au 23/08/2026 grâce à la migration, mais rien ne le maintiendra à jour ensuite tant que le vrai scraper — Phase 8 — n'est pas écrit). Aucun sitemap/robots.txt généré. Pas de module "Paramètres du site" pour administrer le JSON-LD Organization (actuellement en dur dans le layout). Les images/galeries legacy ne sont pas transférées (fichiers binaires absents de ce dépôt, voir brief §16 — nécessite un accès au stockage de production) : les fiches annuaire migrées n'ont donc pas de logo/galerie, et les images d'événements/actus/films pointent vers des chemins qui ne résoudront qu'une fois les fichiers réellement transférés.

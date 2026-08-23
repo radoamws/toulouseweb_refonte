@@ -48,7 +48,7 @@ class AreaResource extends Resource
                     ->default(null),
                 Forms\Components\TextInput::make('phone')
                     ->tel()
-                    ->maxLength(30)
+                    ->maxLength(255)
                     ->default(null),
                 Forms\Components\TextInput::make('website')
                     ->maxLength(255)

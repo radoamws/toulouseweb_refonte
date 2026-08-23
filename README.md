@@ -5,8 +5,8 @@
 
 ## État du projet
 
-**Phase actuelle : 3/4/10 — design system, administration et homepage bien avancés.**
-Le schéma de base cible est appliqué sur `toulouseweb`, 18 ressources d'administration Filament existent et sont testées, et une vraie homepage (slider, actus, agenda, cinéma, annuaire, annonces) est en ligne avec le design system (palette "Ville Rose", typographies Outfit/Inter). Les pages de contenu par domaine (fiche annuaire, agenda, cinéma, annonces, contact) n'existent pas encore, ni scraper, ni migration de données réelle (le contenu actuel est un jeu de démo fictif, voir `DemoContentSeeder`). Voir [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §0 et §13 pour l'état exact et détaillé du code.
+**Phase actuelle : 5 terminée (migration des données réelles) ; 3/4/10 bien avancées.**
+Le schéma de base cible est appliqué sur `toulouseweb` et **peuplé avec les vraies données de production** (2 978 fiches annuaire, 18 724 événements, 17 304 films, 40 740 séances, 6 191 actus, 135 sliders, 2,45M événements de clics historiques...). 18 ressources d'administration Filament existent et sont testées, et la homepage réelle (slider, actus, agenda, cinéma, annuaire) affiche ce contenu migré avec le design system (palette "Ville Rose", typographies Outfit/Inter). Les pages de contenu par domaine (fiche annuaire, agenda, cinéma, annonces, contact) n'existent pas encore, ni scraper. Voir [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §0 et §13 pour l'état exact et détaillé du code, y compris la liste des hypothèses de mapping à valider avec vous.
 
 Avant de reprendre ce projet dans une nouvelle session : lire ce fichier, lire `TECHNICAL_DOCUMENTATION.md`, puis regarder l'état réel du code (`git log`, arborescence) avant de continuer — ne jamais repartir de zéro sur une fonctionnalité déjà faite.
 
@@ -76,7 +76,22 @@ _À documenter au fur et à mesure de l'implémentation (Phase 7 pour les évén
 
 ## Migration des données
 
-_Plan détaillé à produire en Phase 2, exécution en Phase 5._ Voir `TECHNICAL_DOCUMENTATION.md` §3 pour l'inventaire complet des tables à migrer, à transformer, ou à exclure.
+Terminée (Phase 5) — exécutée avec succès contre une vraie copie de `toulouseweb_old`. Pour rejouer sur un nouvel environnement (staging, autre copie de la base legacy) :
+
+```bash
+php artisan migrate:reference-data   # catégories, lieux, équipements, référentiels — à lancer en premier
+php artisan migrate:listings         # fiches annuaire
+php artisan migrate:events           # agenda
+php artisan migrate:cinema           # salles, films, séances, horaires, commentaires
+php artisan migrate:news             # actualités + commentaires
+php artisan migrate:sliders          # sliders + emplacements
+php artisan migrate:contacts         # messages de contact actifs
+php artisan migrate:seo              # métadonnées SEO personnalisées
+php artisan migrate:redirects        # amorce des redirections 301
+php artisan migrate:click-stats --truncate   # historique de clics (~2,78M lignes, la plus longue — plusieurs minutes)
+```
+
+Toutes ces commandes sont idempotentes (rejouables sans dupliquer), sauf `migrate:click-stats` qui nécessite `--truncate` pour être relancée. Logs détaillés dans `storage/logs/migration/<domaine>.log`. Détail complet (mapping des champs, hypothèses de statut, corrections de schéma découvertes en cours de route) : `TECHNICAL_DOCUMENTATION.md` §10 et §13.
 
 ## SEO / GEO
 
