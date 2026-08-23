@@ -5,8 +5,8 @@
 
 ## État du projet
 
-**Phase actuelle : 5 terminée (migration des données réelles) ; 3/4/10 bien avancées.**
-Le schéma de base cible est appliqué sur `toulouseweb` et **peuplé avec les vraies données de production** (2 978 fiches annuaire, 18 724 événements, 17 304 films, 40 740 séances, 6 191 actus, 135 sliders, 2,45M événements de clics historiques...). 18 ressources d'administration Filament existent et sont testées, et la homepage réelle (slider, actus, agenda, cinéma, annuaire) affiche ce contenu migré avec le design system (palette "Ville Rose", typographies Outfit/Inter). Les pages de contenu par domaine (fiche annuaire, agenda, cinéma, annonces, contact) n'existent pas encore, ni scraper. Voir [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §0 et §13 pour l'état exact et détaillé du code, y compris la liste des hypothèses de mapping à valider avec vous.
+**Phase actuelle : 5 terminée (migration) ; 6-11(partiel Contact) et 3/4/10 bien avancées.**
+Le schéma de base cible est appliqué sur `toulouseweb` et **peuplé avec les vraies données de production** (2 978 fiches annuaire, 18 724 événements, 17 304 films, 6 191 actus, 135 sliders...). L'administration (18 ressources Filament) et les pages publiques principales sont en ligne et vérifiées : homepage, annuaire, agenda (dont la catégorie Théâtre sur sa propre URL), cinéma, actualités, annonces (dépôt public avec modération non contournable), contact. Ce qui manque encore : calendrier visuel, dépôt de fiche annuaire par le public, scraping temps réel, sitemap/robots.txt, sécurité approfondie, tests de charge, déploiement. Voir [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §0 et §13 pour l'état exact et détaillé du code, y compris la liste des hypothèses de mapping à valider avec vous.
 
 Avant de reprendre ce projet dans une nouvelle session : lire ce fichier, lire `TECHNICAL_DOCUMENTATION.md`, puis regarder l'état réel du code (`git log`, arborescence) avant de continuer — ne jamais repartir de zéro sur une fonctionnalité déjà faite.
 

@@ -17,8 +17,11 @@
 | 6. Annuaire | 🟡 Pages publiques (index par catégorie + recherche, fiche détail) livrées et vérifiées avec les vraies données (§13) ; pas encore de dépôt de fiche public, pas de recherche géographique |
 | 7. Agenda / événements / théâtre | 🟡 Pages publiques (index + filtre catégorie dont "theatre", fiche détail) livrées ; calendrier visuel et proposition d'événement par le public pas encore faits |
 | 8. Cinéma | 🟡 Pages publiques (liste, fiche film avec séances, fiche salle) livrées sur les données migrées ; scraping temps réel (Pathé-Gaumont) pas réécrit |
-| 10. Homepage | 🟡 Fonctionnelle et vérifiée avec les vraies données migrées (slider, actus, agenda, cinéma, annuaire ; annonces vide, module non migré — voir §13) |
-| 9, 11-14 | Non démarrées |
+| 9. Annonces | 🟡 Pages publiques + dépôt avec workflow de modération strict (jamais de publication automatique, honeypot anti-spam) livrés et testés (§13) |
+| 10. Homepage | 🟡 Fonctionnelle et vérifiée avec les vraies données migrées (slider, actus, agenda, cinéma, annuaire, annonces désormais dépôt-able) |
+| Contact (brief §11, hors numérotation de phase) | ✅ Page refaite, formulaire sécurisé (honeypot + throttle), stockage dans `contact_messages` déjà administrable |
+| 11. SEO/GEO, URLs, redirections | Non démarrée |
+| 12-14 | Non démarrées |
 
 Le dossier `old/` contient l'ancien site (backend Laravel 7 + frontend Nuxt 2), conservé en lecture seule pour référence. La base `toulouseweb_old` contient les données de production, non migrées. La base `toulouseweb` porte désormais le **schéma cible complet** (§9) et un compte admin. Voir §14 pour le détail de ce qui est réellement codé à date.
 
@@ -417,6 +420,15 @@ Tous les tests automatisés (31) passent après migration, y compris avec les co
 - Tests : `tests/Feature/PublicContentPagesTest.php` (7 tests : rendu index/détail, statuts publiés/non publiés, résolution de slug agenda, film sans séance courante).
 - Vérifié en conditions réelles : les 9 routes testées en HTTP contre les vraies données migrées (`php artisan serve` + `curl`), pas seulement via les tests SQLite.
 
+### Actualités, Annonces et Contact publics (Phase 9 + brief §11)
+
+- **Actualités** (`NewsController`, `resources/views/actualites/`) : `/actualites`, `/actualites/{slug}` (résout catégorie puis article, même pattern que l'agenda — cohérence délibérée entre domaines). Corrige au passage les liens déjà présents sur la homepage (`/actualites/{slug}`) qui pointaient vers des routes inexistantes. Structured data `NewsArticle`.
+- **Annonces** (`ClassifiedController`, `resources/views/annonces/`) : `/annonces`, `/annonces/{slug}` (catégorie ou annonce), `/annonces/deposer` (formulaire public) + `POST /annonces`. **Le workflow de modération est non contournable par construction** : `store()` force toujours `status = 'pending'` quoi que le visiteur envoie (même une tentative d'injection explicite de `status=published` dans le payload est ignorée, testé) ; seules les actions admin `Valider`/`Refuser` de `ClassifiedResource` changent ce statut. Honeypot anti-spam (`website`, champ invisible en CSS) sur ce formulaire et celui de contact.
+- **Contact** (`ContactController`, `resources/views/contact/`) : `/contact`, page refaite (brief §11), stockage dans `contact_messages` (déjà administrable), throttle 5/min + honeypot.
+- **Bug réel corrigé** : `NewsCategory` et `ClassifiedCategory` avaient été créés sans le trait `HasSeoMeta` (oubli lors du scaffold initial) — `resolveSeo()` plantait en `BadMethodCallException` dès qu'une page catégorie actualités était visitée. Détecté par le test automatisé, pas en production.
+- Tests : `tests/Feature/PublicFormsAndNewsTest.php` (8 tests, dont 3 dédiés à la non-contournabilité de la modération : statut forcé, injection de `status` ignorée, honeypot).
+- Vérifié en HTTP réel contre les données migrées.
+
 ### Ce qui n'existe PAS encore
 
-Le dépôt de fiche annuaire par le public, le calendrier visuel et la proposition d'événement par le public (agenda), les annonces (Phase 9), les actualités et le contact côté public, ne sont pas construits. Aucun scraper (le cinéma est à jour au 23/08/2026 grâce à la migration, mais rien ne le maintiendra à jour ensuite tant que le vrai scraper — Phase 8 — n'est pas écrit). Aucun sitemap/robots.txt généré. Pas de module "Paramètres du site" pour administrer le JSON-LD Organization (actuellement en dur dans le layout). Les images/galeries legacy ne sont pas transférées (fichiers binaires absents de ce dépôt, voir brief §16 — nécessite un accès au stockage de production) : les fiches annuaire migrées n'ont donc pas de logo/galerie, et les images d'événements/actus/films pointent vers des chemins qui ne résoudront qu'une fois les fichiers réellement transférés.
+Le dépôt de fiche annuaire par le public, le calendrier visuel et la proposition d'événement par le public (agenda). Aucun scraper (le cinéma est à jour au 23/08/2026 grâce à la migration, mais rien ne le maintiendra à jour ensuite tant que le vrai scraper — Phase 8 — n'est pas écrit). Aucun sitemap/robots.txt généré. Pas de module "Paramètres du site" pour administrer le JSON-LD Organization (actuellement en dur dans le layout). Les images/galeries legacy ne sont pas transférées (fichiers binaires absents de ce dépôt, voir brief §16 — nécessite un accès au stockage de production) : les fiches annuaire migrées n'ont donc pas de logo/galerie, et les images d'événements/actus/films pointent vers des chemins qui ne résoudront qu'une fois les fichiers réellement transférés.

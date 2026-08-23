@@ -58,6 +58,12 @@
 
     <x-site.header />
 
+    @if (session('status'))
+        <div class="mx-auto mt-4 max-w-4xl rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-800 sm:mx-auto" role="status">
+            {{ session('status') }}
+        </div>
+    @endif
+
     <main id="main">
         {{ $slot }}
     </main>

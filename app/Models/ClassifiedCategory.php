@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasSeoMeta;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,7 +12,7 @@ use Spatie\Sluggable\SlugOptions;
 /** Catégorie d'annonces, arbre libre et extensible (brief §8). */
 class ClassifiedCategory extends Model
 {
-    use HasSlug;
+    use HasSlug, HasSeoMeta;
 
     protected $fillable = ['parent_id', 'name', 'slug', 'order', 'is_active', 'legacy_id'];
 

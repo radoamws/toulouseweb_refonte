@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasSeoMeta;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Sluggable\HasSlug;
@@ -9,7 +10,7 @@ use Spatie\Sluggable\SlugOptions;
 
 class NewsCategory extends Model
 {
-    use HasSlug;
+    use HasSlug, HasSeoMeta;
 
     protected $fillable = ['name', 'slug', 'legacy_id', 'legacy_code'];
 

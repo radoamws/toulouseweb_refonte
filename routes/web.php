@@ -1,10 +1,13 @@
 <?php
 
 use App\Http\Controllers\CinemaController;
+use App\Http\Controllers\ClassifiedController;
 use App\Http\Controllers\ClickTrackingController;
+use App\Http\Controllers\ContactController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ListingController;
+use App\Http\Controllers\NewsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class.'@index')->name('home');
@@ -32,4 +35,17 @@ Route::get('/cinema', [CinemaController::class, 'index'])->name('cinema.index');
 Route::get('/cinema/films/{movie:slug}', [CinemaController::class, 'showMovie'])->name('cinema.movie');
 Route::get('/cinema/salles/{cinema:slug}', [CinemaController::class, 'showCinema'])->name('cinema.salle');
 
-// Les routes annonces/actualités/contact seront ajoutées aux phases 9-10.
+// Actualités — même pattern catégorie/article que l'agenda.
+Route::get('/actualites', [NewsController::class, 'index'])->name('actualites.index');
+Route::get('/actualites/{slug}', [NewsController::class, 'bySlug'])->name('actualites.bySlug');
+
+// Annonces (brief §8). `deposer` avant `{slug}` pour ne pas être intercepté
+// par la résolution catégorie/annonce.
+Route::get('/annonces', [ClassifiedController::class, 'index'])->name('annonces.index');
+Route::get('/annonces/deposer', [ClassifiedController::class, 'create'])->name('annonces.create');
+Route::post('/annonces', [ClassifiedController::class, 'store'])->middleware('throttle:5,1')->name('annonces.store');
+Route::get('/annonces/{slug}', [ClassifiedController::class, 'bySlug'])->name('annonces.bySlug');
+
+// Contact (brief §11).
+Route::get('/contact', [ContactController::class, 'show'])->name('contact.show');
+Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact.store');
