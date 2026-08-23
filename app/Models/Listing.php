@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\Trackable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -60,6 +61,11 @@ class Listing extends Model implements HasMedia
     public function isPaid(): bool
     {
         return $this->tier === 'paid';
+    }
+
+    public function scopePublished(Builder $query): Builder
+    {
+        return $query->where('status', 'published');
     }
 
     public function isRestaurant(): bool
