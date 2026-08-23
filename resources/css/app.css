@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/outfit';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+/*
+ * Design system ToulouseWeb — voir brief §19 et TECHNICAL_DOCUMENTATION.md §13.
+ * Palette inspirée de la "Ville Rose" (brique terracotta) pour la marque,
+ * un bleu-gris profond ("ink") pour le texte et la navigation, un accent
+ * doré pour les mises en avant ponctuelles (mise en avant, badges premium).
+ * Un seul jeu de tokens pour tout le site public — aucune page ne doit
+ * définir ses propres couleurs en dur (contrairement au legacy, voir audit §6).
+ */
+@theme {
+    --font-sans: 'InterVariable', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: 'Outfit Variable', 'InterVariable', ui-sans-serif, sans-serif;
+
+    --color-brand-50: #fdf4f1;
+    --color-brand-100: #fbe4dc;
+    --color-brand-200: #f6c7b6;
+    --color-brand-300: #eea184;
+    --color-brand-400: #e1774f;
+    --color-brand-500: #c1502f;
+    --color-brand-600: #a63f23;
+    --color-brand-700: #85311c;
+    --color-brand-800: #642417;
+    --color-brand-900: #431810;
+
+    --color-ink-50: #f4f6f8;
+    --color-ink-100: #e5e9ee;
+    --color-ink-200: #c7d0da;
+    --color-ink-300: #9fadbd;
+    --color-ink-400: #6b7c90;
+    --color-ink-500: #445468;
+    --color-ink-600: #33404f;
+    --color-ink-700: #26303c;
+    --color-ink-800: #1a212a;
+    --color-ink-900: #10151b;
+
+    --color-accent-400: #edbb5c;
+    --color-accent-500: #e3a62f;
+    --color-accent-600: #c48a1c;
+}
+
+/* Évite le flash de contenu non initialisé pour les blocs pilotés par Alpine.js */
+[x-cloak] {
+    display: none !important;
+}
