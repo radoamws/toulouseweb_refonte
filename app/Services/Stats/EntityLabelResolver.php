@@ -7,6 +7,7 @@ use App\Models\Classified;
 use App\Models\Event;
 use App\Models\Listing;
 use App\Models\Movie;
+use App\Models\News;
 use App\Models\PartnerSite;
 use App\Models\Slider;
 
@@ -25,6 +26,7 @@ class EntityLabelResolver
         'listing' => [Listing::class, 'title'],
         'event' => [Event::class, 'title'],
         'movie' => [Movie::class, 'title'],
+        'news' => [News::class, 'title'],
         'classified' => [Classified::class, 'title'],
         'category' => [Category::class, 'name'],
         'partner_site' => [PartnerSite::class, 'name'],
@@ -56,6 +58,7 @@ class EntityLabelResolver
             'listing' => 'Fiches annuaire',
             'event' => 'Événements',
             'movie' => 'Films',
+            'news' => 'Actualités',
             'classified' => 'Annonces',
             'category' => 'Catégories',
             'partner_site' => 'Sites partenaires',

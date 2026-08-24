@@ -68,7 +68,7 @@ php artisan serve
 
 ## Administration
 
-18 ressources Filament (`/admin`, une par entité — annuaire, agenda, cinéma, actualités, annonces, sliders, contacts, redirections, sources de scraping...) + une page "Paramètres du site" (`/admin/site-settings` : nom, description, logo, coordonnées, réseaux sociaux — alimente le JSON-LD Organization et le pied de page) + un dashboard de statistiques de clics (vue d'ensemble, répartition par type, top des entités les plus cliquées — couvre annuaire, agenda, cinéma, annonces, catégories, sliders, sites partenaires ; actualités pas encore câblées). Voir `TECHNICAL_DOCUMENTATION.md` §13. Documentation détaillée par ressource à poursuivre au fil de l'implémentation.
+18 ressources Filament (`/admin`, une par entité — annuaire, agenda, cinéma, actualités, annonces, sliders, contacts, redirections, sources de scraping...) + une page "Paramètres du site" (`/admin/site-settings` : nom, description, logo, coordonnées, réseaux sociaux — alimente le JSON-LD Organization et le pied de page) + un dashboard de statistiques de clics (vue d'ensemble, répartition par type, top des entités les plus cliquées — couvre annuaire, agenda, cinéma, actualités, annonces, catégories, sliders, sites partenaires). Voir `TECHNICAL_DOCUMENTATION.md` §13. Documentation détaillée par ressource à poursuivre au fil de l'implémentation.
 
 ## Scraping / Cron
 
