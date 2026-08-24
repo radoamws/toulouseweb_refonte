@@ -51,7 +51,7 @@ class ClassifiedResource extends Resource
                     ->afterStateUpdated(fn (string $state, Forms\Set $set) => $set('slug', \Illuminate\Support\Str::slug($state))),
                 Forms\Components\TextInput::make('slug')->required()->maxLength(255)->unique(ignoreRecord: true),
                 Forms\Components\Textarea::make('description')->required()->columnSpanFull(),
-                SpatieMediaLibraryFileUpload::make('photos')->collection('photos')->image()->multiple(),
+                SpatieMediaLibraryFileUpload::make('photos')->collection('photos')->image()->maxSize(4096)->maxFiles(8)->multiple(),
                 Forms\Components\TextInput::make('price')->label('Prix')->numeric()->prefix('€'),
                 Forms\Components\TextInput::make('location')->label('Localisation')->maxLength(255),
                 Forms\Components\TextInput::make('contact_phone')->label('Téléphone')->tel()->maxLength(255),

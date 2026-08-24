@@ -105,11 +105,14 @@ class ListingResource extends Resource
                             ->preload(),
                         SpatieMediaLibraryFileUpload::make('logo')
                             ->collection('logo')
-                            ->image(),
+                            ->image()
+                            ->maxSize(4096),
                         SpatieMediaLibraryFileUpload::make('gallery')
                             ->collection('gallery')
                             ->image()
+                            ->maxSize(4096)
                             ->multiple()
+                            ->maxFiles(12)
                             ->reorderable(),
                     ]),
 

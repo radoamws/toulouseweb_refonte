@@ -64,6 +64,7 @@ class EventResource extends Resource
                     ->columnSpanFull(),
                 Forms\Components\FileUpload::make('image')
                     ->image()
+                    ->maxSize(4096)
                     ->directory('events'),
                 Forms\Components\TextInput::make('price')
                     ->maxLength(255)

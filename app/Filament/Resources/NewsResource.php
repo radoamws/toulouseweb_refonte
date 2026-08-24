@@ -54,6 +54,7 @@ class NewsResource extends Resource
                     ->columnSpanFull(),
                 Forms\Components\FileUpload::make('image')
                     ->image()
+                    ->maxSize(4096)
                     ->directory('news'),
                 Forms\Components\Select::make('status')
                     ->label('Statut')

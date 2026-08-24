@@ -32,6 +32,7 @@ class SliderResource extends Resource
                 Forms\Components\FileUpload::make('image')
                     ->label('Image')
                     ->image()
+                    ->maxSize(4096)
                     ->directory('sliders')
                     ->required(),
                 Forms\Components\TextInput::make('link_url')
