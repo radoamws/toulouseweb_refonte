@@ -13,3 +13,8 @@ Artisan::command('inspire', function () {
 // hébergement mutualisé sans worker permanent (brief §7 décision d'architecture).
 Schedule::command('queue:work --stop-when-empty')->everyMinute()->withoutOverlapping();
 Schedule::command('sitemap:generate')->daily();
+
+// Scraping cinéma (brief §7/§9) — fréquence quotidienne : les nouveaux
+// films sortent en général le mercredi, une vérification quotidienne
+// suffit largement et reste légère pour l'API distante.
+Schedule::command('scrape:cinema')->dailyAt('05:00')->withoutOverlapping();

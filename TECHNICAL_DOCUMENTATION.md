@@ -16,7 +16,7 @@
 | 5. Migration des données | ✅ Terminé — 10 commandes `migrate:*` exécutées avec succès contre `toulouseweb_old` réelle (§13), toutes les données non explicitement exclues sont dans `toulouseweb` |
 | 6. Annuaire | 🟡 Pages publiques (index par catégorie + recherche, fiche détail) livrées et vérifiées avec les vraies données (§13) ; pas encore de dépôt de fiche public, pas de recherche géographique |
 | 7. Agenda / événements / théâtre | 🟡 Pages publiques (index + filtre catégorie dont "theatre", fiche détail) livrées ; calendrier visuel et proposition d'événement par le public pas encore faits |
-| 8. Cinéma | 🟡 Pages publiques (liste, fiche film avec séances, fiche salle) livrées sur les données migrées ; scraping temps réel (Pathé-Gaumont) pas réécrit |
+| 8. Cinéma | 🟡 Pages publiques + scraper Pathé-Gaumont réécrit (`scrape:cinema`, fiches film + salle, planifié quotidien) ; horaires précis toujours manuels (comme le legacy) ; non re-vérifié en direct (accès réseau bloqué depuis ce sandbox, voir §13) |
 | 9. Annonces | 🟡 Pages publiques + dépôt avec workflow de modération strict (jamais de publication automatique, honeypot anti-spam) livrés et testés (§13) |
 | 10. Homepage | 🟡 Fonctionnelle et vérifiée avec les vraies données migrées (slider, actus, agenda, cinéma, annuaire, annonces désormais dépôt-able) |
 | Contact (brief §11, hors numérotation de phase) | ✅ Page refaite, formulaire sécurisé (honeypot + throttle), stockage dans `contact_messages` déjà administrable |
@@ -259,21 +259,31 @@ Principes transversaux : clés primaires `id` auto-incrémentées, `legacy_id` (
 
 **RGPD** : le module Rencontres n'est pas migré vers le nouveau schéma applicatif — un export CSV/SQL des tables concernées (`t_toulousains`, `t_courriers`, `t_favoris`, `t_cote_d_amour`) est réalisé à la demande pour archivage hors ligne, hors de toute base connectée à l'application.
 
-## 11. Cron / commandes (à détailler précisément en Phase 7-8, socle déjà défini)
+## 11. Cron / commandes
 
-Un seul cron serveur : `* * * * * php artisan schedule:run`. Toutes les tâches ci-dessous seront déclarées dans `app/Console/Kernel.php::schedule()` :
+Un seul cron serveur, à configurer en production : `* * * * * php artisan schedule:run`. Toutes les tâches sont déclarées dans `routes/console.php` (Laravel 12 — pas de `Console/Kernel.php`) :
 
-| Commande | Rôle | Fréquence prévue |
-|---|---|---|
-| `queue:work --stop-when-empty` | Traite la file (emails, images) | Chaque minute |
-| `scrape:events` | Scraping agenda (sources dans `scraper_sources`) | Toutes les 3-6h |
-| `scrape:cinema` | Import séances Pathé-Gaumont (+ sources additionnelles à évaluer) | Quotidien |
-| `events:archive-past` | Statut `expired` sur événements passés | Quotidien |
-| `classifieds:expire` | Statut `expired` sur annonces dépassant leur durée de publication | Quotidien |
-| `sitemap:generate` | Régénère `sitemap.xml` en fichier statique caché | Quotidien |
-| `redirects:audit` | Repère les 404 fréquentes sans redirection associée | Hebdomadaire |
+| Commande | Rôle | Fréquence | Statut |
+|---|---|---|---|
+| `queue:work --stop-when-empty` | Traite la file (emails, images) | Chaque minute | ✅ Implémenté |
+| `sitemap:generate` | Régénère `sitemap.xml` en fichier statique caché | Quotidien | ✅ Implémenté (§13) |
+| `scrape:cinema` | Fiches film + association salle depuis les sources actives (`scraper_sources`, type `cinema`) | Quotidien à 5h | ✅ Implémenté (§13 — voir détail ci-dessous) |
+| `scrape:events` | Scraping agenda (sources dans `scraper_sources`, type `agenda`) | Toutes les 3-6h | ❌ Pas encore écrit |
+| `events:archive-past` | Statut `expired` sur événements passés | Quotidien | ❌ Pas encore écrit |
+| `classifieds:expire` | Statut `expired` sur annonces dépassant leur durée de publication | Quotidien | ❌ Pas encore écrit |
+| `redirects:audit` | Repère les 404 fréquentes sans redirection associée | Hebdomadaire | ❌ Pas encore écrit |
 
-Documentation complète (paramètres, logs, gestion d'erreurs) à produire au moment de l'implémentation de chaque commande, dans ce même tableau.
+### `scrape:cinema` — détail (brief §7/§9/§21)
+
+- **Commande** : `php artisan scrape:cinema` (option `--source=<id>` pour ne relancer qu'une source précise).
+- **Rôle** : réécrit `CinemaController::autoUpdateCinema` (legacy — l'INSERT final était commenté, rien n'était réellement importé, voir audit backend §3.3). Découvre/actualise les fiches film (titre, réalisateur, casting, genres, durée, synopsis, affiche, distributeur, année) et crée/met à jour une association salle+film (`screenings`) pour marquer un film "à l'affiche". **Ne gère pas les horaires précis** (`screening_times`) — l'API Pathé-Gaumont n'en fournit pas d'exploitables, exactement comme dans le legacy (jamais remplacé par du scraping, saisie admin manuelle via une future relation manager sur `CinemaResource`).
+- **Source de données** : `App\Services\Scraping\Cinema\PatheGaumontDriver`, une source par salle (`scraper_sources`, seedée pour Gaumont Wilson via `ScraperSourcesSeeder`). Endpoints : `GET /api/cinema/{slug}/shows?language=fr` (liste), `GET /api/show/{slug}?language=fr` (détail par film).
+- **⚠️ Non re-vérifié en direct** : le sandbox de développement n'a pas d'accès sortant vers `cinemaspathegaumont.com` (bloqué 403 par leur pare-feu Akamai, probablement une réputation d'IP datacenter). Les noms de champs (`title`, `directors`, `actors`, `genres[]`, `duration`, `releaseAt[]`, `synopsis`, `posterPath.md/lg`, `distribution`, `slug`) proviennent de la lecture directe du code source legacy réel (`old/backEnd/.../CinemaController.php::inserGaumontWilsonFilm`), pas d'une réponse observée. **À valider dès la première exécution en environnement avec accès réseau sortant** (voir `scraper_runs` dans l'admin pour le résultat).
+- **Robustesse ajoutée vs. legacy** : dédoublonnage fiable par `external_ref` (le legacy comparait par nom/slug texte, sans jamais mettre à jour l'existant) ; les fiches déjà connues sont désormais mises à jour, pas seulement créées une fois ; bug de filtrage de dates corrigé (le legacy comparait deux fois à la même borne) ; chaque appel HTTP a un timeout + 2 retries, un échec sur un film n'interrompt pas les autres ; plus aucune salle codée en dur (piloté par `scraper_sources.config`).
+- **Logs/erreurs** : chaque exécution crée une ligne `scraper_runs` (found/created/updated/skipped, statut success/partial/failed, message d'erreur) consultable dans l'admin. Un échec sur une source n'interrompt pas les autres sources actives.
+- **Tests** : `tests/Feature/ScrapeCinemaTest.php` (création, mise à jour sans doublon, film hors fenêtre ignoré, échec amont géré proprement, source inactive non exécutée) — vérifié aussi en conditions réelles que l'échec réseau (403 réel) est bien capturé sans crash de la commande.
+
+Documentation complète des futures commandes (`scrape:events`, `events:archive-past`, `classifieds:expire`, `redirects:audit`) à produire au moment de leur implémentation, dans ce même tableau.
 
 ## 12. Plan de développement par phases (mise à jour post-décisions)
 
@@ -286,7 +296,7 @@ Documentation complète (paramètres, logs, gestion d'erreurs) à produire au mo
 | 5. Migration des données | Exécution des commandes `migrate:*` sur environnement local | À venir |
 | 6. Annuaire | Listings, catégories, recherche, fiches payantes/gratuites | À venir |
 | 7. Agenda / événements / théâtre | Listing, filtres, calendrier, scraping événements | À venir |
-| 8. Cinéma | Modèle, scraping Pathé-Gaumont réécrit, UI | À venir |
+| 8. Cinéma | Modèle, scraping Pathé-Gaumont réécrit, UI | ✅ Fait (§13) — reste : vérification en direct dès accès réseau disponible |
 | 9. Annonces | Dépôt public, modération admin, catégories dynamiques | À venir |
 | 10. Homepage | Slider admin, sections dynamiques | À venir |
 | 11. SEO/GEO, URLs, redirections | `seo_meta`, sitemap, redirections, structured data | À venir |
@@ -473,4 +483,4 @@ Ces 2 fichiers ont été copiés dans `storage/app/public/sliders/` (classement 
 
 ### Ce qui n'existe PAS encore
 
-Le dépôt de fiche annuaire par le public, le calendrier visuel et la proposition d'événement par le public (agenda). Aucun scraper (le cinéma est à jour au 23/08/2026 grâce à la migration, mais rien ne le maintiendra à jour ensuite tant que le vrai scraper — Phase 8 — n'est pas écrit). Pas de module "Paramètres du site" pour administrer le JSON-LD Organization (actuellement en dur dans le layout), ni d'interface admin pour gérer les redirections au-delà de `RedirectResource` (déjà existant, §13 Phase 4). Pas d'audit Search Console/logs pour les URLs legacy hors du périmètre couvert par la continuité de slug en base (voir §10). L'écrasante majorité des images de contenu (annuaire, agenda, actualités, cinéma, galeries, pictos) reste à récupérer depuis le stockage de production (voir ci-dessus). Cache applicatif, optimisation des requêtes N+1 à grande échelle et tests de charge (reste de la Phase 12), procédure de déploiement (Phase 14).
+Le dépôt de fiche annuaire par le public, le calendrier visuel et la proposition d'événement par le public (agenda). Le scraper cinéma existe (`scrape:cinema`, ci-dessus) mais reste à vérifier en direct ; **aucun scraper agenda** n'est écrit (`t_agenda_scrapping` listait Zenith, Théâtre du Capitole, Stade Toulousain... sans que l'audit ait identifié de mécanisme technique clair à reproduire — à investiguer spécifiquement avant de s'y attaquer). Pas de relation manager pour saisir les horaires de séance (`screening_times`) depuis `CinemaResource` — cette saisie reste manuelle, comme dans le legacy. Pas de module "Paramètres du site" pour administrer le JSON-LD Organization (actuellement en dur dans le layout), ni d'interface admin pour gérer les redirections au-delà de `RedirectResource` (déjà existant, §13 Phase 4). Pas d'audit Search Console/logs pour les URLs legacy hors du périmètre couvert par la continuité de slug en base (voir §10). L'écrasante majorité des images de contenu (annuaire, agenda, actualités, cinéma, galeries, pictos) reste à récupérer depuis le stockage de production (voir ci-dessus). Cache applicatif, optimisation des requêtes N+1 à grande échelle et tests de charge (reste de la Phase 12), procédure de déploiement (Phase 14).
