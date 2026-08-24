@@ -12,7 +12,15 @@ class Screening extends Model
 {
     protected $fillable = ['cinema_id', 'movie_id', 'language_id', 'start_date', 'end_date', 'preview', 'staff_pick', 'legacy_id'];
 
-    protected $casts = ['preview' => 'boolean', 'staff_pick' => 'boolean', 'start_date' => 'date', 'end_date' => 'date'];
+    // Format explicite 'Y-m-d' requis : le cast 'date' seul stocke en
+    // 'Y-m-d H:i:s' (le composant heure est ignoré à l'affichage mais bien
+    // écrit en base), ce qui fait échouer un `updateOrCreate` matchant sur
+    // une chaîne 'Y-m-d' nue (cas réel rencontré par AllocineDriver — sur
+    // SQLite l'absence de coercition de type fait alors créer un doublon
+    // au lieu de mettre à jour ; MySQL tronque silencieusement la colonne
+    // DATE donc le bug n'y était pas visible, mais le fix reste correct
+    // indépendamment du moteur).
+    protected $casts = ['preview' => 'boolean', 'staff_pick' => 'boolean', 'start_date' => 'date:Y-m-d', 'end_date' => 'date:Y-m-d'];
 
     public function cinema(): BelongsTo
     {

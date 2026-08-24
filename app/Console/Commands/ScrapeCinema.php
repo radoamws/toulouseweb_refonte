@@ -10,7 +10,7 @@ use Illuminate\Console\Command;
  * Lance tous les scrapers cinéma actifs (brief §7/§9/§21). Chaque source
  * (`scraper_sources`, administrable via ScraperSourceResource) instancie sa
  * propre classe (`driver_class`) implémentant `App\Services\Scraping\ScraperDriver`
- * — voir PatheGaumontDriver pour la première source réelle (Gaumont Wilson).
+ * — voir AllocineDriver, une source par salle (`ScraperSourcesSeeder`).
  *
  * Un échec sur une source n'interrompt pas les autres (chacune a son propre
  * `scraper_runs`, consultable dans l'admin pour diagnostiquer).
