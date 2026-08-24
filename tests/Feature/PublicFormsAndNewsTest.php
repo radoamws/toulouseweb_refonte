@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Category;
 use App\Models\Classified;
 use App\Models\ClassifiedCategory;
 use App\Models\ContactMessage;
+use App\Models\Listing;
 use App\Models\News;
 use App\Models\NewsCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -102,6 +104,59 @@ class PublicFormsAndNewsTest extends TestCase
         ]);
 
         $this->get('/annonces/'.$classified->slug)->assertOk()->assertSee('Annonce publiée');
+    }
+
+    public function test_listing_submission_always_starts_pending_and_free_and_is_not_publicly_visible(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);
+
+        $response = $this->post('/annuaire/deposer', [
+            'category_id' => $category->id,
+            'title' => 'Mon Petit Restaurant',
+            'city' => 'Toulouse',
+            'url_verification' => '', // honeypot vide = humain
+        ]);
+
+        $response->assertRedirect(route('annuaire.index'));
+
+        $listing = Listing::where('title', 'Mon Petit Restaurant')->firstOrFail();
+        $this->assertSame('pending', $listing->status);
+        $this->assertSame('free', $listing->tier);
+        $this->assertTrue($listing->categories->contains($category));
+
+        // Pas visible publiquement tant qu'elle n'est pas validée par l'admin.
+        $this->get('/annuaire/fiche/'.$listing->slug)->assertNotFound();
+        $this->get('/annuaire')->assertOk()->assertDontSee('Mon Petit Restaurant');
+    }
+
+    public function test_listing_submission_cannot_inject_status_or_tier(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);
+
+        $this->post('/annuaire/deposer', [
+            'category_id' => $category->id,
+            'title' => 'Tentative de contournement',
+            'status' => 'published', // ne doit jamais être pris en compte
+            'tier' => 'paid', // idem
+            'url_verification' => '',
+        ]);
+
+        $listing = Listing::where('title', 'Tentative de contournement')->firstOrFail();
+        $this->assertSame('pending', $listing->status);
+        $this->assertSame('free', $listing->tier);
+    }
+
+    public function test_listing_submission_rejected_when_honeypot_filled(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);
+
+        $this->post('/annuaire/deposer', [
+            'category_id' => $category->id,
+            'title' => 'Spam bot',
+            'url_verification' => 'http://spam.example', // honeypot rempli = bot
+        ])->assertSessionHasErrors('url_verification');
+
+        $this->assertDatabaseMissing('listings', ['title' => 'Spam bot']);
     }
 
     public function test_contact_form_submission_is_stored(): void

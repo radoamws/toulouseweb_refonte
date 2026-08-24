@@ -26,6 +26,10 @@ Route::post('/track-click', ClickTrackingController::class)
 // de ListingController pour la raison (redirections 301 legacy, brief §15).
 Route::get('/annuaire', [ListingController::class, 'index'])->name('annuaire.index');
 Route::get('/annuaire/fiche/{slug}', [ListingController::class, 'show'])->name('annuaire.show');
+// `deposer` avant `{categorySlug}` (wildcard) pour ne pas être intercepté —
+// même piège que pour /annonces, voir commentaire plus bas.
+Route::get('/annuaire/deposer', [ListingController::class, 'create'])->name('annuaire.create');
+Route::post('/annuaire/deposer', [ListingController::class, 'store'])->middleware('throttle:5,1')->name('annuaire.store');
 Route::get('/annuaire/{categorySlug}', [ListingController::class, 'index'])->name('annuaire.category');
 
 // Agenda (brief §6) — une seule route par slug : résout catégorie (dont

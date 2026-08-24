@@ -1,7 +1,7 @@
 # ToulouseWeb — Documentation technique
 
 > Document vivant : à mettre à jour à chaque modification importante du code ou de l'architecture.
-> Dernière mise à jour : 2026-08-25 — **Phases 1, 2, 5 et 8 terminées ; Phase 3 (design system + layout) et Phase 4 (admin, dont page Paramètres du site) bien avancées ; premières briques de la Phase 10 (homepage) livrées.**
+> Dernière mise à jour : 2026-08-25 — **Phases 1, 2, 5, 6, 8 terminées ; Phase 3 (design system + layout) et Phase 4 (admin, dont page Paramètres du site) bien avancées ; premières briques de la Phase 10 (homepage) livrées.**
 
 ---
 
@@ -14,7 +14,7 @@
 | 3. Design system & layout | 🟡 Palette/typographies/composants Blade de base livrés (§13), pages de contenu (annuaire/agenda/cinéma...) pas encore construites |
 | 4. Administration | 🟡 18 ressources Filament créées et testées + relation manager Séances (Phase 8) + page Paramètres du site (§13), à compléter (gestion utilisateurs/rôles, dashboard stats) |
 | 5. Migration des données | ✅ Terminé — 11 commandes `migrate:*` exécutées avec succès contre `toulouseweb_old` réelle (§13, dont `migrate:partner-sites` ajoutée le 2026-08-24 — table oubliée à l'audit initial) + 7 commandes `images:*` ayant réimporté l'écrasante majorité des visuels de contenu retrouvés sous `old/backEnd/public/` (33 000+ fichiers, voir §13) |
-| 6. Annuaire | 🟡 Pages publiques (index par catégorie + recherche, fiche détail) livrées et vérifiées avec les vraies données, désormais avec photo principale + galerie réelles (§13) ; pas encore de dépôt de fiche public, pas de recherche géographique |
+| 6. Annuaire | 🟡 Pages publiques (index par catégorie + recherche, fiche détail) livrées et vérifiées avec les vraies données, désormais avec photo principale + galerie réelles + dépôt public de fiche (modération stricte, tier toujours gratuit) — voir §13 ; pas encore de recherche géographique |
 | 7. Agenda / événements / théâtre | 🟡 Pages publiques (index + filtre catégorie dont "theatre", fiche détail) livrées ; calendrier visuel et proposition d'événement par le public pas encore faits ; scraper agenda confirmé **inexistant côté legacy** (routes mortes, aucune méthode réelle — voir §13), décision produit requise avant de construire quoi que ce soit |
 | 8. Cinéma | 🟡 Pages publiques + scraper AlloCiné réécrit (`scrape:cinema`, une source par salle — 24/27 — fiches film + salle + horaires précis, planifié quotidien) + relation manager Séances (saisie manuelle en complément) ; scraper non re-vérifié en direct (accès réseau bloqué depuis ce sandbox, voir §13) |
 | 9. Annonces | 🟡 Pages publiques + dépôt avec workflow de modération strict (jamais de publication automatique, honeypot anti-spam) livrés et testés (§13) |
@@ -309,7 +309,7 @@ Documentation complète des futures commandes (`scrape:events`, `events:archive-
 | 3. Design system & layout | Scaffold Laravel + Filament, Tailwind config, composants Blade de base, layout public | 🔜 Prochaine étape |
 | 4. Administration | Resources Filament par entité, rôles/permissions | À venir |
 | 5. Migration des données | Exécution des commandes `migrate:*` sur environnement local | À venir |
-| 6. Annuaire | Listings, catégories, recherche, fiches payantes/gratuites | À venir |
+| 6. Annuaire | Listings, catégories, recherche, fiches payantes/gratuites, dépôt public | ✅ Fait (§13) — reste : recherche géographique |
 | 7. Agenda / événements / théâtre | Listing, filtres, calendrier, scraping événements | À venir |
 | 8. Cinéma | Modèle, scraping AlloCiné réécrit (une source par salle), UI | ✅ Fait (§13) — reste : vérification en direct dès accès réseau disponible |
 | 9. Annonces | Dépôt public, modération admin, catégories dynamiques | À venir |
@@ -449,7 +449,7 @@ Tous les tests automatisés (31) passent après migration, y compris avec les co
 
 ### Pages publiques annuaire / agenda / cinéma (Phases 6-8, partiel)
 
-- **Annuaire** (`ListingController`, `resources/views/annuaire/`) : `/annuaire` (grille + sidebar catégories + recherche), `/annuaire/{category}` (inclut automatiquement les sous-catégories), `/annuaire/fiche/{listing}` (fiche détail). Distinction stricte gratuite/payante appliquée dans la vue (brief §5) : une fiche gratuite n'affiche jamais email/site web/description riche même si ces champs sont renseignés en base. Structured data `LocalBusiness` ou `Restaurant` (via `Listing::isRestaurant()`) sur la fiche détail.
+- **Annuaire** (`ListingController`, `resources/views/annuaire/`) : `/annuaire` (grille + sidebar catégories + recherche), `/annuaire/{category}` (inclut automatiquement les sous-catégories), `/annuaire/fiche/{listing}` (fiche détail), **`/annuaire/deposer`** (dépôt public, voir ci-dessous). Distinction stricte gratuite/payante appliquée dans la vue (brief §5) : une fiche gratuite n'affiche jamais email/site web/description riche même si ces champs sont renseignés en base. Structured data `LocalBusiness` ou `Restaurant` (via `Listing::isRestaurant()`) sur la fiche détail.
 - **Agenda** (`EventController`, `resources/views/agenda/`) : `/agenda` (liste + filtre catégorie + recherche + navigation date), `/agenda/{slug}` résout **catégorie d'abord, événement ensuite** sur la même URL — c'est ce qui donne au menu THÉÂTRE (`/agenda/theatre`) sa propre URL sans être une entité séparée, conformément au brief §6. Structured data `Event` (avec `Offer`/`Place` si prix/lieu connus).
 - **Cinéma** (`CinemaController`, `resources/views/cinema/`) : `/cinema` (films actuellement programmés + liste des salles), `/cinema/films/{movie}` (séances groupées par salle, avis), `/cinema/salles/{cinema}` (films groupés par salle). "Actuellement programmé" = au moins une séance dont la fenêtre `start_date`/`end_date` couvre aujourd'hui. Structured data `Movie`/`MovieTheater`.
 - **`x-ui.breadcrumb`** : fil d'Ariane visuel + `BreadcrumbList` JSON-LD, réutilisé sur les 3 domaines.
@@ -457,6 +457,8 @@ Tous les tests automatisés (31) passent après migration, y compris avec les co
 - **Simplification assumée** : les URLs de catégorie annuaire sont à un seul segment (`/annuaire/{slug}`, résolu à n'importe quel niveau de la hiérarchie) plutôt que de reproduire le chemin imbriqué `/annuaire/cat/scat1/scat2` du legacy — plus simple et tout aussi indexable ; à revoir si le client tient à la profondeur visible dans l'URL.
 - Tests : `tests/Feature/PublicContentPagesTest.php` (7 tests : rendu index/détail, statuts publiés/non publiés, résolution de slug agenda, film sans séance courante).
 - Vérifié en conditions réelles : les 9 routes testées en HTTP contre les vraies données migrées (`php artisan serve` + `curl`), pas seulement via les tests SQLite.
+
+**Dépôt public de fiche annuaire** (`/annuaire/deposer`, brief §5) — même modèle que le dépôt d'annonce (Phase 9) : workflow de modération STRICT et non contournable, `ListingController::store()` force toujours `tier = 'free'` et `status = 'pending'`, jamais de valeur envoyée par le visiteur (testé explicitement : tentative d'injection de `status`/`tier` dans le payload, sans effet). Honeypot anti-spam nommé `url_verification` (pas `website`, comme pour les annonces/contact) — `Listing` a un vrai champ `website` fillable, un nom identique aurait fait échouer toute soumission légitime renseignant son site. Une seule catégorie sélectionnable côté public (l'admin peut en ajouter via `ListingResource` après validation). Lien "+ Ajouter mon établissement" sur `/annuaire` (sidebar + état vide). Tests : `tests/Feature/PublicFormsAndNewsTest.php` (statut/tier toujours forcés, fiche non visible tant que `pending`, honeypot rejeté). Vérifié en HTTP réel (`php artisan serve` + `curl`) : formulaire, noms de champs, non-régression du routage catégorie (`/annuaire/deposer` doit être déclaré avant la route wildcard `/annuaire/{categorySlug}`, même piège que pour les annonces).
 
 ### Actualités, Annonces et Contact publics (Phase 9 + brief §11)
 
@@ -531,7 +533,7 @@ Vues publiques mises à jour en conséquence pour exploiter ces données désorm
 
 ### Ce qui n'existe PAS encore
 
-Le dépôt de fiche annuaire par le public, le calendrier visuel et la proposition d'événement par le public (agenda). Le scraper cinéma AlloCiné existe (`scrape:cinema`, ci-dessus, 24 salles/27, fiches film + horaires précis) mais reste à vérifier en direct. Pas d'interface admin pour gérer les redirections au-delà de `RedirectResource` (déjà existant, §13 Phase 4). Pas d'audit Search Console/logs pour les URLs legacy hors du périmètre couvert par la continuité de slug en base (voir §10). Cache applicatif, optimisation des requêtes N+1 à grande échelle et tests de charge (reste de la Phase 12), procédure de déploiement (Phase 14).
+Le calendrier visuel et la proposition d'événement par le public (agenda). Le scraper cinéma AlloCiné existe (`scrape:cinema`, ci-dessus, 24 salles/27, fiches film + horaires précis) mais reste à vérifier en direct. Pas d'interface admin pour gérer les redirections au-delà de `RedirectResource` (déjà existant, §13 Phase 4). Pas d'audit Search Console/logs pour les URLs legacy hors du périmètre couvert par la continuité de slug en base (voir §10). Cache applicatif, optimisation des requêtes N+1 à grande échelle et tests de charge (reste de la Phase 12), procédure de déploiement (Phase 14).
 
 **Scraper agenda : investigation terminée, conclusion définitive (2026-08-24)** — contrairement au cinéma où `autoUpdateCinemaAllocine` était un vrai mécanisme fonctionnel (juste mal documenté), **le scraper agenda n'existe nulle part dans le code legacy final** :
 - `t_agenda_scrapping` liste 18 sources (Zenith, Théâtre du Capitole, Stade Toulousain, TFC, Bikini, Odyssud, Théâtre Garonne...) avec une colonne `lien` du type `updateAgendaforZenith`, `updateAgendaRugby`, etc. — qui ressemblent à des noms de méthode de contrôleur.

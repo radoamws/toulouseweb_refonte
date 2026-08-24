@@ -26,6 +26,9 @@
                         </li>
                     @endforeach
                 </ul>
+                <a href="/annuaire/deposer" class="mt-6 block rounded-lg border border-dashed border-brand-300 px-3 py-2 text-center text-sm font-semibold text-brand-700 hover:bg-brand-50">
+                    + Ajouter mon établissement
+                </a>
             </aside>
 
             {{-- Résultats --}}
@@ -49,7 +52,10 @@
                 @endif
 
                 @if ($listings->isEmpty())
-                    <p class="mt-10 text-ink-500">Aucune fiche ne correspond à votre recherche pour le moment.</p>
+                    <p class="mt-10 text-ink-500">
+                        Aucune fiche ne correspond à votre recherche pour le moment.
+                        <a href="/annuaire/deposer" class="font-semibold text-brand-700 hover:underline">Ajoutez la vôtre.</a>
+                    </p>
                 @else
                     <div class="mt-8 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
                         @foreach ($listings as $listing)

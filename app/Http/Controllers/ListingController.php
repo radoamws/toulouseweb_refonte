@@ -69,6 +69,51 @@ class ListingController extends Controller
         ]);
     }
 
+    public function create(): View
+    {
+        $categories = Category::where('is_active', true)->orderBy('level')->orderBy('order')->orderBy('name')->get();
+
+        return view('annuaire.create', ['categories' => $categories, 'seo' => []]);
+    }
+
+    /**
+     * Dépôt public d'une fiche annuaire (brief §5). Workflow de modération
+     * STRICT et non contournable, sur le même modèle que
+     * ClassifiedController::store() : `tier`/`status` sont TOUJOURS forcés
+     * ici, jamais de valeur envoyée par le visiteur — seul l'admin
+     * (ListingResource) fait passer une fiche en payante et/ou publiée.
+     */
+    public function store(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $validated = $request->validate([
+            'category_id' => ['required', 'exists:categories,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'short_description' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'postal_code' => ['nullable', 'string', 'max:10'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'website' => ['nullable', 'url', 'max:255'],
+            // Honeypot anti-spam (brief §18) : champ invisible, un vrai
+            // visiteur ne le remplit jamais. Nommé différemment de
+            // ClassifiedController/ContactController pour ne pas entrer en
+            // collision avec le vrai champ `website` de Listing.
+            'url_verification' => ['size:0'],
+        ]);
+
+        $listing = Listing::create([
+            ...collect($validated)->except(['category_id', 'url_verification'])->all(),
+            'tier' => 'free', // jamais autre chose ici — voir docblock de la méthode
+            'status' => 'pending',
+        ]);
+        $listing->categories()->attach($validated['category_id']);
+
+        return redirect()
+            ->route('annuaire.index')
+            ->with('status', 'Votre fiche a bien été reçue et sera publiée après validation par notre équipe.');
+    }
+
     /** Inclut la catégorie elle-même + tous ses descendants (niveaux 1 et 2). */
     protected function categoryAndDescendantIds(Category $category): array
     {
