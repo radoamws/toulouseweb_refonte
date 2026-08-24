@@ -1,7 +1,7 @@
 # ToulouseWeb — Documentation technique
 
 > Document vivant : à mettre à jour à chaque modification importante du code ou de l'architecture.
-> Dernière mise à jour : 2026-08-24 — **Phases 1, 2, 5 et 8 terminées ; Phase 3 (design system + layout) et Phase 4 (admin) bien avancées ; premières briques de la Phase 10 (homepage) livrées.**
+> Dernière mise à jour : 2026-08-25 — **Phases 1, 2, 5 et 8 terminées ; Phase 3 (design system + layout) et Phase 4 (admin, dont page Paramètres du site) bien avancées ; premières briques de la Phase 10 (homepage) livrées.**
 
 ---
 
@@ -12,7 +12,7 @@
 | 1. Audit complet de l'ancien site et de la base | ✅ Terminé (§1-6) |
 | 2. Architecture technique et base de données | ✅ Terminé (§7-11) |
 | 3. Design system & layout | 🟡 Palette/typographies/composants Blade de base livrés (§13), pages de contenu (annuaire/agenda/cinéma...) pas encore construites |
-| 4. Administration | 🟡 18 ressources Filament créées et testées (§13), à compléter (relation managers cinéma, page paramètres du site, dashboard stats) |
+| 4. Administration | 🟡 18 ressources Filament créées et testées + relation manager Séances (Phase 8) + page Paramètres du site (§13), à compléter (gestion utilisateurs/rôles, dashboard stats) |
 | 5. Migration des données | ✅ Terminé — 11 commandes `migrate:*` exécutées avec succès contre `toulouseweb_old` réelle (§13, dont `migrate:partner-sites` ajoutée le 2026-08-24 — table oubliée à l'audit initial) + 7 commandes `images:*` ayant réimporté l'écrasante majorité des visuels de contenu retrouvés sous `old/backEnd/public/` (33 000+ fichiers, voir §13) |
 | 6. Annuaire | 🟡 Pages publiques (index par catégorie + recherche, fiche détail) livrées et vérifiées avec les vraies données, désormais avec photo principale + galerie réelles (§13) ; pas encore de dépôt de fiche public, pas de recherche géographique |
 | 7. Agenda / événements / théâtre | 🟡 Pages publiques (index + filtre catégorie dont "theatre", fiche détail) livrées ; calendrier visuel et proposition d'événement par le public pas encore faits ; scraper agenda confirmé **inexistant côté legacy** (routes mortes, aucune méthode réelle — voir §13), décision produit requise avant de construire quoi que ce soit |
@@ -365,7 +365,19 @@ Tous les modèles du schéma cible existent dans `app/Models/` avec leurs relati
 | `RedirectResource` | Type de redirection 301/302 en select, compteur de hits en lecture seule |
 | `CinemaResource`, `MovieResource`, `ClassifiedCategoryResource`, `NewsCategoryResource`, `AreaResource`, `AmenityResource`, `ContactMessageResource`, `PartnerSiteResource`, `ScraperSourceResource` | Générées avec `--generate` (formulaires/tables auto-inférés du schéma), pas encore personnalisées en profondeur |
 
-**Reste à faire côté admin** (Phase 4 à poursuivre) : relation managers (ex. gérer les séances/horaires depuis la fiche Cinéma/Film), page dédiée "Paramètres du site" (brief §12), gestion des utilisateurs/rôles, dashboard avec widgets de stats de clics (`ClickTrackingService::dailySummary`), page SEO globale.
+**Fait depuis** : relation manager Séances sur `CinemaResource` (Phase 8, voir plus haut) ; page "Paramètres du site" (voir ci-dessous).
+
+**Reste à faire côté admin** : gestion des utilisateurs/rôles, dashboard avec widgets de stats de clics (`ClickTrackingService::dailySummary`), page SEO globale.
+
+### Paramètres du site (`Filament\Pages\SiteSettings`, brief §13)
+
+Remplace les valeurs codées en dur dans `components/layouts/app.blade.php` (nom du site, description, image OG par défaut) et le pied de page — **aucune table legacy équivalente** (`t_entete` est un système différent : des overrides SEO par page d'annuaire, déjà couvert par `seo_meta` — pas des réglages globaux), fonctionnalité entièrement nouvelle.
+
+- `App\Models\SiteSetting` : une seule ligne (singleton, `SiteSetting::current()` la crée si absente avec des valeurs par défaut cohérentes avec l'existant) — `site_name`, `tagline`, `description`, `logo`, `default_og_image`, `email`, `phone`, `address`, 5 champs de réseaux sociaux (`socialLinks()` retourne les non-vides, pour le `sameAs` du JSON-LD).
+- `App\Filament\Pages\SiteSettings` : page Filament simple (pas un Resource — rien à lister), formulaire en 3 sections (Identité, Coordonnées, Réseaux sociaux), upload logo/image OG via `FileUpload`.
+- Consommé par `components/layouts/app.blade.php` (title/description par défaut, meta OG, JSON-LD Organization avec `name`/`logo`/`description`/`sameAs`), `components/site/header.blade.php` (logo si renseigné, sinon repli visuel identique à avant) et `components/site/footer.blade.php` (nom, description, liens sociaux, copyright).
+- **Bug préexistant découvert et corrigé au passage** : la clé JSON-LD `'@context'` écrite non échappée dans le Blade était interprétée par le compilateur comme la directive `@context` (façade `Context`, Laravel 11+), corrompant tout le JSON-LD Organization en production silencieusement (jamais détecté avant faute d'avoir vérifié le HTML réellement rendu, pas seulement `assertOk()`). Corrigé en échappant `'@@context'`. À surveiller : tout futur JSON-LD écrit directement en Blade doit faire attention à ce piège.
+- Tests : `tests/Feature/SiteSettingsTest.php` (accès admin uniquement, sauvegarde réelle via `Livewire::test()->fillForm()->call('save')`, et vérification que la homepage reflète bien des valeurs personnalisées dans le JSON-LD rendu).
 
 ### Tests
 
@@ -519,7 +531,7 @@ Vues publiques mises à jour en conséquence pour exploiter ces données désorm
 
 ### Ce qui n'existe PAS encore
 
-Le dépôt de fiche annuaire par le public, le calendrier visuel et la proposition d'événement par le public (agenda). Le scraper cinéma AlloCiné existe (`scrape:cinema`, ci-dessus, 24 salles/27, fiches film + horaires précis) mais reste à vérifier en direct. Pas de module "Paramètres du site" pour administrer le JSON-LD Organization (actuellement en dur dans le layout), ni d'interface admin pour gérer les redirections au-delà de `RedirectResource` (déjà existant, §13 Phase 4). Pas d'audit Search Console/logs pour les URLs legacy hors du périmètre couvert par la continuité de slug en base (voir §10). Cache applicatif, optimisation des requêtes N+1 à grande échelle et tests de charge (reste de la Phase 12), procédure de déploiement (Phase 14).
+Le dépôt de fiche annuaire par le public, le calendrier visuel et la proposition d'événement par le public (agenda). Le scraper cinéma AlloCiné existe (`scrape:cinema`, ci-dessus, 24 salles/27, fiches film + horaires précis) mais reste à vérifier en direct. Pas d'interface admin pour gérer les redirections au-delà de `RedirectResource` (déjà existant, §13 Phase 4). Pas d'audit Search Console/logs pour les URLs legacy hors du périmètre couvert par la continuité de slug en base (voir §10). Cache applicatif, optimisation des requêtes N+1 à grande échelle et tests de charge (reste de la Phase 12), procédure de déploiement (Phase 14).
 
 **Scraper agenda : investigation terminée, conclusion définitive (2026-08-24)** — contrairement au cinéma où `autoUpdateCinemaAllocine` était un vrai mécanisme fonctionnel (juste mal documenté), **le scraper agenda n'existe nulle part dans le code legacy final** :
 - `t_agenda_scrapping` liste 18 sources (Zenith, Théâtre du Capitole, Stade Toulousain, TFC, Bikini, Odyssud, Théâtre Garonne...) avec une colonne `lien` du type `updateAgendaforZenith`, `updateAgendaRugby`, etc. — qui ressemblent à des noms de méthode de contrôleur.

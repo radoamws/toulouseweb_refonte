@@ -1,4 +1,5 @@
 @php
+    $siteSettings = \App\Models\SiteSetting::current();
     // Structure de navigation cible (remplace le menu codé en dur dans
     // Header.vue du legacy, voir TECHNICAL_DOCUMENTATION.md §6). Les entrées
     // Restaurants/Enfants/Sports/Mariages/Spectacles/Sorties sont des
@@ -25,8 +26,12 @@
 <header x-data="{ mobileOpen: false, annuaireOpen: false }" class="sticky top-0 z-40 border-b border-ink-100 bg-white/95 backdrop-blur">
     <div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <a href="{{ url('/') }}" class="flex shrink-0 items-center gap-2 font-heading text-xl font-bold text-brand-600">
-            <span class="inline-block h-2.5 w-2.5 rounded-full bg-accent-500" aria-hidden="true"></span>
-            ToulouseWeb
+            @if ($siteSettings->logo_url)
+                <img src="{{ $siteSettings->logo_url }}" alt="{{ $siteSettings->site_name }}" class="h-8 w-auto">
+            @else
+                <span class="inline-block h-2.5 w-2.5 rounded-full bg-accent-500" aria-hidden="true"></span>
+            @endif
+            {{ $siteSettings->site_name }}
         </a>
 
         <nav class="hidden items-center gap-1 lg:flex" aria-label="Navigation principale">

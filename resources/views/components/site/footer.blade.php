@@ -1,14 +1,28 @@
 @php
     $partners = \App\Models\PartnerSite::query()->orderBy('order')->limit(6)->get();
+    $siteSettings = \App\Models\SiteSetting::current();
+    $socialLabels = [
+        'facebook_url' => 'Facebook', 'instagram_url' => 'Instagram', 'twitter_url' => 'X / Twitter',
+        'linkedin_url' => 'LinkedIn', 'youtube_url' => 'YouTube',
+    ];
 @endphp
 <footer class="mt-16 border-t border-ink-100 bg-ink-900 text-ink-200">
     <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div class="grid gap-10 md:grid-cols-4">
             <div>
-                <p class="font-heading text-lg font-bold text-white">ToulouseWeb</p>
+                <p class="font-heading text-lg font-bold text-white">{{ $siteSettings->site_name }}</p>
                 <p class="mt-3 text-sm text-ink-300">
-                    Le portail pour découvrir Toulouse et sa région : actualités, agenda, cinéma, annuaire et annonces locales.
+                    {{ $siteSettings->description ?: 'Le portail pour découvrir Toulouse et sa région : actualités, agenda, cinéma, annuaire et annonces locales.' }}
                 </p>
+                @if ($siteSettings->socialLinks())
+                    <ul class="mt-4 flex flex-wrap gap-3 text-sm">
+                        @foreach (['facebook_url', 'instagram_url', 'twitter_url', 'linkedin_url', 'youtube_url'] as $field)
+                            @if ($siteSettings->$field)
+                                <li><a href="{{ $siteSettings->$field }}" target="_blank" rel="noopener" class="hover:text-white">{{ $socialLabels[$field] }}</a></li>
+                            @endif
+                        @endforeach
+                    </ul>
+                @endif
             </div>
             <div>
                 <p class="text-sm font-semibold text-white">Découvrir</p>
@@ -46,7 +60,7 @@
         </div>
 
         <div class="mt-10 flex flex-col items-center justify-between gap-3 border-t border-ink-700 pt-6 text-xs text-ink-400 sm:flex-row">
-            <p>&copy; {{ now()->year }} ToulouseWeb — Tous droits réservés.</p>
+            <p>&copy; {{ now()->year }} {{ $siteSettings->site_name }} — Tous droits réservés.</p>
             <p>Toulouse et sa région, autrement.</p>
         </div>
     </div>

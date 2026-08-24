@@ -3,12 +3,13 @@
 ])
 
 @php
+    $siteSettings = \App\Models\SiteSetting::current();
     $seo = array_merge([
-        'title' => 'ToulouseWeb — Toulouse et sa région',
-        'description' => "Actualités, agenda, cinéma, annuaire, annonces et sorties à Toulouse et dans sa région.",
+        'title' => $siteSettings->site_name.($siteSettings->tagline ? ' — '.$siteSettings->tagline : ' — Toulouse et sa région'),
+        'description' => $siteSettings->description ?: "Actualités, agenda, cinéma, annuaire, annonces et sorties à Toulouse et dans sa région.",
         'canonical_url' => url()->current(),
         'robots' => 'index,follow',
-        'og_image' => asset('images/og-default.jpg'),
+        'og_image' => $siteSettings->default_og_image_url ?: asset('images/og-default.jpg'),
     ], array_filter($seo));
 @endphp
 <!DOCTYPE html>
@@ -25,7 +26,7 @@
 
     {{-- Open Graph / Twitter Card — voir brief §13 --}}
     <meta property="og:type" content="website">
-    <meta property="og:site_name" content="ToulouseWeb">
+    <meta property="og:site_name" content="{{ $siteSettings->site_name }}">
     <meta property="og:title" content="{{ $seo['title'] }}">
     <meta property="og:description" content="{{ $seo['description'] }}">
     <meta property="og:url" content="{{ $seo['canonical_url'] }}">
@@ -36,15 +37,21 @@
     <meta name="twitter:title" content="{{ $seo['title'] }}">
     <meta name="twitter:description" content="{{ $seo['description'] }}">
 
-    {{-- Organisation Schema.org — TODO Phase 11 : rendre administrable via un module "Paramètres du site" --}}
+    {{-- Organisation Schema.org — administrable via le module "Paramètres du site" (Filament\Pages\SiteSettings, brief §13).
+         La clé JSON-LD doit être échappée en "@@context" (bug préexistant découvert en vérifiant le rendu réel :
+         Blade compile toute occurrence non échappée, y compris en commentaire PHP, voir TECHNICAL_DOCUMENTATION.md §13). --}}
     <script type="application/ld+json">
-    {!! json_encode([
-        '@context' => 'https://schema.org',
+    {!! json_encode(array_filter([
+        '@@context' => 'https://schema.org',
         '@type' => 'Organization',
-        'name' => 'ToulouseWeb',
+        'name' => $siteSettings->site_name,
         'url' => url('/'),
-        'description' => "Portail local de Toulouse et sa région : actualités, agenda, cinéma, annuaire, annonces.",
-    ]) !!}
+        'logo' => $siteSettings->logo_url,
+        'description' => $siteSettings->description,
+        'email' => $siteSettings->email,
+        'telephone' => $siteSettings->phone,
+        'sameAs' => $siteSettings->socialLinks() ?: null,
+    ])) !!}
     </script>
 
     @stack('head')
