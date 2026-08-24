@@ -6,7 +6,7 @@
 ## État du projet
 
 **Phase actuelle : 5 et 8 terminées ; 6-12 et 3/4/10 bien avancées.**
-Le schéma de base cible est appliqué sur `toulouseweb` et **peuplé avec les vraies données de production** (2 978 fiches annuaire, 18 724 événements, 17 304 films, 6 191 actus, 135 sliders...). L'administration (18 ressources Filament) et les pages publiques principales sont en ligne et vérifiées : homepage, annuaire, agenda (dont la catégorie Théâtre sur sa propre URL), cinéma, actualités, annonces (dépôt public avec modération non contournable), contact. Les redirections 301 (6 710 entrées migrées) et le sitemap.xml (4 036 URLs) sont opérationnels. Le scraper cinéma (`scrape:cinema`, une source AlloCiné par salle — 24 des 27 salles legacy, dont Pathé-Gaumont Wilson qui n'a pas de traitement spécial) est réécrit, gère films **et horaires précis**, et est planifié quotidiennement — **non re-vérifié en direct** faute d'accès réseau sortant depuis cet environnement de développement, à confirmer dès la première exécution en production. Une première passe de sécurité corrige les principales failles constatées dans l'ancien système à l'audit. Ce qui manque encore : scraper agenda, calendrier visuel, dépôt de fiche annuaire par le public, performance à grande échelle, déploiement. Voir [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §0 et §13 pour l'état exact et détaillé du code, y compris la liste des hypothèses de mapping à valider avec vous.
+Le schéma de base cible est appliqué sur `toulouseweb` et **peuplé avec les vraies données de production** (2 978 fiches annuaire, 18 724 événements, 17 304 films, 6 191 actus, 135 sliders...). L'administration (18 ressources Filament) et les pages publiques principales sont en ligne et vérifiées : homepage, annuaire, agenda (dont la catégorie Théâtre sur sa propre URL), cinéma, actualités, annonces (dépôt public avec modération non contournable), contact. Les redirections 301 (6 710 entrées migrées) et le sitemap.xml (4 036 URLs) sont opérationnels. Le scraper cinéma (`scrape:cinema`, une source AlloCiné par salle — 24 des 27 salles legacy, dont Pathé-Gaumont Wilson qui n'a pas de traitement spécial) est réécrit, gère films **et horaires précis**, et est planifié quotidiennement — **non re-vérifié en direct** faute d'accès réseau sortant depuis cet environnement de développement, à confirmer dès la première exécution en production. Une première passe de sécurité corrige les principales failles constatées dans l'ancien système à l'audit. Les images de contenu (annuaire, films, actualités, agenda, sliders) ont été réimportées depuis `old/backEnd/public/` (33 000+ fichiers retrouvés, correction d'une estimation initiale erronée à seulement 48 — voir §13) ; l'annuaire affiche désormais photo principale et galerie réelles. Ce qui manque encore : scraper agenda, calendrier visuel, dépôt de fiche annuaire par le public, performance à grande échelle, déploiement. Voir [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §0 et §13 pour l'état exact et détaillé du code, y compris la liste des hypothèses de mapping à valider avec vous.
 
 Avant de reprendre ce projet dans une nouvelle session : lire ce fichier, lire `TECHNICAL_DOCUMENTATION.md`, puis regarder l'état réel du code (`git log`, arborescence) avant de continuer — ne jamais repartir de zéro sur une fonctionnalité déjà faite.
 
@@ -86,12 +86,29 @@ php artisan migrate:cinema           # salles, films, séances, horaires, commen
 php artisan migrate:news             # actualités + commentaires
 php artisan migrate:sliders          # sliders + emplacements
 php artisan migrate:contacts         # messages de contact actifs
+php artisan migrate:partner-sites    # sites partenaires (page contact)
 php artisan migrate:seo              # métadonnées SEO personnalisées
 php artisan migrate:redirects        # amorce des redirections 301
 php artisan migrate:click-stats --truncate   # historique de clics (~2,78M lignes, la plus longue — plusieurs minutes)
 ```
 
 Toutes ces commandes sont idempotentes (rejouables sans dupliquer), sauf `migrate:click-stats` qui nécessite `--truncate` pour être relancée. Logs détaillés dans `storage/logs/migration/<domaine>.log`. Détail complet (mapping des champs, hypothèses de statut, corrections de schéma découvertes en cours de route) : `TECHNICAL_DOCUMENTATION.md` §10 et §13.
+
+### Réimport des images de contenu
+
+`old/backEnd/public/` contient plus de 33 000 fichiers image (~3,2 Go) correspondant aux fiches annuaire, films, actualités, agenda et sliders. Ces commandes retrouvent et copient ceux qui correspondent encore à une ligne migrée, puis mettent à jour le modèle correspondant (ou une collection MediaLibrary pour l'annuaire) :
+
+```bash
+php artisan images:movies         # affiches de films (movies.poster)
+php artisan images:news           # images d'actualités (news.image)
+php artisan images:listings       # fiches annuaire : photo principale (media "logo") + galerie (media "gallery")
+php artisan images:events         # images d'événements (events.image)
+php artisan images:amenities      # pictogrammes d'équipements (amenities.icon)
+php artisan images:partner-sites  # logos des sites partenaires (partner_sites.logo) — après migrate:partner-sites
+php artisan images:sliders        # images de sliders (recherche large, peu de correspondances)
+```
+
+**Ces commandes ne sont volontairement jamais rejouées en committant leur résultat dans git** (des centaines de Mo de binaires, aucun intérêt de diff) — `storage/app/public/` reste ignoré comme par défaut. Sur un nouvel environnement (staging, production), les rejouer contre une copie de `old/backEnd/public/` (ou tout accès équivalent au stockage de l'ancien site), exactement comme les commandes `migrate:*` contre une copie de `toulouseweb_old`. Détail des volumes réellement récupérés par domaine : `TECHNICAL_DOCUMENTATION.md` §13.
 
 ## SEO / GEO
 

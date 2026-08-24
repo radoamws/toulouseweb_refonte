@@ -39,4 +39,14 @@ class ImageUrlResolutionTest extends TestCase
 
         $this->assertNull($event->image_url);
     }
+
+    public function test_data_uri_passes_through_unchanged(): void
+    {
+        // Constaté sur de vraies données legacy (t_cine_film.image) : quelques
+        // lignes stockent directement une data URI au lieu d'un nom de fichier.
+        $uri = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+        $slider = Slider::create(['title' => 'Test', 'image' => $uri, 'is_active' => true]);
+
+        $this->assertSame($uri, $slider->image_url);
+    }
 }

@@ -22,7 +22,7 @@ trait ResolvesImageUrl
             return null;
         }
 
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/')) {
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/') || str_starts_with($path, 'data:')) {
             return $path;
         }
 

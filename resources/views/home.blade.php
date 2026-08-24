@@ -94,6 +94,7 @@
                     @foreach ($featuredListings as $listing)
                         <x-ui.card
                             :href="'/annuaire/fiche/'.$listing->slug"
+                            :image="$listing->getFirstMediaUrl('logo')"
                             :eyebrow="$listing->categories->first()?->name"
                             :title="$listing->title"
                             :meta="$listing->city"

@@ -5,6 +5,7 @@
         '@context' => 'https://schema.org',
         '@type' => $listing->isRestaurant() ? 'Restaurant' : 'LocalBusiness',
         'name' => $listing->title,
+        'image' => $listing->getFirstMediaUrl('logo') ?: null,
         'description' => $listing->short_description,
         'telephone' => $listing->phone,
         'email' => $listing->email,
@@ -53,10 +54,29 @@
             </div>
         </div>
 
+        @if ($listing->getFirstMediaUrl('logo'))
+            <div class="mt-6 aspect-[16/9] w-full overflow-hidden rounded-2xl bg-ink-100 sm:aspect-[21/9]">
+                <img src="{{ $listing->getFirstMediaUrl('logo') }}" alt="{{ $listing->title }}" class="h-full w-full object-cover">
+            </div>
+        @endif
+
         <div class="mt-8 grid gap-8 lg:grid-cols-3">
             <div class="lg:col-span-2">
                 @if ($listing->isPaid() && $listing->description)
                     <div class="prose prose-ink max-w-none">{!! nl2br(e($listing->description)) !!}</div>
+                @endif
+
+                @if ($listing->getMedia('gallery')->isNotEmpty())
+                    <div class="mt-6">
+                        <h2 class="font-heading text-lg font-semibold text-ink-900">Photos</h2>
+                        <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                            @foreach ($listing->getMedia('gallery') as $photo)
+                                <a href="{{ $photo->getUrl() }}" target="_blank" rel="noopener" class="aspect-square overflow-hidden rounded-xl bg-ink-100">
+                                    <img src="{{ $photo->getUrl() }}" alt="{{ $listing->title }}" loading="lazy" class="h-full w-full object-cover transition hover:scale-105">
+                                </a>
+                            @endforeach
+                        </div>
+                    </div>
                 @endif
 
                 @if ($listing->amenities->isNotEmpty())
@@ -75,7 +95,7 @@
                         <h2 class="font-heading text-lg font-semibold text-ink-900">Dans la même catégorie</h2>
                         <div class="mt-4 grid gap-4 sm:grid-cols-2">
                             @foreach ($related as $item)
-                                <x-ui.card :href="'/annuaire/fiche/'.$item->slug" :title="$item->title" :meta="$item->city" :track="'listing:'.$item->id.':annuaire_related'" />
+                                <x-ui.card :href="'/annuaire/fiche/'.$item->slug" :image="$item->getFirstMediaUrl('logo')" :title="$item->title" :meta="$item->city" :track="'listing:'.$item->id.':annuaire_related'" />
                             @endforeach
                         </div>
                     </div>

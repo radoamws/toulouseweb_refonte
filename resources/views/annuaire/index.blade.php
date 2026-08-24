@@ -55,6 +55,7 @@
                         @foreach ($listings as $listing)
                             <x-ui.card
                                 :href="'/annuaire/fiche/'.$listing->slug"
+                                :image="$listing->getFirstMediaUrl('logo')"
                                 :eyebrow="$listing->categories->first()?->name"
                                 :title="$listing->title"
                                 :meta="collect([$listing->city, $listing->phone])->filter()->implode(' · ')"
