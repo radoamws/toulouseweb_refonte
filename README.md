@@ -116,6 +116,7 @@ php artisan images:sliders        # images de sliders (recherche large, peu de c
 - **Sitemap** : `php artisan sitemap:generate` régénère `public/sitemap.xml` (planifié quotidiennement). **Ne pas éditer ce fichier à la main**, il est écrasé à chaque exécution.
 - **`robots.txt`** : `public/robots.txt`, bloque `/admin` et `/track-click`.
 - **Redirections 301** : administrables via `RedirectResource` (`/admin`), servies par `Controller::redirectOrAbort()` sur chaque route de fiche/détail. Voir `TECHNICAL_DOCUMENTATION.md` §13 pour le piège rencontré avec `Route::fallback()` avant ce choix d'implémentation.
+- **404 fréquentes** : toute 404 réelle est journalisée (`missed_redirects`) et consultable dans l'admin (`MissedRedirectResource`, "404 fréquentes") ou via `php artisan redirects:audit` (planifié hebdomadairement) — permet de repérer les chemins legacy manquants à traiter manuellement dans `RedirectResource`.
 
 ## Déploiement
 

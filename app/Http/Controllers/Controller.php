@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MissedRedirect;
 use App\Models\Redirect;
 use Illuminate\Http\RedirectResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -27,6 +28,8 @@ abstract class Controller
         $redirect = Redirect::where('from_path', $path)->where('is_active', true)->first();
 
         if (! $redirect) {
+            MissedRedirect::record($path);
+
             throw new NotFoundHttpException;
         }
 

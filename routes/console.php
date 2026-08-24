@@ -18,3 +18,8 @@ Schedule::command('sitemap:generate')->daily();
 // films sortent en général le mercredi, une vérification quotidienne
 // suffit largement et reste légère pour l'API distante.
 Schedule::command('scrape:cinema')->dailyAt('05:00')->withoutOverlapping();
+
+// Repérage des 404 fréquentes sans redirection (brief §15) — hebdomadaire,
+// laisse le temps aux occurrences ponctuelles/scanners de se distinguer
+// des vrais chemins legacy manquants.
+Schedule::command('redirects:audit')->weekly();

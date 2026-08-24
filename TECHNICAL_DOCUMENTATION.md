@@ -271,7 +271,7 @@ Un seul cron serveur, à configurer en production : `* * * * * php artisan sched
 | `scrape:events` | Scraping agenda (sources dans `scraper_sources`, type `agenda`) | Toutes les 3-6h | ❌ Pas encore écrit |
 | `events:archive-past` | Statut `expired` sur événements passés | Quotidien | ❌ Pas encore écrit |
 | `classifieds:expire` | Statut `expired` sur annonces dépassant leur durée de publication | Quotidien | ❌ Pas encore écrit |
-| `redirects:audit` | Repère les 404 fréquentes sans redirection associée | Hebdomadaire | ❌ Pas encore écrit |
+| `redirects:audit` | Repère les 404 fréquentes sans redirection associée | Hebdomadaire | ✅ Implémenté (§13 — voir détail ci-dessous) |
 
 **Commandes de récupération ponctuelle (pas de cron, à rejouer manuellement contre une source de données)** : `migrate:partner-sites` et les 7 commandes `images:{movies,news,listings,amenities,partner-sites,events,sliders}` — voir "Import des images" en §13 pour le détail, les volumes réels et la justification de ne pas committer les fichiers importés dans git.
 
@@ -298,7 +298,18 @@ Un seul cron serveur, à configurer en production : `* * * * * php artisan sched
 
 Complément manuel au scraper : `App\Filament\Resources\CinemaResource\RelationManagers\ScreeningsRelationManager` (onglet "Séances" sur la fiche d'une salle) liste les `screenings` de la salle (film, langue, fenêtre de programmation, types de projection, avant-première/coup de cœur) et permet de créer/éditer/supprimer une séance — avec ses horaires (`screening_times`, jour de semaine 0-6 + heure + lien de réservation) saisis **inline** via un `Repeater` lié par relation (`->relationship('times')`), pas de navigation séparée. Utile pour les 3 salles non couvertes par `scrape:cinema` (inactives dans le legacy, pas d'URL AlloCiné) et pour corriger ponctuellement une séance scrapée. Tests : `tests/Feature/CinemaScreeningsRelationManagerTest.php` (page d'édition sans erreur fatale ; création réelle d'une séance + d'un horaire imbriqué via `Livewire::test()->mountTableAction()`, vérifiée en base).
 
-Documentation complète des futures commandes (`scrape:events`, `events:archive-past`, `classifieds:expire`, `redirects:audit`) à produire au moment de leur implémentation, dans ce même tableau.
+### `redirects:audit` — détail (brief §15)
+
+Repère les 404 fréquentes sans redirection associée. Nécessitait d'abord de **journaliser** les 404 réelles — jusque-là rien ne gardait trace de ce qui échouait, seulement de ce qui redirigeait avec succès (`redirects.hits_count`) :
+
+- Nouvelle table `missed_redirects` (`path` unique, `hits_count`, `first_seen_at`, `last_seen_at`) — alimentée par `MissedRedirect::record($path)`, appelé depuis `Controller::redirectOrAbort()` (tous les contrôleurs de contenu) et `RedirectFallbackController`, juste avant le 404 final. `updateOrCreate`-like : incrémente si le chemin est déjà connu, ne duplique jamais.
+- `php artisan redirects:audit` (`--min-hits=3` par défaut, `--limit=25`) : tableau trié par fréquence décroissante. Volontairement une simple liste, pas d'automatisation — décider qu'une 404 mérite une redirection (et vers où) reste un jugement humain.
+- `MissedRedirectResource` (admin, groupe "SEO & Technique") : même donnée en continu dans l'admin (pas seulement au moment du cron), lecture seule + action "Écarter" (supprime une ligne non pertinente, ex. bruit de scanner) — pas de création/édition, cette liste n'est jamais saisie à la main.
+- **Bug MySQL trouvé et corrigé avant tout commit** : la migration initiale déclarait `first_seen_at`/`last_seen_at` en `timestamp` NOT NULL sans défaut — MySQL en mode strict refuse deux colonnes timestamp NOT NULL sans valeur par défaut sur une même table (`SQLSTATE[42000]: ... Invalid default value`). Invisible sur SQLite (tests), révélé uniquement en migrant contre la vraie base MySQL locale. Corrigé en rendant les deux colonnes nullable (toujours renseignées en pratique par `MissedRedirect::record()`).
+- Tests : `tests/Feature/RedirectsTest.php` (chemin inconnu journalisé et incrémenté sur répétition, redirection connue jamais journalisée comme manquée, commande filtrée par seuil).
+- Vérifié en HTTP réel (`php artisan serve` + `curl`) : deux 404 de nature différente (résolution manuelle via `redirectOrAbort` et fallback générique) correctement journalisées et incrémentées en base MySQL réelle.
+
+Documentation complète des futures commandes (`scrape:events`, `events:archive-past`, `classifieds:expire`) à produire au moment de leur implémentation, dans ce même tableau.
 
 ## 12. Plan de développement par phases (mise à jour post-décisions)
 
@@ -554,7 +565,7 @@ Vues publiques mises à jour en conséquence pour exploiter ces données désorm
 
 ### Ce qui n'existe PAS encore
 
-La proposition d'événement par le public (agenda). Le scraper cinéma AlloCiné existe (`scrape:cinema`, ci-dessus, 24 salles/27, fiches film + horaires précis) mais reste à vérifier en direct. Pas d'interface admin pour gérer les redirections au-delà de `RedirectResource` (déjà existant, §13 Phase 4). Pas d'audit Search Console/logs pour les URLs legacy hors du périmètre couvert par la continuité de slug en base (voir §10). Cache applicatif, optimisation des requêtes N+1 à grande échelle et tests de charge (reste de la Phase 12), procédure de déploiement (Phase 14).
+La proposition d'événement par le public (agenda). Le scraper cinéma AlloCiné existe (`scrape:cinema`, ci-dessus, 24 salles/27, fiches film + horaires précis) mais reste à vérifier en direct. Pas d'audit Search Console/logs pour les URLs legacy hors du périmètre couvert par la continuité de slug en base (voir §10) — `redirects:audit`/`missed_redirects` couvre désormais les 404 générées PAR ce dépôt en conditions réelles, mais pas un historique Search Console antérieur à sa mise en place. Cache applicatif, optimisation des requêtes N+1 à grande échelle et tests de charge (reste de la Phase 12), procédure de déploiement (Phase 14).
 
 **Scraper agenda : investigation terminée, conclusion définitive (2026-08-24)** — contrairement au cinéma où `autoUpdateCinemaAllocine` était un vrai mécanisme fonctionnel (juste mal documenté), **le scraper agenda n'existe nulle part dans le code legacy final** :
 - `t_agenda_scrapping` liste 18 sources (Zenith, Théâtre du Capitole, Stade Toulousain, TFC, Bikini, Odyssud, Théâtre Garonne...) avec une colonne `lien` du type `updateAgendaforZenith`, `updateAgendaRugby`, etc. — qui ressemblent à des noms de méthode de contrôleur.
