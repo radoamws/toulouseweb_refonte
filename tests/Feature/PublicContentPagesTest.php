@@ -76,6 +76,39 @@ class PublicContentPagesTest extends TestCase
         $this->get('/agenda/theatre')->assertOk()->assertSee('Le Malade Imaginaire')->assertSee('Théâtre');
     }
 
+    public function test_agenda_calendar_view_renders_with_event_marker(): void
+    {
+        $event = Event::create([
+            'title' => 'Concert Calendrier', 'slug' => 'concert-calendrier',
+            'status' => 'published', 'start_date' => now()->startOfMonth()->addDays(4),
+        ]);
+
+        $response = $this->get('/agenda?view=calendar');
+
+        $response->assertOk();
+        $response->assertSee($event->start_date->translatedFormat('F Y'));
+        // Régression : x-ui.button avec href="{{ }}" (au lieu de :href="") double
+        // l'échappement HTML dès que l'URL contient plusieurs paramètres de
+        // requête ("&" devient "&amp;amp;") — voir TECHNICAL_DOCUMENTATION.md §13.
+        $response->assertDontSee('&amp;amp;', false);
+    }
+
+    public function test_agenda_date_navigation_does_not_double_encode_with_multiple_query_params(): void
+    {
+        Event::create([
+            'title' => 'Concert Recherche', 'slug' => 'concert-recherche',
+            'status' => 'published', 'start_date' => now()->addDay(),
+        ]);
+
+        // Deux paramètres de requête simultanés (date + q) : c'est ce qui
+        // révèle le bug de double échappement, invisible avec un seul
+        // paramètre (rien à séparer par "&").
+        $response = $this->get('/agenda?date='.now()->format('Y-m-d').'&q=concert');
+
+        $response->assertOk();
+        $response->assertDontSee('&amp;amp;', false);
+    }
+
     public function test_agenda_slug_resolves_event_when_not_a_category(): void
     {
         $event = Event::create([

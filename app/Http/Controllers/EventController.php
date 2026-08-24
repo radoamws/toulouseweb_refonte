@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\EventCategory;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -59,7 +60,53 @@ class EventController extends Controller
 
         $seo = $category?->resolveSeo() ?? [];
 
-        return view('agenda.index', compact('events', 'categories', 'category', 'date', 'seo'));
+        $view = $request->string('view')->value() === 'calendar' ? 'calendar' : 'list';
+        $calendarMonth = null;
+        $calendarCounts = [];
+
+        if ($view === 'calendar') {
+            $calendarMonth = $this->resolveCalendarMonth($request, $date);
+            $calendarCounts = $this->countEventsByDay($calendarMonth, $category);
+        }
+
+        return view('agenda.index', compact(
+            'events', 'categories', 'category', 'date', 'seo',
+            'view', 'calendarMonth', 'calendarCounts'
+        ));
+    }
+
+    protected function resolveCalendarMonth(Request $request, ?Carbon $date): Carbon
+    {
+        if ($request->filled('month')) {
+            try {
+                return Carbon::createFromFormat('Y-m', $request->string('month')->value())->startOfMonth();
+            } catch (\Throwable) {
+                // valeur de mois invalide dans l'URL — on retombe sur le mois courant plutôt que planter
+            }
+        }
+
+        return ($date ?? now())->copy()->startOfMonth();
+    }
+
+    /**
+     * Compte les événements par jour de début dans le mois (approximation
+     * volontaire pour la vue calendrier : un événement s'étalant sur
+     * plusieurs jours n'apparaît que sur son jour de début, pas sur toute sa
+     * durée — sinon un festival d'une semaine "remplirait" toute la vue.
+     * Le filtre par jour précis (`?date=`, vue liste) reste, lui, exact.
+     *
+     * @return array<string, int> clé "Y-m-d" => nombre d'événements
+     */
+    protected function countEventsByDay(Carbon $month, ?EventCategory $category): array
+    {
+        return Event::query()
+            ->published()
+            ->whereBetween('start_date', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
+            ->when($category, fn ($q) => $q->whereHas('categories', fn ($q2) => $q2->where('event_categories.id', $category->id)))
+            ->selectRaw('DATE(start_date) as day, COUNT(*) as total')
+            ->groupBy('day')
+            ->pluck('total', 'day')
+            ->all();
     }
 
     public function show(Event $event): View
