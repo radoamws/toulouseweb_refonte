@@ -34,8 +34,13 @@ class CinemaController extends Controller
         ]);
     }
 
-    public function showMovie(Movie $movie): View
+    public function showMovie(Request $request, string $slug): View|\Illuminate\Http\RedirectResponse
     {
+        $movie = Movie::where('slug', $slug)->first();
+        if (! $movie) {
+            return $this->redirectOrAbort($request->path());
+        }
+
         $movie->load([
             'screenings' => fn ($q) => $this->currentlyValid($q)->with(['cinema', 'language', 'types', 'times']),
             'comments' => fn ($q) => $q->where('status', 'published')->latest(),
@@ -50,8 +55,13 @@ class CinemaController extends Controller
         ]);
     }
 
-    public function showCinema(Cinema $cinema): View
+    public function showCinema(Request $request, string $slug): View|\Illuminate\Http\RedirectResponse
     {
+        $cinema = Cinema::where('slug', $slug)->first();
+        if (! $cinema) {
+            return $this->redirectOrAbort($request->path());
+        }
+
         $cinema->load([
             'screenings' => fn ($q) => $this->currentlyValid($q)->with(['movie', 'language', 'times']),
         ]);

@@ -1,2 +1,5 @@
 User-agent: *
-Disallow:
+Disallow: /admin
+Disallow: /track-click
+
+Sitemap: https://toulouseweb.com/sitemap.xml

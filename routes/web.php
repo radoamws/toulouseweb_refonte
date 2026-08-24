@@ -8,6 +8,7 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ListingController;
 use App\Http\Controllers\NewsController;
+use App\Http\Controllers\RedirectFallbackController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class.'@index')->name('home');
@@ -19,11 +20,13 @@ Route::post('/track-click', ClickTrackingController::class)
     ->middleware('throttle:60,1')
     ->name('track-click');
 
-// Annuaire (brief §5). `fiche` avant `{category}` pour éviter toute
+// Annuaire (brief §5). `fiche` avant `{categorySlug}` pour éviter toute
 // ambiguïté (chemins à segments différents, mais plus clair ainsi).
+// Slugs en paramètres simples (pas de route-model-binding) : voir docblock
+// de ListingController pour la raison (redirections 301 legacy, brief §15).
 Route::get('/annuaire', [ListingController::class, 'index'])->name('annuaire.index');
-Route::get('/annuaire/fiche/{listing:slug}', [ListingController::class, 'show'])->name('annuaire.show');
-Route::get('/annuaire/{category:slug}', [ListingController::class, 'index'])->name('annuaire.category');
+Route::get('/annuaire/fiche/{slug}', [ListingController::class, 'show'])->name('annuaire.show');
+Route::get('/annuaire/{categorySlug}', [ListingController::class, 'index'])->name('annuaire.category');
 
 // Agenda (brief §6) — une seule route par slug : résout catégorie (dont
 // "theatre", qui a ainsi sa propre URL comme demandé) puis événement.
@@ -32,8 +35,8 @@ Route::get('/agenda/{slug}', [EventController::class, 'bySlug'])->name('agenda.b
 
 // Cinéma (brief §9).
 Route::get('/cinema', [CinemaController::class, 'index'])->name('cinema.index');
-Route::get('/cinema/films/{movie:slug}', [CinemaController::class, 'showMovie'])->name('cinema.movie');
-Route::get('/cinema/salles/{cinema:slug}', [CinemaController::class, 'showCinema'])->name('cinema.salle');
+Route::get('/cinema/films/{slug}', [CinemaController::class, 'showMovie'])->name('cinema.movie');
+Route::get('/cinema/salles/{slug}', [CinemaController::class, 'showCinema'])->name('cinema.salle');
 
 // Actualités — même pattern catégorie/article que l'agenda.
 Route::get('/actualites', [NewsController::class, 'index'])->name('actualites.index');
@@ -49,3 +52,7 @@ Route::get('/annonces/{slug}', [ClassifiedController::class, 'bySlug'])->name('a
 // Contact (brief §11).
 Route::get('/contact', [ContactController::class, 'show'])->name('contact.show');
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact.store');
+
+// Redirections 301 administrables (brief §15) — dernier recours, seulement
+// consulté quand aucune route ci-dessus ne correspond.
+Route::fallback(RedirectFallbackController::class);

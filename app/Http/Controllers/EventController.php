@@ -24,13 +24,16 @@ class EventController extends Controller
      * (ex: /agenda/theatre) et les fiches événement — résolution par ordre
      * de priorité (catégorie d'abord, comme dans la navigation principale).
      */
-    public function bySlug(Request $request, string $slug): View
+    public function bySlug(Request $request, string $slug): View|\Illuminate\Http\RedirectResponse
     {
         if ($category = EventCategory::where('slug', $slug)->first()) {
             return $this->renderIndex($request, $category);
         }
 
-        $event = Event::where('slug', $slug)->firstOrFail();
+        $event = Event::where('slug', $slug)->first();
+        if (! $event) {
+            return $this->redirectOrAbort($request->path());
+        }
 
         return $this->show($event);
     }

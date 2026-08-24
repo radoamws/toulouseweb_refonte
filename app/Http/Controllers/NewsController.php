@@ -18,13 +18,16 @@ class NewsController extends Controller
         return $this->renderIndex($request, $category);
     }
 
-    public function bySlug(Request $request, string $slug): View
+    public function bySlug(Request $request, string $slug): View|\Illuminate\Http\RedirectResponse
     {
         if ($category = NewsCategory::where('slug', $slug)->first()) {
             return $this->renderIndex($request, $category);
         }
 
-        $news = News::published()->where('slug', $slug)->firstOrFail();
+        $news = News::published()->where('slug', $slug)->first();
+        if (! $news) {
+            return $this->redirectOrAbort($request->path());
+        }
 
         return $this->show($news);
     }

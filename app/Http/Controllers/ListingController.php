@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Listing;
+use App\Models\Page;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -11,11 +12,21 @@ use Illuminate\View\View;
  * Annuaire (brief §5) : listing par catégorie avec recherche, fiche
  * détaillée pour les fiches payantes. Les fiches gratuites n'exposent que
  * titre/adresse/téléphone côté vue (voir resources/views/annuaire/*).
+ *
+ * Résolution de slug volontairement manuelle (pas de route-model-binding
+ * implicite) : sinon un slug legacy inconnu déclenche un 404 AVANT que le
+ * contrôleur ne puisse consulter la table `redirects` (voir
+ * Controller::redirectOrAbort).
  */
 class ListingController extends Controller
 {
-    public function index(Request $request, ?Category $category = null): View
+    public function index(Request $request, ?string $categorySlug = null): View
     {
+        $category = $categorySlug ? Category::where('slug', $categorySlug)->first() : null;
+        if ($categorySlug && ! $category) {
+            return $this->redirectOrAbort($request->path());
+        }
+
         $categoryIds = $category ? $this->categoryAndDescendantIds($category) : null;
 
         $listings = Listing::query()
@@ -30,14 +41,18 @@ class ListingController extends Controller
 
         $topCategories = Category::where('level', 0)->where('is_active', true)->orderBy('order')->orderBy('name')->get();
 
-        $seo = $category ? $category->resolveSeo() : (\App\Models\Page::where('key', 'seo-menu-annuaire')->first()?->resolveSeo() ?? []);
+        $seo = $category ? $category->resolveSeo() : (Page::where('key', 'seo-menu-annuaire')->first()?->resolveSeo() ?? []);
 
         return view('annuaire.index', compact('listings', 'topCategories', 'category', 'seo'));
     }
 
-    public function show(Listing $listing): View
+    public function show(Request $request, string $slug): View|\Illuminate\Http\RedirectResponse
     {
-        abort_unless($listing->status === 'published', 404);
+        $listing = Listing::where('slug', $slug)->where('status', 'published')->first();
+
+        if (! $listing) {
+            return $this->redirectOrAbort($request->path());
+        }
 
         $listing->load(['categories', 'amenities', 'media']);
 

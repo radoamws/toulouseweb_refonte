@@ -23,13 +23,16 @@ class ClassifiedController extends Controller
         return $this->renderIndex($request, $category);
     }
 
-    public function bySlug(Request $request, string $slug): View
+    public function bySlug(Request $request, string $slug): View|\Illuminate\Http\RedirectResponse
     {
         if ($category = ClassifiedCategory::where('slug', $slug)->first()) {
             return $this->renderIndex($request, $category);
         }
 
-        $classified = Classified::where('status', 'published')->where('slug', $slug)->firstOrFail();
+        $classified = Classified::where('status', 'published')->where('slug', $slug)->first();
+        if (! $classified) {
+            return $this->redirectOrAbort($request->path());
+        }
 
         return $this->show($classified);
     }
