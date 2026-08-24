@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ResolvesImageUrl;
 use App\Models\Concerns\Trackable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 /**
  * Bannière carrousel homepage/pages, administrable (brief §4) : ajout,
@@ -13,7 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class Slider extends Model
 {
-    use Trackable;
+    use Trackable, ResolvesImageUrl;
 
     protected $fillable = [
         'title', 'image', 'link_url', 'client_name', 'order', 'delay_ms',
@@ -25,6 +27,11 @@ class Slider extends Model
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
     ];
+
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::get(fn () => static::resolveImageUrl($this->image));
+    }
 
     public function placements(): HasMany
     {

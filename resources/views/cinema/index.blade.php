@@ -29,8 +29,8 @@
                     <a href="/cinema/films/{{ $movie->slug }}" data-track="movie:{{ $movie->id }}:cinema_listing"
                        class="group block overflow-hidden rounded-xl border border-ink-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
                         <div class="aspect-[2/3] w-full overflow-hidden bg-ink-100">
-                            @if ($movie->poster)
-                                <img src="{{ $movie->poster }}" alt="{{ $movie->title }}" loading="lazy" class="h-full w-full object-cover transition group-hover:scale-105">
+                            @if ($movie->poster_url)
+                                <img src="{{ $movie->poster_url }}" alt="{{ $movie->title }}" loading="lazy" class="h-full w-full object-cover transition group-hover:scale-105">
                             @endif
                         </div>
                         <p class="p-2 text-sm font-medium text-ink-800 group-hover:text-brand-700">{{ $movie->title }}</p>

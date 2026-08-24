@@ -9,7 +9,7 @@
         '@type' => 'Movie',
         'name' => $movie->title,
         'description' => $movie->synopsis,
-        'image' => $movie->poster,
+        'image' => $movie->poster_url,
         'director' => $movie->director ? ['@type' => 'Person', 'name' => $movie->director] : null,
         'datePublished' => $movie->release_date?->toDateString(),
         'duration' => $movie->duration_minutes ? 'PT'.$movie->duration_minutes.'M' : null,
@@ -26,8 +26,8 @@
 
         <div class="grid gap-8 sm:grid-cols-3">
             <div class="aspect-[2/3] overflow-hidden rounded-2xl bg-ink-100 sm:col-span-1">
-                @if ($movie->poster)
-                    <img src="{{ $movie->poster }}" alt="{{ $movie->title }}" class="h-full w-full object-cover">
+                @if ($movie->poster_url)
+                    <img src="{{ $movie->poster_url }}" alt="{{ $movie->title }}" class="h-full w-full object-cover">
                 @endif
             </div>
             <div class="sm:col-span-2">

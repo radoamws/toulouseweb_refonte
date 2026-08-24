@@ -33,7 +33,7 @@
                     @foreach ($latestNews as $news)
                         <x-ui.card
                             :href="'/actualites/'.$news->slug"
-                            :image="$news->image"
+                            :image="$news->image_url"
                             :eyebrow="$news->category?->name"
                             :title="$news->title"
                             :meta="$news->published_at?->translatedFormat('d M Y')"
@@ -52,7 +52,7 @@
                     @foreach ($upcomingEvents as $event)
                         <x-ui.card
                             :href="'/agenda/'.$event->slug"
-                            :image="$event->image"
+                            :image="$event->image_url"
                             :eyebrow="$event->categories->first()?->name"
                             :title="$event->title"
                             :meta="$event->start_date->translatedFormat('d M Y').($event->area ? ' · '.$event->area->name : '')"
@@ -75,8 +75,8 @@
                             class="group block overflow-hidden rounded-xl border border-ink-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                         >
                             <div class="aspect-[2/3] w-full overflow-hidden bg-ink-100">
-                                @if ($movie->poster)
-                                    <img src="{{ $movie->poster }}" alt="{{ $movie->title }}" loading="lazy" class="h-full w-full object-cover transition group-hover:scale-105">
+                                @if ($movie->poster_url)
+                                    <img src="{{ $movie->poster_url }}" alt="{{ $movie->title }}" loading="lazy" class="h-full w-full object-cover transition group-hover:scale-105">
                                 @endif
                             </div>
                             <p class="p-2 text-sm font-medium text-ink-800 group-hover:text-brand-700">{{ $movie->title }}</p>

@@ -8,7 +8,7 @@
         'startDate' => $event->start_date->toIso8601String(),
         'endDate' => $event->end_date?->toIso8601String(),
         'eventStatus' => $event->status === 'cancelled' ? 'https://schema.org/EventCancelled' : 'https://schema.org/EventScheduled',
-        'image' => $event->image,
+        'image' => $event->image_url,
         'offers' => $event->price ? ['@type' => 'Offer', 'price' => $event->price, 'priceCurrency' => 'EUR', 'url' => $event->booking_url] : null,
         'location' => $event->area ? array_filter([
             '@type' => 'Place',
@@ -30,8 +30,8 @@
             ['label' => $event->title],
         ]" />
 
-        @if ($event->image)
-            <img src="{{ $event->image }}" alt="{{ $event->title }}" class="mb-6 aspect-video w-full rounded-2xl object-cover">
+        @if ($event->image_url)
+            <img src="{{ $event->image_url }}" alt="{{ $event->title }}" class="mb-6 aspect-video w-full rounded-2xl object-cover">
         @endif
 
         <div class="flex flex-wrap gap-2">

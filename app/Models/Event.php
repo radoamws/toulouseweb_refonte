@@ -3,19 +3,21 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasSeoMeta;
+use App\Models\Concerns\ResolvesImageUrl;
 use App\Models\Concerns\Trackable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Spatie\Sluggable\HasSlug;
 use Spatie\Sluggable\SlugOptions;
 
 /** Événement d'agenda (remplace t_agendas ; corrige la FK area_id cassée du legacy). */
 class Event extends Model
 {
-    use HasSlug, SoftDeletes, HasSeoMeta, Trackable;
+    use HasSlug, SoftDeletes, HasSeoMeta, Trackable, ResolvesImageUrl;
 
     protected $fillable = [
         'area_id', 'title', 'slug', 'subtitle', 'description', 'image', 'price',
@@ -32,6 +34,11 @@ class Event extends Model
     public function getSlugOptions(): SlugOptions
     {
         return SlugOptions::create()->generateSlugsFrom('title')->saveSlugsTo('slug');
+    }
+
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::get(fn () => static::resolveImageUrl($this->image));
     }
 
     public function area(): BelongsTo

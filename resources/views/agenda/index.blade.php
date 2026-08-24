@@ -47,7 +47,7 @@
                 @foreach ($events as $event)
                     <x-ui.card
                         :href="'/agenda/'.$event->slug"
-                        :image="$event->image"
+                        :image="$event->image_url"
                         :eyebrow="$event->categories->first()?->name"
                         :title="$event->title"
                         :meta="$event->start_date->translatedFormat('d M Y').($event->area ? ' · '.$event->area->name : '')"

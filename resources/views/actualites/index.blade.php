@@ -33,7 +33,7 @@
                 @foreach ($news as $item)
                     <x-ui.card
                         :href="'/actualites/'.$item->slug"
-                        :image="$item->image"
+                        :image="$item->image_url"
                         :eyebrow="$item->category?->name"
                         :title="$item->title"
                         :meta="$item->published_at?->translatedFormat('d M Y')"

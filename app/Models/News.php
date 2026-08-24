@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasSeoMeta;
+use App\Models\Concerns\ResolvesImageUrl;
 use App\Models\Concerns\Trackable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -19,7 +21,7 @@ use Spatie\Sluggable\SlugOptions;
  */
 class News extends Model
 {
-    use HasSlug, SoftDeletes, HasSeoMeta, Trackable;
+    use HasSlug, SoftDeletes, HasSeoMeta, Trackable, ResolvesImageUrl;
 
     protected $fillable = [
         'category_id', 'author_id', 'title', 'slug', 'excerpt', 'body', 'image',
@@ -31,6 +33,11 @@ class News extends Model
     public function getSlugOptions(): SlugOptions
     {
         return SlugOptions::create()->generateSlugsFrom('title')->saveSlugsTo('slug');
+    }
+
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::get(fn () => static::resolveImageUrl($this->image));
     }
 
     public function category(): BelongsTo

@@ -5,7 +5,7 @@
         '@type' => 'NewsArticle',
         'headline' => $news->title,
         'description' => $news->excerpt,
-        'image' => $news->image,
+        'image' => $news->image_url,
         'datePublished' => $news->published_at?->toIso8601String(),
         'dateModified' => $news->updated_at->toIso8601String(),
         'author' => $news->author ? ['@type' => 'Person', 'name' => $news->author->name] : ['@type' => 'Organization', 'name' => 'ToulouseWeb'],
@@ -24,8 +24,8 @@
             ['label' => $news->title],
         ]" />
 
-        @if ($news->image)
-            <img src="{{ $news->image }}" alt="{{ $news->title }}" class="mb-6 aspect-video w-full rounded-2xl object-cover">
+        @if ($news->image_url)
+            <img src="{{ $news->image_url }}" alt="{{ $news->title }}" class="mb-6 aspect-video w-full rounded-2xl object-cover">
         @endif
 
         @if ($news->category)
@@ -41,7 +41,7 @@
                 <h2 class="font-heading text-lg font-semibold text-ink-900">À lire aussi</h2>
                 <div class="mt-4 grid gap-4 sm:grid-cols-3">
                     @foreach ($related as $item)
-                        <x-ui.card :href="'/actualites/'.$item->slug" :image="$item->image" :title="$item->title" :track="'news:'.$item->id.':actualites_related'" />
+                        <x-ui.card :href="'/actualites/'.$item->slug" :image="$item->image_url" :title="$item->title" :track="'news:'.$item->id.':actualites_related'" />
                     @endforeach
                 </div>
             </div>

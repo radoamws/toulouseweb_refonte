@@ -35,7 +35,7 @@
                 aria-label="{{ $slide->title }}"
             >
                 <img
-                    src="{{ $slide->image }}"
+                    src="{{ $slide->image_url }}"
                     alt="{{ $slide->title }}"
                     loading="{{ $i === 0 ? 'eager' : 'lazy' }}"
                     fetchpriority="{{ $i === 0 ? 'high' : 'auto' }}"
