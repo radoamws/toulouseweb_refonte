@@ -39,9 +39,12 @@
                 $isToday = $day->isSameDay($today);
                 $isSelected = $date && $day->isSameDay($date);
             @endphp
+            {{-- Pas de data-track ici : une case de calendrier n'est pas une
+                 entité (entity_id doit être un entier, voir track-click.js /
+                 ClickTrackingController) — un jour n'en est pas un, contrairement
+                 à une bannière/catégorie/fiche/film réels. --}}
             <a
                 href="{{ request()->fullUrlWithQuery(['date' => $day->format('Y-m-d'), 'view' => 'list']) }}"
-                data-track="agenda_calendar_day:{{ $day->format('Y-m-d') }}:agenda_calendar"
                 class="flex aspect-square flex-col items-center justify-center rounded-lg text-sm transition
                     {{ ! $inMonth ? 'text-ink-300' : 'text-ink-800' }}
                     {{ $isSelected ? 'bg-brand-600 text-white' : ($isToday ? 'border border-brand-400 font-semibold' : 'hover:bg-ink-50') }}"

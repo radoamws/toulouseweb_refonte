@@ -12,7 +12,7 @@
 | 1. Audit complet de l'ancien site et de la base | ✅ Terminé (§1-6) |
 | 2. Architecture technique et base de données | ✅ Terminé (§7-11) |
 | 3. Design system & layout | 🟡 Palette/typographies/composants Blade de base livrés (§13), pages de contenu (annuaire/agenda/cinéma...) pas encore construites |
-| 4. Administration | 🟡 18 ressources Filament créées et testées + relation manager Séances (Phase 8) + page Paramètres du site (§13), à compléter (gestion utilisateurs/rôles, dashboard stats) |
+| 4. Administration | 🟡 18 ressources Filament créées et testées + relation manager Séances (Phase 8) + page Paramètres du site + dashboard stats de clics (§13), à compléter (gestion utilisateurs/rôles) |
 | 5. Migration des données | ✅ Terminé — 11 commandes `migrate:*` exécutées avec succès contre `toulouseweb_old` réelle (§13, dont `migrate:partner-sites` ajoutée le 2026-08-24 — table oubliée à l'audit initial) + 7 commandes `images:*` ayant réimporté l'écrasante majorité des visuels de contenu retrouvés sous `old/backEnd/public/` (33 000+ fichiers, voir §13) |
 | 6. Annuaire | 🟡 Pages publiques (index par catégorie + recherche, fiche détail) livrées et vérifiées avec les vraies données, désormais avec photo principale + galerie réelles + dépôt public de fiche (modération stricte, tier toujours gratuit) — voir §13 ; pas encore de recherche géographique |
 | 7. Agenda / événements / théâtre | 🟡 Pages publiques (index + filtre catégorie dont "theatre", fiche détail, **calendrier visuel**) livrées ; proposition d'événement par le public pas encore faite ; scraper agenda confirmé **inexistant côté legacy** (routes mortes, aucune méthode réelle — voir §13), décision produit requise avant de construire quoi que ce soit |
@@ -347,7 +347,7 @@ Tous les modèles du schéma cible existent dans `app/Models/` avec leurs relati
 ### Services transversaux
 
 - `App\Services\Seo\SeoResolverService` : résout title/description/canonical/robots/og_image/structured_data d'une entité — valeur admin (`seo_meta`) si renseignée, sinon génération automatique à partir des attributs du modèle (implémente le principe "SEO personnalisé -> sinon génération automatique" du brief §13). **Pas encore branché sur les vues publiques** (aucune vue publique n'existe encore, Phase 6+).
-- `App\Services\Stats\ClickTrackingService` + `App\Http\Controllers\ClickTrackingController` : endpoint unique `POST /track-click` (throttlé 60/min), enregistre n'importe quel clic (`entity_type`, `entity_id`, `context`, referrer, user-agent, IP hashée). Répond à la demande explicite du client de statistiques étendues à chaque clic du site. **Pas encore appelé depuis le frontend** (aucun composant public n'existe encore) — prêt à être câblé dès la Phase 10 (homepage) et suivantes.
+- `App\Services\Stats\ClickTrackingService` + `App\Http\Controllers\ClickTrackingController` : endpoint unique `POST /track-click` (throttlé 60/min), enregistre n'importe quel clic (`entity_type`, `entity_id`, `context`, referrer, user-agent, IP hashée). Répond à la demande explicite du client de statistiques étendues à chaque clic du site. Câblé via `data-track="type:id:contexte"` (`resources/js/track-click.js`, `sendBeacon`) sur : `listing`, `event`, `movie`, `classified`, `category`, `partner_site`, `slider`. **Pas encore câblé sur `actualites/*`** (actualités) — gap honnête à combler, aucun lien de la vue News n'a de `data-track` pour l'instant.
 
 ### Administration Filament (Phase 4, amorcée)
 
@@ -367,7 +367,24 @@ Tous les modèles du schéma cible existent dans `app/Models/` avec leurs relati
 
 **Fait depuis** : relation manager Séances sur `CinemaResource` (Phase 8, voir plus haut) ; page "Paramètres du site" (voir ci-dessous).
 
-**Reste à faire côté admin** : gestion des utilisateurs/rôles, dashboard avec widgets de stats de clics (`ClickTrackingService::dailySummary`), page SEO globale.
+**Reste à faire côté admin** : gestion des utilisateurs/rôles, page SEO globale.
+
+### Dashboard admin — statistiques de clics (brief : "chaque clic... doit être ajouté dans cette statistique")
+
+3 widgets Filament (`app/Filament/Widgets/`, auto-découverts via `discoverWidgets()` dans `AdminPanelProvider`, affichés sur le tableau de bord par défaut) :
+
+- `ClicksOverview` (`StatsOverviewWidget`) : total de clics aujourd'hui / 7 jours / 30 jours, toutes entités confondues.
+- `ClicksByTypeChart` (`BarChartWidget`) : répartition des clics par type d'entité sur 30 jours.
+- `TopClickedEntities` (widget custom, pas `TableWidget`) : top 10 des entités les plus cliquées tous types confondus, avec libellé humain résolu (`App\Services\Stats\EntityLabelResolver`) — widget custom car la requête agrégée (`GROUP BY entity_type, entity_id`) ne correspond à aucun modèle Eloquent unique exploitable par le composant Table de Filament.
+
+`App\Services\Stats\ClickTrackingService` complété avec `totalCount()`, `totalsByType()`, `topEntities()`. `App\Services\Stats\EntityLabelResolver` fait correspondre chaque `entity_type` (chaîne libre côté frontend) à un modèle + colonne d'affichage — **à tenir à jour à chaque nouveau type de clic suivi**.
+
+**Bug trouvé et corrigé en construisant ce dashboard** (avant même un premier commit, pas en production) :
+- Le lien de case de calendrier agenda (Phase 7 précédente) portait `data-track="agenda_calendar_day:{date}:..."` — mais `entity_id` DOIT être un entier (`ClickTrackingController` valide `'entity_id' => ['required', 'integer']`, et `track-click.js` fait `Number(entityId)`) ; une date ("2026-08-19") donne `NaN` → `null` en JSON → rejeté par la validation. Échec silencieux (l'appel `fetch`/`sendBeacon` avale l'erreur), jamais remonté à l'utilisateur. Retiré : une case de calendrier n'est pas une entité au sens du brief, contrairement à une fiche/un film/une bannière.
+- `EntityLabelResolver` appelait `Model::withTrashed()->find()` uniformément, mais seuls `Listing`/`Event`/`Classified` utilisent `SoftDeletes` — `Movie`/`Category`/`PartnerSite`/`Slider` n'ont pas cette méthode (`BadMethodCallException` si jamais atteint). Corrigé en repli sur `find()` simple partout.
+- **Piège Filament découvert en testant** : les widgets sont **lazy par défaut** (`Filament\Support\Concerns\CanBeLazy`, `$isLazy = true`) — leur contenu réel n'est rendu qu'après un aller-retour Livewire déclenché par un observateur d'intersection JS côté navigateur. Un test HTTP serveur (`$this->get('/admin')`, pas de JS) ne voit donc que des widgets vides (`"data":[]`) au premier chargement. Désactivé (`$isLazy = false`) sur les 3 widgets pour un affichage immédiat, à la fois pour l'utilisateur (pas d'attente perceptible sur un dashboard qui n'a rien de coûteux à charger) et pour la testabilité.
+
+Tests : `tests/Feature/AdminDashboardStatsTest.php` (rendu avec de vrais clics enregistrés, rendu sans clic sans erreur).
 
 ### Paramètres du site (`Filament\Pages\SiteSettings`, brief §13)
 

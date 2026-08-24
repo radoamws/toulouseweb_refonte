@@ -45,4 +45,47 @@ class ClickTrackingService
             ->pluck('total', 'day')
             ->all();
     }
+
+    /** Nombre total de clics, toutes entités confondues, sur une plage de dates (bornes incluses). */
+    public function totalCount(\DateTimeInterface $from, \DateTimeInterface $to): int
+    {
+        return ClickEvent::query()->whereBetween('created_at', [$from, $to])->count();
+    }
+
+    /**
+     * Nombre de clics par type d'entité sur une plage de dates — alimente le
+     * graphique "clics par type" du dashboard admin (brief : statistiques
+     * étendues à chaque clic du site, quel que soit son type).
+     *
+     * @return array<string, int> entity_type => total
+     */
+    public function totalsByType(\DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return ClickEvent::query()
+            ->selectRaw('entity_type, COUNT(*) as total')
+            ->whereBetween('created_at', [$from, $to])
+            ->groupBy('entity_type')
+            ->orderByDesc('total')
+            ->pluck('total', 'entity_type')
+            ->all();
+    }
+
+    /**
+     * Les N entités (tous types confondus) les plus cliquées sur une plage
+     * de dates — alimente le widget "Top clics" du dashboard admin.
+     *
+     * @return array<int, array{entity_type: string, entity_id: int, total: int}>
+     */
+    public function topEntities(int $limit, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return ClickEvent::query()
+            ->selectRaw('entity_type, entity_id, COUNT(*) as total')
+            ->whereBetween('created_at', [$from, $to])
+            ->groupBy('entity_type', 'entity_id')
+            ->orderByDesc('total')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($row) => ['entity_type' => $row->entity_type, 'entity_id' => (int) $row->entity_id, 'total' => (int) $row->total])
+            ->all();
+    }
 }
