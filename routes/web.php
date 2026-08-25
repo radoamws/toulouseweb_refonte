@@ -7,11 +7,15 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ListingController;
+use App\Http\Controllers\LlmsTxtController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\RedirectFallbackController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class.'@index')->name('home');
+
+// GEO/AI Search (brief §13) — voir docblock de LlmsTxtController.
+Route::get('/llms.txt', LlmsTxtController::class)->name('llms-txt');
 
 // Tracking de clics générique (voir TECHNICAL_DOCUMENTATION.md §9) —
 // appelable depuis n'importe quel composant public. Throttle pour éviter

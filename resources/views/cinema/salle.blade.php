@@ -53,5 +53,21 @@
                 @endforeach
             </div>
         @endif
+
+        @if ($related->isNotEmpty())
+            <div class="mt-12">
+                <h2 class="font-heading text-lg font-semibold text-ink-900">Autres salles</h2>
+                <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    @foreach ($related as $item)
+                        <x-ui.card
+                            :href="'/cinema/salles/'.$item->slug"
+                            :title="$item->name"
+                            :meta="$item->address"
+                            :track="'cinema:'.$item->id.':cinema_salle_related'"
+                        />
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 </x-layouts.app>

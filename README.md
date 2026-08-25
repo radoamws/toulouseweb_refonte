@@ -122,6 +122,9 @@ php artisan images:sliders        # images de sliders (recherche large, peu de c
 - **`robots.txt`** : `public/robots.txt`, bloque `/admin` et `/track-click`.
 - **Redirections 301** : administrables via `RedirectResource` (`/admin`), servies par `Controller::redirectOrAbort()` sur chaque route de fiche/détail. Voir `TECHNICAL_DOCUMENTATION.md` §13 pour le piège rencontré avec `Route::fallback()` avant ce choix d'implémentation.
 - **404 fréquentes** : toute 404 réelle est journalisée (`missed_redirects`) et consultable dans l'admin (`MissedRedirectResource`, "404 fréquentes") ou via `php artisan redirects:audit` (planifié hebdomadairement) — permet de repérer les chemins legacy manquants à traiter manuellement dans `RedirectResource`.
+- **Maillage interne** : chaque page de détail (annuaire, agenda, cinéma, actualités, annonces) affiche un bloc "contenu similaire" (même catégorie/salle/à l'affiche).
+- **Contenus expirés** : `php artisan content:mark-expired` (planifié quotidiennement) garde le statut des événements/annonces cohérent une fois leur date dépassée — le filtrage public par date, lui, ne dépend pas de cette commande.
+- **GEO/AI Search** : `/llms.txt` (convention llmstxt.org) résume le site pour les agents IA — complémentaire de robots.txt (aucun crawler IA bloqué) et des données structurées Schema.org déjà posées sur chaque page.
 
 ## Déploiement
 

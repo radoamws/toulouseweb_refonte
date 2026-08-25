@@ -166,4 +166,44 @@ class PublicContentPagesTest extends TestCase
 
         $this->get('/cinema/films/vieux-film')->assertOk()->assertSee('Aucune séance programmée actuellement.');
     }
+
+    /** Maillage interne (brief §13, SEO/GEO) — voir docblock des contrôleurs. */
+    public function test_agenda_show_lists_related_events_in_the_same_category(): void
+    {
+        $category = EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $other = EventCategory::create(['name' => 'Concerts', 'slug' => 'concerts']);
+
+        $event = Event::create(['title' => 'Pièce principale', 'slug' => 'piece-principale', 'status' => 'published', 'start_date' => now()->addDay()]);
+        $event->categories()->attach($category);
+
+        $sameCategory = Event::create(['title' => 'Autre pièce', 'slug' => 'autre-piece', 'status' => 'published', 'start_date' => now()->addDays(2)]);
+        $sameCategory->categories()->attach($category);
+
+        $otherCategory = Event::create(['title' => 'Un concert', 'slug' => 'un-concert', 'status' => 'published', 'start_date' => now()->addDays(3)]);
+        $otherCategory->categories()->attach($other);
+
+        $response = $this->get('/agenda/piece-principale')->assertOk();
+        $response->assertSee('Autre pièce')->assertDontSee('Un concert');
+    }
+
+    public function test_cinema_movie_show_lists_other_currently_screening_movies(): void
+    {
+        $cinema = Cinema::create(['name' => 'Gaumont Wilson', 'slug' => 'gaumont-wilson', 'is_active' => true]);
+        $movie = Movie::create(['title' => 'Film Principal', 'slug' => 'film-principal']);
+        $other = Movie::create(['title' => 'Autre Film', 'slug' => 'autre-film']);
+        Screening::create(['cinema_id' => $cinema->id, 'movie_id' => $movie->id, 'start_date' => now()->subDay(), 'end_date' => now()->addWeek()]);
+        Screening::create(['cinema_id' => $cinema->id, 'movie_id' => $other->id, 'start_date' => now()->subDay(), 'end_date' => now()->addWeek()]);
+
+        $this->get('/cinema/films/film-principal')->assertOk()->assertSee('Autre Film');
+    }
+
+    public function test_cinema_salle_show_lists_other_active_cinemas(): void
+    {
+        Cinema::create(['name' => 'Gaumont Wilson', 'slug' => 'gaumont-wilson', 'is_active' => true]);
+        Cinema::create(['name' => 'ABC', 'slug' => 'abc', 'is_active' => true]);
+        Cinema::create(['name' => 'Salle Fermée', 'slug' => 'salle-fermee', 'is_active' => false]);
+
+        $response = $this->get('/cinema/salles/gaumont-wilson')->assertOk();
+        $response->assertSee('ABC')->assertDontSee('Salle Fermée');
+    }
 }

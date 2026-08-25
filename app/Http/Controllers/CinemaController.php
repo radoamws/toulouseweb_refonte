@@ -49,9 +49,19 @@ class CinemaController extends Controller
 
         $screeningsByCinema = $movie->screenings->groupBy('cinema.name');
 
+        // Maillage interne (brief §13, SEO/GEO) — autres films actuellement
+        // à l'affiche, hors film courant.
+        $related = Movie::query()
+            ->whereHas('screenings', fn (Builder $q) => $this->currentlyValid($q))
+            ->where('id', '!=', $movie->id)
+            ->latest('release_date')
+            ->limit(4)
+            ->get();
+
         return view('cinema.movie', [
             'movie' => $movie,
             'screeningsByCinema' => $screeningsByCinema,
+            'related' => $related,
             'seo' => $movie->resolveSeo(),
         ]);
     }
@@ -67,8 +77,17 @@ class CinemaController extends Controller
             'screenings' => fn ($q) => $this->currentlyValid($q)->with(['movie', 'language', 'times']),
         ]);
 
+        // Maillage interne (brief §13, SEO/GEO) — autres salles actives,
+        // hors salle courante.
+        $related = Cinema::where('is_active', true)
+            ->where('id', '!=', $cinema->id)
+            ->orderBy('name')
+            ->limit(4)
+            ->get();
+
         return view('cinema.salle', [
             'cinema' => $cinema,
+            'related' => $related,
             'seo' => $cinema->resolveSeo(),
         ]);
     }

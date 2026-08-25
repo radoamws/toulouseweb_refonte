@@ -117,8 +117,18 @@ class EventController extends Controller
 
         $event->load(['area', 'categories']);
 
+        // Maillage interne (brief §13, SEO/GEO) — mêmes catégories, à venir,
+        // hors événement courant.
+        $related = Event::published()->upcoming()
+            ->whereHas('categories', fn ($q) => $q->whereIn('event_categories.id', $event->categories->pluck('id')))
+            ->where('id', '!=', $event->id)
+            ->orderBy('start_date')
+            ->limit(4)
+            ->get();
+
         return view('agenda.show', [
             'event' => $event,
+            'related' => $related,
             'seo' => $event->resolveSeo(),
         ]);
     }

@@ -27,3 +27,8 @@ Schedule::command('scrape:events')->dailyAt('05:30')->withoutOverlapping();
 // laisse le temps aux occurrences ponctuelles/scanners de se distinguer
 // des vrais chemins legacy manquants.
 Schedule::command('redirects:audit')->weekly();
+
+// "Gestion des contenus expirés"/"événements passés" (brief §13, SEO/GEO) —
+// garde `status` cohérent côté admin, voir docblock de MarkExpiredContent
+// (le filtrage public par date, lui, ne dépend pas de cette commande).
+Schedule::command('content:mark-expired')->dailyAt('04:30');

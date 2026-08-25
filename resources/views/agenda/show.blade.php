@@ -83,5 +83,22 @@
                 Réserver / en savoir plus
             </x-ui.button>
         @endif
+
+        @if ($related->isNotEmpty())
+            <div class="mt-12">
+                <h2 class="font-heading text-lg font-semibold text-ink-900">À voir aussi</h2>
+                <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    @foreach ($related as $item)
+                        <x-ui.card
+                            :href="'/agenda/'.$item->slug"
+                            :image="$item->image_url"
+                            :title="$item->title"
+                            :meta="$item->start_date->translatedFormat('d M Y')"
+                            :track="'event:'.$item->id.':agenda_related'"
+                        />
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 </x-layouts.app>

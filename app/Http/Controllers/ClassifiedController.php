@@ -66,8 +66,19 @@ class ClassifiedController extends Controller
 
         $classified->load(['category', 'media']);
 
+        // Maillage interne (brief §13, SEO/GEO) — même catégorie, hors
+        // annonce courante.
+        $related = Classified::where('status', 'published')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>=', now()))
+            ->where('category_id', $classified->category_id)
+            ->where('id', '!=', $classified->id)
+            ->latest()
+            ->limit(4)
+            ->get();
+
         return view('annonces.show', [
             'classified' => $classified,
+            'related' => $related,
             'seo' => $classified->resolveSeo(),
         ]);
     }

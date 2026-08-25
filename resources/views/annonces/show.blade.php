@@ -34,5 +34,21 @@
                 <div><dt class="inline font-medium text-ink-500">Email :</dt> <dd class="inline"><a href="mailto:{{ $classified->contact_email }}" class="text-brand-700 hover:underline" data-track="classified:{{ $classified->id }}:email_click">{{ $classified->contact_email }}</a></dd></div>
             </dl>
         </div>
+
+        @if ($related->isNotEmpty())
+            <div class="mt-12">
+                <h2 class="font-heading text-lg font-semibold text-ink-900">Annonces similaires</h2>
+                <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    @foreach ($related as $item)
+                        <x-ui.card
+                            :href="'/annonces/'.$item->slug"
+                            :title="$item->title"
+                            :meta="$item->price ? number_format($item->price, 0, ',', ' ').' €' : null"
+                            :track="'classified:'.$item->id.':annonces_related'"
+                        />
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 </x-layouts.app>

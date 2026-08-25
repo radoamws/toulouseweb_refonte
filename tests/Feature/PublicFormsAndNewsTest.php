@@ -106,6 +106,29 @@ class PublicFormsAndNewsTest extends TestCase
         $this->get('/annonces/'.$classified->slug)->assertOk()->assertSee('Annonce publiée');
     }
 
+    /** Maillage interne (brief §13, SEO/GEO) — voir docblock de ClassifiedController::show(). */
+    public function test_classified_show_lists_related_classifieds_in_the_same_category(): void
+    {
+        $category = ClassifiedCategory::create(['name' => 'Voitures', 'slug' => 'voitures']);
+        $other = ClassifiedCategory::create(['name' => 'Immobilier', 'slug' => 'immobilier']);
+
+        $classified = Classified::create([
+            'category_id' => $category->id, 'title' => 'Citadine principale', 'slug' => 'citadine-principale',
+            'description' => 'x', 'contact_email' => 'a@example.test', 'status' => 'published',
+        ]);
+        Classified::create([
+            'category_id' => $category->id, 'title' => 'Autre voiture', 'slug' => 'autre-voiture',
+            'description' => 'x', 'contact_email' => 'a@example.test', 'status' => 'published',
+        ]);
+        Classified::create([
+            'category_id' => $other->id, 'title' => 'Un appartement', 'slug' => 'un-appartement',
+            'description' => 'x', 'contact_email' => 'a@example.test', 'status' => 'published',
+        ]);
+
+        $response = $this->get('/annonces/'.$classified->slug)->assertOk();
+        $response->assertSee('Autre voiture')->assertDontSee('Un appartement');
+    }
+
     public function test_listing_submission_always_starts_pending_and_free_and_is_not_publicly_visible(): void
     {
         $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);
