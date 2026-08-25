@@ -91,6 +91,20 @@ class SiteSettings extends Page implements HasForms
                         TextInput::make('youtube_url')->label('YouTube')->url()->maxLength(255),
                     ])
                     ->columns(2),
+                Section::make('SEO & Analytics')
+                    ->description('Réglages globaux — le title/description/image par entité reste géré au niveau de chaque fiche (voir le bloc SEO de chaque ressource).')
+                    ->schema([
+                        TextInput::make('google_analytics_id')
+                            ->label('Identifiant Google Analytics (GA4)')
+                            ->maxLength(255)
+                            ->placeholder('G-XXXXXXXXXX')
+                            ->helperText('Laisser vide pour ne charger aucun script de mesure d\'audience.'),
+                        TextInput::make('google_site_verification')
+                            ->label('Balise de vérification Google Search Console')
+                            ->maxLength(255)
+                            ->helperText('Le contenu du meta tag fourni par Search Console (méthode "balise HTML"), pas l\'URL entière.'),
+                    ])
+                    ->columns(2),
             ])
             ->statePath('data');
     }

@@ -67,7 +67,7 @@ class AdminPanelSmokeTest extends TestCase
         // configuration a le plus de chances de se cacher.
         return collect([
             'listings', 'events', 'event-categories', 'categories',
-            'classifieds', 'news', 'sliders', 'redirects',
+            'classifieds', 'news', 'sliders', 'redirects', 'users', 'roles',
         ])->mapWithKeys(fn (string $slug) => [$slug => ["/admin/{$slug}/create"]])->all();
     }
 
@@ -80,7 +80,7 @@ class AdminPanelSmokeTest extends TestCase
             'classifieds', 'classified-categories',
             'news', 'news-categories',
             'sliders', 'contact-messages', 'partner-sites',
-            'redirects', 'missed-redirects', 'scraper-sources',
+            'redirects', 'missed-redirects', 'scraper-sources', 'users', 'roles',
         ])->mapWithKeys(fn (string $slug) => [$slug => ["/admin/{$slug}"]])->all();
     }
 }

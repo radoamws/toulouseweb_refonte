@@ -68,7 +68,7 @@ php artisan serve
 
 ## Administration
 
-18 ressources Filament (`/admin`, une par entité — annuaire, agenda, cinéma, actualités, annonces, sliders, contacts, redirections, sources de scraping...) + une page "Paramètres du site" (`/admin/site-settings` : nom, description, logo, coordonnées, réseaux sociaux — alimente le JSON-LD Organization et le pied de page) + un dashboard de statistiques de clics (vue d'ensemble, répartition par type, top des entités les plus cliquées — couvre annuaire, agenda, cinéma, actualités, annonces, catégories, sliders, sites partenaires). Voir `TECHNICAL_DOCUMENTATION.md` §13. Documentation détaillée par ressource à poursuivre au fil de l'implémentation.
+21 ressources Filament (`/admin`, une par entité — annuaire, agenda, cinéma, actualités, annonces, sliders, contacts, redirections, 404 fréquentes, sources de scraping, **utilisateurs et rôles**...) + une page "Paramètres du site" (`/admin/site-settings` : identité, coordonnées, réseaux sociaux, **SEO/Analytics globaux** — Google Analytics, vérification Search Console) + un dashboard de statistiques de clics (vue d'ensemble, répartition par type, top des entités les plus cliquées — couvre annuaire, agenda, cinéma, actualités, annonces, catégories, sliders, sites partenaires). Voir `TECHNICAL_DOCUMENTATION.md` §13. Documentation détaillée par ressource à poursuivre au fil de l'implémentation.
 
 ## Scraping / Cron
 
@@ -113,6 +113,7 @@ php artisan images:sliders        # images de sliders (recherche large, peu de c
 ## SEO / GEO
 
 - **Balises** : title/description personnalisables par entité (`seo_meta`) avec génération automatique de repli (`App\Services\Seo\SeoResolverService`), canonical, Open Graph, Twitter Card, JSON-LD (Organization, LocalBusiness/Restaurant, Event, Movie/MovieTheater, NewsArticle, BreadcrumbList) — voir `resources/views/components/layouts/app.blade.php` et les vues de détail par domaine.
+- **SEO/Analytics globaux** : Google Analytics (GA4) et balise de vérification Search Console configurables dans "Paramètres du site" (`/admin/site-settings`) — chargés uniquement si renseignés, aucun script tiers par défaut.
 - **Sitemap** : `php artisan sitemap:generate` régénère `public/sitemap.xml` (planifié quotidiennement). **Ne pas éditer ce fichier à la main**, il est écrasé à chaque exécution.
 - **`robots.txt`** : `public/robots.txt`, bloque `/admin` et `/track-click`.
 - **Redirections 301** : administrables via `RedirectResource` (`/admin`), servies par `Controller::redirectOrAbort()` sur chaque route de fiche/détail. Voir `TECHNICAL_DOCUMENTATION.md` §13 pour le piège rencontré avec `Route::fallback()` avant ce choix d'implémentation.

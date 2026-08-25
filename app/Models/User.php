@@ -51,11 +51,17 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
-     * Seuls les comptes disposant d'un rôle (attribué via Filament/Spatie
-     * permission) peuvent accéder à l'administration — voir brief §12/§18.
+     * Seuls les comptes disposant d'au moins un rôle (Spatie permission)
+     * peuvent accéder à l'administration — voir brief §12/§18.
+     *
+     * Générique (n'importe quel rôle) plutôt qu'une liste figée de noms :
+     * depuis que les rôles sont administrables (`RoleResource`), une liste
+     * en dur aurait été un piège — créer un nouveau rôle depuis l'admin et
+     * l'assigner à un utilisateur n'aurait silencieusement donné accès à
+     * rien tant que cette liste n'aurait pas aussi été mise à jour en code.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->exists && $this->hasAnyRole(['super_admin', 'admin', 'editor', 'moderator']);
+        return $this->exists && $this->roles()->exists();
     }
 }

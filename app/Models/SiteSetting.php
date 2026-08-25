@@ -20,6 +20,7 @@ class SiteSetting extends Model
         'site_name', 'tagline', 'description', 'logo', 'default_og_image',
         'email', 'phone', 'address',
         'facebook_url', 'instagram_url', 'twitter_url', 'linkedin_url', 'youtube_url',
+        'google_analytics_id', 'google_site_verification',
     ];
 
     /** Retourne (et crée si besoin) l'unique ligne de réglages, avec des valeurs par défaut cohérentes avec l'existant. */

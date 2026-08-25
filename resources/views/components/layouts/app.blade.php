@@ -54,6 +54,20 @@
     ])) !!}
     </script>
 
+    {{-- SEO/Analytics globaux (Filament\Pages\SiteSettings) — chargés seulement si renseignés. --}}
+    @if ($siteSettings->google_site_verification)
+        <meta name="google-site-verification" content="{{ $siteSettings->google_site_verification }}">
+    @endif
+    @if ($siteSettings->google_analytics_id)
+        <script async src="https://www.googletagmanager.com/gtag/js?id={{ $siteSettings->google_analytics_id }}"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '{{ $siteSettings->google_analytics_id }}');
+        </script>
+    @endif
+
     @stack('head')
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])

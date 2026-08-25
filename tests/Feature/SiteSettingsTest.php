@@ -60,6 +60,37 @@ class SiteSettingsTest extends TestCase
         $this->assertSame(['https://facebook.com/toulouseweb'], $settings->socialLinks());
     }
 
+    public function test_admin_can_configure_global_seo_analytics_settings(): void
+    {
+        $this->actingAs($this->authenticatedAdmin());
+
+        Livewire::test(SiteSettings::class)
+            ->fillForm([
+                'google_analytics_id' => 'G-TESTID123',
+                'google_site_verification' => 'test-verification-token',
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $settings = SiteSetting::current();
+        $this->assertSame('G-TESTID123', $settings->google_analytics_id);
+        $this->assertSame('test-verification-token', $settings->google_site_verification);
+    }
+
+    public function test_homepage_renders_analytics_and_verification_tags_only_when_configured(): void
+    {
+        $this->assertStringNotContainsString('googletagmanager', $this->get('/')->getContent());
+
+        SiteSetting::current()->update([
+            'google_analytics_id' => 'G-TESTID123',
+            'google_site_verification' => 'test-verification-token',
+        ]);
+
+        $response = $this->get('/');
+        $response->assertSee('googletagmanager.com/gtag/js?id=G-TESTID123', false);
+        $response->assertSee('name="google-site-verification" content="test-verification-token"', false);
+    }
+
     public function test_homepage_reflects_custom_site_settings_in_organization_json_ld(): void
     {
         SiteSetting::current()->update([

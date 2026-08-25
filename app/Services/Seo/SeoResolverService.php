@@ -2,6 +2,7 @@
 
 namespace App\Services\Seo;
 
+use App\Models\SiteSetting;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
@@ -35,9 +36,10 @@ class SeoResolverService
 
     protected function generateTitle(Model $model): string
     {
-        $name = $this->firstAttribute($model, ['title', 'name']) ?? 'ToulouseWeb';
+        $siteName = SiteSetting::current()->site_name;
+        $name = $this->firstAttribute($model, ['title', 'name']) ?? $siteName;
 
-        return "{$name} — Toulouse | ToulouseWeb";
+        return "{$name} — Toulouse | {$siteName}";
     }
 
     protected function generateDescription(Model $model): ?string
@@ -47,7 +49,9 @@ class SeoResolverService
         ]);
 
         if (! $text) {
-            return "Découvrez {$this->firstAttribute($model, ['title', 'name'])} sur ToulouseWeb, le portail de Toulouse et sa région.";
+            $siteName = SiteSetting::current()->site_name;
+
+            return "Découvrez {$this->firstAttribute($model, ['title', 'name'])} sur {$siteName}, le portail de Toulouse et sa région.";
         }
 
         return trim(strip_tags($text));

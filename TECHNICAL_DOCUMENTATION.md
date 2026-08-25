@@ -12,7 +12,7 @@
 | 1. Audit complet de l'ancien site et de la base | ✅ Terminé (§1-6) |
 | 2. Architecture technique et base de données | ✅ Terminé (§7-11) |
 | 3. Design system & layout | 🟡 Palette/typographies/composants Blade de base livrés (§13), pages de contenu (annuaire/agenda/cinéma...) pas encore construites |
-| 4. Administration | 🟡 18 ressources Filament créées et testées + relation manager Séances (Phase 8) + page Paramètres du site + dashboard stats de clics (§13), à compléter (gestion utilisateurs/rôles) |
+| 4. Administration | 🟡 21 ressources Filament créées et testées (dont gestion utilisateurs/rôles) + relation manager Séances (Phase 8) + page Paramètres du site (dont SEO/Analytics globaux) + dashboard stats de clics (§13) |
 | 5. Migration des données | ✅ Terminé — 11 commandes `migrate:*` exécutées avec succès contre `toulouseweb_old` réelle (§13, dont `migrate:partner-sites` ajoutée le 2026-08-24 — table oubliée à l'audit initial) + 7 commandes `images:*` ayant réimporté l'écrasante majorité des visuels de contenu retrouvés sous `old/backEnd/public/` (33 000+ fichiers, voir §13) |
 | 6. Annuaire | 🟡 Pages publiques (index par catégorie + recherche, fiche détail) livrées et vérifiées avec les vraies données, désormais avec photo principale + galerie réelles + dépôt public de fiche (modération stricte, tier toujours gratuit) — voir §13 ; pas encore de recherche géographique |
 | 7. Agenda / événements / théâtre | 🟡 Pages publiques (index + filtre catégorie dont "theatre", fiche détail, **calendrier visuel**) livrées ; proposition d'événement par le public pas encore faite ; scraper agenda confirmé **inexistant côté legacy** (routes mortes, aucune méthode réelle — voir §13), décision produit requise avant de construire quoi que ce soit |
@@ -362,7 +362,7 @@ Tous les modèles du schéma cible existent dans `app/Models/` avec leurs relati
 
 ### Administration Filament (Phase 4, amorcée)
 
-17 ressources créées sous `app/Filament/Resources/`, groupées par domaine dans la navigation (Annuaire, Agenda, Cinéma, Annonces, Actualités, Accueil, Contact & Contenu, SEO & Technique) :
+21 ressources créées sous `app/Filament/Resources/`, groupées par domaine dans la navigation (Annuaire, Agenda, Cinéma, Annonces, Actualités, Accueil, Contact & Contenu, SEO & Technique, Réglages) :
 
 | Ressource | Particularités déjà codées |
 |---|---|
@@ -375,10 +375,22 @@ Tous les modèles du schéma cible existent dans `app/Models/` avec leurs relati
 | `SliderResource` | Gestion des emplacements (`slider_placements`) via `CheckboxList` avec sauvegarde relationnelle custom |
 | `RedirectResource` | Type de redirection 301/302 en select, compteur de hits en lecture seule |
 | `CinemaResource`, `MovieResource`, `ClassifiedCategoryResource`, `NewsCategoryResource`, `AreaResource`, `AmenityResource`, `ContactMessageResource`, `PartnerSiteResource`, `ScraperSourceResource` | Générées avec `--generate` (formulaires/tables auto-inférés du schéma), pas encore personnalisées en profondeur |
+| `MissedRedirectResource` | Lecture seule + action "Écarter" (jamais de création/édition manuelle, voir §11) |
+| `UserResource` | Rôles en relation many-to-many (`Select` multiple, au moins un requis), mot de passe haché à la volée (`dehydrateStateUsing`), non déhydraté si laissé vide en édition, suppression de son propre compte masquée |
+| `RoleResource` | Nom de rôle seul (pas de permissions granulaires, voir docblock) |
 
-**Fait depuis** : relation manager Séances sur `CinemaResource` (Phase 8, voir plus haut) ; page "Paramètres du site" (voir ci-dessous).
+**Fait depuis** : relation manager Séances sur `CinemaResource` (Phase 8) ; page "Paramètres du site" (SEO/Analytics globaux inclus, voir ci-dessous) ; `MissedRedirectResource` (§11) ; gestion utilisateurs/rôles (`UserResource`/`RoleResource`, voir ci-dessous).
 
-**Reste à faire côté admin** : gestion des utilisateurs/rôles, page SEO globale.
+**Reste à faire côté admin** : rien d'identifié pour l'instant au-delà de ce qui est déjà listé ailleurs (dashboard SEO/redirections avancé, granularité de permissions si un besoin se présente).
+
+### Gestion utilisateurs/rôles (brief §12/§18)
+
+Jusqu'ici seulement possible via `RolesAndAdminSeeder`/tinker, aucune interface. `UserResource` et `RoleResource` (groupe "Réglages") comblent ce manque :
+
+- `UserResource` : nom, email, mot de passe (haché, optionnel en édition — laisser vide ne le modifie pas), rôles (`Select` multiple lié par relation, **au moins un requis**). Suppression de son propre compte masquée dans la liste ET sur la fiche (évite un verrouillage accidentel hors de l'admin).
+- `RoleResource` : nom de rôle seul — ce projet n'a pas de permissions granulaires (un rôle donne simplement accès au panel, sans distinction de capacités entre rôles). À enrichir avec de vraies permissions Spatie si un besoin de granularité apparaît (ex. "moderator" limité aux annonces/commentaires) — décision produit à prendre le moment venu.
+- **Correction apportée à `User::canAccessPanel()`** : vérifiait auparavant une liste figée de 4 noms de rôle (`super_admin`, `admin`, `editor`, `moderator`). Depuis que les rôles sont administrables, cette liste en dur serait devenue un piège silencieux : créer un nouveau rôle depuis l'admin et l'assigner à un utilisateur n'aurait donné accès à rien tant que le code n'aurait pas aussi été mis à jour. Remplacé par une vérification générique (`$this->roles()->exists()`) — n'importe quel rôle donne désormais accès.
+- Tests : `tests/Feature/UserRoleManagementTest.php` — accès panel refusé sans rôle, accès accordé avec un rôle **custom** (pas dans l'ancienne liste figée, pour verrouiller la régression), création d'utilisateur avec mot de passe haché, création sans rôle rejetée, suppression de son propre compte impossible, création d'un nouveau rôle. **Piège rencontré en testant** : un `Select` lié par `relationship()` attend la CLÉ du modèle en état de formulaire (l'id du rôle), pas son nom affiché — un premier jet du test passait `'roles' => ['editor']` (le nom) et provoquait une vraie `QueryException` (FK invalide), corrigé en passant `$role->id`.
 
 ### Dashboard admin — statistiques de clics (brief : "chaque clic... doit être ajouté dans cette statistique")
 
@@ -401,11 +413,12 @@ Tests : `tests/Feature/AdminDashboardStatsTest.php` (rendu avec de vrais clics e
 
 Remplace les valeurs codées en dur dans `components/layouts/app.blade.php` (nom du site, description, image OG par défaut) et le pied de page — **aucune table legacy équivalente** (`t_entete` est un système différent : des overrides SEO par page d'annuaire, déjà couvert par `seo_meta` — pas des réglages globaux), fonctionnalité entièrement nouvelle.
 
-- `App\Models\SiteSetting` : une seule ligne (singleton, `SiteSetting::current()` la crée si absente avec des valeurs par défaut cohérentes avec l'existant) — `site_name`, `tagline`, `description`, `logo`, `default_og_image`, `email`, `phone`, `address`, 5 champs de réseaux sociaux (`socialLinks()` retourne les non-vides, pour le `sameAs` du JSON-LD).
-- `App\Filament\Pages\SiteSettings` : page Filament simple (pas un Resource — rien à lister), formulaire en 3 sections (Identité, Coordonnées, Réseaux sociaux), upload logo/image OG via `FileUpload`.
-- Consommé par `components/layouts/app.blade.php` (title/description par défaut, meta OG, JSON-LD Organization avec `name`/`logo`/`description`/`sameAs`), `components/site/header.blade.php` (logo si renseigné, sinon repli visuel identique à avant) et `components/site/footer.blade.php` (nom, description, liens sociaux, copyright).
+- `App\Models\SiteSetting` : une seule ligne (singleton, `SiteSetting::current()` la crée si absente avec des valeurs par défaut cohérentes avec l'existant) — `site_name`, `tagline`, `description`, `logo`, `default_og_image`, `email`, `phone`, `address`, 5 champs de réseaux sociaux (`socialLinks()` retourne les non-vides, pour le `sameAs` du JSON-LD), `google_analytics_id`, `google_site_verification`.
+- `App\Filament\Pages\SiteSettings` : page Filament simple (pas un Resource — rien à lister), formulaire en 4 sections (Identité, Coordonnées, Réseaux sociaux, **SEO & Analytics**), upload logo/image OG via `FileUpload`.
+- Consommé par `components/layouts/app.blade.php` (title/description par défaut, meta OG, JSON-LD Organization avec `name`/`logo`/`description`/`sameAs`, balise `google-site-verification` et script `gtag.js` **seulement si renseignés** — pas de script chargé quand aucun identifiant Analytics n'est configuré), `components/site/header.blade.php` (logo si renseigné, sinon repli visuel identique à avant) et `components/site/footer.blade.php` (nom, description, liens sociaux, copyright).
+- **"Page SEO globale" (brief, reste à faire historique)** : le title/description/canonical/OG par ENTITÉ était déjà couvert (`seo_meta` + `SeoResolverService`, y compris la homepage via `Page::where('key','home')`). Ce qui manquait réellement était les réglages qui n'appartiennent à AUCUNE entité — `google_analytics_id`/`google_site_verification` ci-dessus. Au passage, `SeoResolverService::generateTitle()`/`generateDescription()` (repli automatique quand aucun `seo_meta` n'est renseigné) avaient "ToulouseWeb" codé en dur — remplacé par `SiteSetting::current()->site_name`, cohérent avec le reste du module. `public/robots.txt` reste un fichier statique non administrable — non traité ici (hors périmètre demandé), à reconsidérer si un besoin réel se présente.
 - **Bug préexistant découvert et corrigé au passage** : la clé JSON-LD `'@context'` écrite non échappée dans le Blade était interprétée par le compilateur comme la directive `@context` (façade `Context`, Laravel 11+), corrompant tout le JSON-LD Organization en production silencieusement (jamais détecté avant faute d'avoir vérifié le HTML réellement rendu, pas seulement `assertOk()`). Corrigé en échappant `'@@context'`. À surveiller : tout futur JSON-LD écrit directement en Blade doit faire attention à ce piège.
-- Tests : `tests/Feature/SiteSettingsTest.php` (accès admin uniquement, sauvegarde réelle via `Livewire::test()->fillForm()->call('save')`, et vérification que la homepage reflète bien des valeurs personnalisées dans le JSON-LD rendu).
+- Tests : `tests/Feature/SiteSettingsTest.php` (accès admin uniquement, sauvegarde réelle via `Livewire::test()->fillForm()->call('save')`, vérification que la homepage reflète bien des valeurs personnalisées dans le JSON-LD rendu, et que les balises Analytics/vérification n'apparaissent QUE lorsqu'elles sont configurées).
 
 ### Tests
 
