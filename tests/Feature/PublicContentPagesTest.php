@@ -35,6 +35,31 @@ class PublicContentPagesTest extends TestCase
         $this->get('/annuaire/restaurants')->assertOk()->assertSee('Le Bon Cassoulet');
     }
 
+    /**
+     * Recherche géographique (brief §5) — filtre par ville, voir docblock de
+     * ListingController pour la limite connue (pas de vraies coordonnées
+     * lat/lng côté legacy, filtre par ville en repli).
+     */
+    public function test_annuaire_city_filter(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants']);
+        $toulouse = Listing::create([
+            'title' => 'Le Bon Cassoulet', 'slug' => 'le-bon-cassoulet',
+            'tier' => 'free', 'status' => 'published', 'city' => 'Toulouse',
+        ]);
+        $blagnac = Listing::create([
+            'title' => 'Le Bon Steak', 'slug' => 'le-bon-steak',
+            'tier' => 'free', 'status' => 'published', 'city' => 'Blagnac',
+        ]);
+        $toulouse->categories()->attach($category);
+        $blagnac->categories()->attach($category);
+
+        $this->get('/annuaire?city=Blagnac')
+            ->assertOk()
+            ->assertSee('Le Bon Steak')
+            ->assertDontSee('Le Bon Cassoulet');
+    }
+
     public function test_annuaire_show_renders_paid_and_free_tiers_differently(): void
     {
         $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants']);

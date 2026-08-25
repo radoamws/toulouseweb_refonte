@@ -5,9 +5,17 @@
             : [['label' => 'Agenda']]" />
 
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">
-                {{ $category?->name ?? 'Agenda de Toulouse' }}
-            </h1>
+            <div class="flex items-center gap-4">
+                <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">
+                    {{ $category?->name ?? 'Agenda de Toulouse' }}
+                </h1>
+                <a href="/agenda/proposer" class="hidden shrink-0 rounded-full border border-dashed border-brand-300 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 sm:inline-block">
+                    + Proposer un événement
+                </a>
+            </div>
+            <a href="/agenda/proposer" class="inline-block w-fit rounded-full border border-dashed border-brand-300 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 sm:hidden">
+                + Proposer un événement
+            </a>
 
             <form method="GET" class="flex flex-wrap gap-2">
                 <input type="hidden" name="view" value="{{ $view }}">

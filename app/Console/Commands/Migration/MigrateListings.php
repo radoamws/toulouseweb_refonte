@@ -60,6 +60,15 @@ class MigrateListings extends Command
                     $existing = Listing::withTrashed()->where('legacy_id', $row->id)->first();
                     $slug = $existing?->slug ?? LegacyCleaner::preserveSlug($row->slug ?: $row->slug_old, $title, 'listings', $existing?->id);
 
+                    // Recherche géographique (brief §5) : la base legacy n'a
+                    // jamais stocké de lat/lng structurées, seulement `adresse`
+                    // en texte libre — extraction best-effort du code postal
+                    // + ville (voir LegacyCleaner::postalAndCity) pour au
+                    // moins permettre un filtre par ville. Coordonnées
+                    // lat/lng réelles hors scope (nécessiterait un service de
+                    // géocodage externe, voir TECHNICAL_DOCUMENTATION.md §13).
+                    [$postalCode, $city] = LegacyCleaner::postalAndCity($row->adresse);
+
                     $listing = Listing::updateOrCreate(
                         ['legacy_id' => $row->id],
                         [
@@ -70,6 +79,8 @@ class MigrateListings extends Command
                             'short_description' => LegacyCleaner::text($row->sous_titre),
                             'description' => LegacyCleaner::text($row->description) ?? LegacyCleaner::text($row->descr_gratuit),
                             'address' => LegacyCleaner::text($row->adresse),
+                            'city' => $city,
+                            'postal_code' => $postalCode,
                             'phone' => LegacyCleaner::text($row->tel),
                             'email' => LegacyCleaner::text($row->email),
                             'website' => LegacyCleaner::text($row->url) ?? LegacyCleaner::text($row->lien_web),

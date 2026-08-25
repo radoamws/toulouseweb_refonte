@@ -37,13 +37,25 @@
                     <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">
                         {{ $category?->name ?? 'Annuaire de Toulouse' }}
                     </h1>
-                    <form method="GET" class="flex gap-2">
+                    <form method="GET" class="flex flex-wrap gap-2">
                         <input
                             type="search" name="q" value="{{ request('q') }}"
                             placeholder="Rechercher une fiche…"
-                            class="w-full rounded-full border border-ink-200 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none sm:w-64"
+                            class="w-full rounded-full border border-ink-200 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none sm:w-56"
                         >
+                        {{-- Recherche géographique (brief §5) : filtre par ville — voir
+                        ListingController::renderIndex() pour la limite connue
+                        (pas de vraies coordonnées lat/lng côté legacy). --}}
+                        <select name="city" class="rounded-full border border-ink-200 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                            <option value="">Toutes les villes</option>
+                            @foreach ($cities as $c)
+                                <option value="{{ $c }}" @selected(request('city') === $c)>{{ $c }}</option>
+                            @endforeach
+                        </select>
                         <x-ui.button type="submit" variant="outline" size="sm">Rechercher</x-ui.button>
+                        @if (request('q') || request('city'))
+                            <x-ui.button :href="url()->current()" variant="ghost" size="sm">Réinitialiser</x-ui.button>
+                        @endif
                     </form>
                 </div>
 

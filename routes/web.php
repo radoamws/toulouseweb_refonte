@@ -34,7 +34,11 @@ Route::get('/annuaire/{categorySlug}', [ListingController::class, 'index'])->nam
 
 // Agenda (brief §6) — une seule route par slug : résout catégorie (dont
 // "theatre", qui a ainsi sa propre URL comme demandé) puis événement.
+// `proposer` avant `{slug}` (wildcard) pour ne pas être intercepté — même
+// piège que pour /annuaire/deposer et /annonces/deposer.
 Route::get('/agenda', [EventController::class, 'index'])->name('agenda.index');
+Route::get('/agenda/proposer', [EventController::class, 'create'])->name('agenda.create');
+Route::post('/agenda/proposer', [EventController::class, 'store'])->middleware('throttle:5,1')->name('agenda.store');
 Route::get('/agenda/{slug}', [EventController::class, 'bySlug'])->name('agenda.bySlug');
 
 // Cinéma (brief §9).

@@ -12,11 +12,13 @@ use Illuminate\Database\Seeder;
  * modèle réel du cron legacy (`autoUpdateCinemaAllocine/{id}` appelé une
  * fois par salle, voir AllocineDriver). Correspondance salle → identifiant
  * AlloCiné extraite une fois depuis `toulouseweb_old.t_cine.url`
- * (`salle_gen_csalle=P0057.html` → `P0057`) le 2026-08-24 : 24 des 27
+ * (`salle_gen_csalle=P0057.html` → `P0057`) le 2026-08-24 : 25 des 28
  * salles ont un identifiant exploitable (les 3 restantes — UGC Toulouse,
  * Le Mermoz, Espace des Nouveautés — sont inactives dans le legacy et
  * n'ont pas d'URL AlloCiné renseignée, donc pas de source créée pour
- * elles). À exécuter une fois par environnement :
+ * elles). Vérifié en direct le 25/08/2026 : 25/25 sources exécutées avec
+ * succès (397 séances trouvées), voir TECHNICAL_DOCUMENTATION.md §13. À
+ * exécuter une fois par environnement :
  * `php artisan db:seed --class=ScraperSourcesSeeder`.
  */
 class ScraperSourcesSeeder extends Seeder

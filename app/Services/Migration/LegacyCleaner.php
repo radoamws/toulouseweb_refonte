@@ -42,6 +42,41 @@ class LegacyCleaner
         return str_replace("\u{FFFD}", '', $value);
     }
 
+    /**
+     * Extrait code postal + ville depuis une adresse libre legacy (brief §5,
+     * "recherche géographique" — voir TECHNICAL_DOCUMENTATION.md §13 : la
+     * base legacy n'a JAMAIS stocké de coordonnées lat/lng structurées,
+     * seulement ce champ texte libre, souvent truffé de HTML/liens/texte
+     * générique — voir `t_article.adresse`). Reconnaît le format français
+     * standard "{...} {5 chiffres} {Ville}" en fin de chaîne, une fois le
+     * HTML retiré. Best-effort : renvoie [null, null] plutôt qu'une valeur
+     * fausse quand rien de fiable ne matche (URL, texte marketing, adresse
+     * sans code postal, format étranger...).
+     *
+     * @return array{0: ?string, 1: ?string} [code_postal, ville]
+     */
+    public static function postalAndCity(?string $rawAddress): array
+    {
+        if (! $rawAddress) {
+            return [null, null];
+        }
+
+        $text = trim(strip_tags($rawAddress));
+        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+
+        if (preg_match('/(\d{5})[\s,]+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ\'\-\s]{1,60})$/u', $text, $matches)) {
+            // Casse très inconsistante côté legacy ("COLOMIERS", "Plaisance
+            // du touch"...) — normalisée en casse-titre pour un filtre par
+            // ville lisible (regroupe aussi certaines variantes de casse qui
+            // seraient sinon comptées comme des villes différentes).
+            $city = mb_convert_case(trim($matches[2]), MB_CASE_TITLE, 'UTF-8');
+
+            return [$matches[1], $city];
+        }
+
+        return [null, null];
+    }
+
     public static function date(null|string|\DateTimeInterface $value): ?string
     {
         if (! $value) {

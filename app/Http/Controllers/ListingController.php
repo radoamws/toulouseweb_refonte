@@ -17,6 +17,20 @@ use Illuminate\View\View;
  * implicite) : sinon un slug legacy inconnu déclenche un 404 AVANT que le
  * contrôleur ne puisse consulter la table `redirects` (voir
  * Controller::redirectOrAbort).
+ *
+ * ⚠️ Recherche géographique (brief §5) — LIMITE CONNUE : la base legacy n'a
+ * jamais stocké de coordonnées lat/lng structurées pour les fiches annuaire
+ * (colonnes présentes dans le schéma migré mais vides à 100%, confirmé en
+ * direct le 25/08/2026 côté `toulouseweb_old.t_article` — aucune colonne
+ * géo n'existe côté source). Une vraie recherche "autour de moi"/par rayon
+ * nécessiterait un géocodage de ~2 978 adresses via un service externe
+ * (Google Maps, Nominatim/OSM...) — décision produit + éventuelles
+ * identifiants d'API hors scope ici. En attendant, un filtre par VILLE est
+ * implémenté (`?city=`), la ville étant extraite au mieux depuis le champ
+ * adresse legacy en texte libre (`LegacyCleaner::postalAndCity()`,
+ * `migrate:listings`) — ~39% de couverture (1155/2978), le reste des
+ * adresses ne se terminant pas par un "code postal + ville" reconnaissable
+ * (URLs, texte marketing, formats non-français...).
  */
 class ListingController extends Controller
 {
@@ -33,6 +47,11 @@ class ListingController extends Controller
             ->published()
             ->when($categoryIds, fn ($q) => $q->whereHas('categories', fn ($q2) => $q2->whereIn('categories.id', $categoryIds)))
             ->when($request->filled('q'), fn ($q) => $q->where('title', 'like', '%'.$request->string('q').'%'))
+            // Recherche géographique (brief §5) : filtre par ville — voir
+            // docblock de classe pour la limite connue (pas de vraies
+            // coordonnées lat/lng, la ville est extraite au mieux depuis
+            // l'adresse legacy, ~39% de couverture).
+            ->when($request->filled('city'), fn ($q) => $q->where('city', $request->string('city')))
             ->with('categories')
             ->orderByDesc('tier') // payantes d'abord (brief §5)
             ->orderBy('title')
@@ -41,9 +60,20 @@ class ListingController extends Controller
 
         $topCategories = Category::where('level', 0)->where('is_active', true)->orderBy('order')->orderBy('name')->get();
 
+        // Villes les plus représentées (annuaire complet, pas juste la page
+        // affichée) — repli propre le temps qu'un vrai géocodage arrive.
+        $cities = Listing::published()
+            ->whereNotNull('city')
+            ->select('city')
+            ->groupBy('city')
+            ->selectRaw('COUNT(*) as total')
+            ->orderByDesc('total')
+            ->limit(30)
+            ->pluck('city');
+
         $seo = $category ? $category->resolveSeo() : (Page::where('key', 'seo-menu-annuaire')->first()?->resolveSeo() ?? []);
 
-        return view('annuaire.index', compact('listings', 'topCategories', 'category', 'seo'));
+        return view('annuaire.index', compact('listings', 'topCategories', 'category', 'seo', 'cities'));
     }
 
     public function show(Request $request, string $slug): View|\Illuminate\Http\RedirectResponse

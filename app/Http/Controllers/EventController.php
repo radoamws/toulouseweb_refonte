@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Area;
 use App\Models\Event;
 use App\Models\EventCategory;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -119,5 +121,69 @@ class EventController extends Controller
             'event' => $event,
             'seo' => $event->resolveSeo(),
         ]);
+    }
+
+    public function create(): View
+    {
+        $categories = EventCategory::orderBy('order')->orderBy('name')->get();
+
+        return view('agenda.create', ['categories' => $categories, 'seo' => []]);
+    }
+
+    /**
+     * Dépôt public d'un événement (brief §6, "proposition d'événement par le
+     * public" — même modèle de modération STRICTE et non contournable que
+     * ClassifiedController::store()/ListingController::store() : `status`
+     * et `source` sont TOUJOURS forcés ici, jamais de valeur envoyée par le
+     * visiteur. Seul l'admin (EventResource, déjà administrable avec le
+     * statut "pending") fait passer un événement à `published`.
+     *
+     * Le lieu (`area_id`) n'est pas choisi dans une liste déroulante : la
+     * table `areas` compte plusieurs milliers de lignes (import legacy brut,
+     * voir TECHNICAL_DOCUMENTATION.md §13), impraticable en `<select>`. Le
+     * visiteur tape simplement le nom du lieu ; on réutilise une `Area`
+     * existante du même nom si elle existe, sinon on en crée une nouvelle
+     * (elle aussi soumise à la même modération : l'événement reste `pending`
+     * tant que l'admin ne l'a pas validé, qu'elle référence un lieu déjà
+     * connu ou tout neuf).
+     */
+    public function store(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'event_category_id' => ['required', 'exists:event_categories,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'venue_name' => ['required', 'string', 'max:255'],
+            'venue_address' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'price' => ['nullable', 'string', 'max:255'],
+            'booking_url' => ['nullable', 'url', 'max:255'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            // Honeypot anti-spam (brief §18) : champ invisible, un vrai
+            // visiteur ne le remplit jamais.
+            'website' => ['size:0'],
+        ]);
+
+        $area = Area::firstOrCreate(
+            ['name' => trim($validated['venue_name'])],
+            ['address' => $validated['venue_address'] ?? null]
+        );
+
+        $event = Event::create([
+            'area_id' => $area->id,
+            'title' => $validated['title'],
+            'description' => $validated['description'] ?? null,
+            'price' => $validated['price'] ?? null,
+            'booking_url' => $validated['booking_url'] ?? null,
+            'start_date' => $validated['start_date'],
+            'end_date' => $validated['end_date'] ?? null,
+            'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
+            'source' => 'user_submitted',
+        ]);
+        $event->categories()->attach($validated['event_category_id']);
+
+        return redirect()
+            ->route('agenda.index')
+            ->with('status', 'Votre événement a bien été reçu et sera publié après validation par notre équipe.');
     }
 }
