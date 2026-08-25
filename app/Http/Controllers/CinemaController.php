@@ -10,9 +10,10 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * Cinéma (brief §9). Le scraping temps réel (Phase 8, réécriture complète
- * de l'auto-update Pathé-Gaumont cassé côté legacy) n'est pas encore fait —
- * ces vues consomment les données migrées telles quelles (§10).
+ * Cinéma (brief §9). Alimenté par les données migrées (§10) ET par le
+ * scraper AlloCiné (`scrape:cinema`/`AllocineDriver`, quotidien, vérifié en
+ * direct le 25/08/2026 — 25/25 sources réelles, voir TECHNICAL_DOCUMENTATION.md
+ * §13) qui tient à jour films/salles/horaires précis.
  */
 class CinemaController extends Controller
 {

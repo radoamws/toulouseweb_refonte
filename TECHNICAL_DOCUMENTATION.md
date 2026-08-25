@@ -11,7 +11,7 @@
 |---|---|
 | 1. Audit complet de l'ancien site et de la base | ✅ Terminé (§1-6) |
 | 2. Architecture technique et base de données | ✅ Terminé (§7-11) |
-| 3. Design system & layout | 🟡 Palette/typographies/composants Blade de base livrés (§13), pages de contenu (annuaire/agenda/cinéma...) pas encore construites |
+| 3. Design system & layout | ✅ Palette/typographies/composants Blade de base livrés (§13), et toutes les pages de contenu (annuaire/agenda/cinéma/actualités/annonces/homepage) construites dessus — voir phases 6-10 |
 | 4. Administration | 🟡 21 ressources Filament créées et testées (dont gestion utilisateurs/rôles) + relation manager Séances (Phase 8) + page Paramètres du site (dont SEO/Analytics globaux) + dashboard stats de clics (§13) |
 | 5. Migration des données | ✅ Terminé — 11 commandes `migrate:*` exécutées avec succès contre `toulouseweb_old` réelle (§13, dont `migrate:partner-sites` ajoutée le 2026-08-24 — table oubliée à l'audit initial) + 7 commandes `images:*` ayant réimporté l'écrasante majorité des visuels de contenu retrouvés sous `old/backEnd/public/` (33 000+ fichiers, voir §13) |
 | 6. Annuaire | 🟡 Pages publiques (index par catégorie + recherche texte + **filtre par ville**, fiche détail) livrées et vérifiées avec les vraies données, désormais avec photo principale + galerie réelles + dépôt public de fiche (modération stricte, tier toujours gratuit) — voir §13 ; recherche géographique par RAYON (lat/lng) hors scope — la base legacy n'a jamais stocké de coordonnées, nécessiterait un service de géocodage externe |
@@ -21,8 +21,9 @@
 | 10. Homepage | 🟡 Fonctionnelle et vérifiée avec les vraies données migrées (slider, actus, agenda, cinéma, annuaire, annonces désormais dépôt-able) |
 | Contact (brief §11, hors numérotation de phase) | ✅ Page refaite, formulaire sécurisé (honeypot + throttle), stockage dans `contact_messages` déjà administrable |
 | 11. SEO/GEO, URLs, redirections | 🟡 Redirections 301 opérationnelles sur les 6 710 entrées migrées (annuaire/cinéma/actualités/catégories), sitemap.xml généré (4 036 URLs), robots.txt ; canonical/OG/Twitter/JSON-LD déjà posés depuis les phases précédentes |
-| 12. Performance & sécurité | 🟡 Amorce sécurité : en-têtes de sécurité globaux, limites d'upload Filament, cookies de session sécurisés en prod, tests dédiés (§13). Performance (cache, index) pas encore traitée |
-| 13-14 | Non démarrées |
+| 12. Performance & sécurité | 🟡 Sécurité : en-têtes de sécurité globaux, limites d'upload Filament, cookies de session sécurisés en prod, tests dédiés. Performance : audit des requêtes réelles, 2 index manquants identifiés et ajoutés (`listings.city`, `click_events.created_at` — la table de 2,78M lignes tournait en full scan sur 3 requêtes du dashboard admin à CHAQUE chargement) — voir §13 |
+| 13. Tests complets | 🟡 138 tests / 376 assertions (feature + unit), couvrant modération/sécurité/scraping/migration/SEO sur tous les modules livrés — pas de campagne de charge/perf dédiée |
+| 14. Préparation au déploiement | 🔜 Non démarrée |
 
 Le dossier `old/` contient l'ancien site (backend Laravel 7 + frontend Nuxt 2), conservé en lecture seule pour référence. La base `toulouseweb_old` contient les données de production, non migrées. La base `toulouseweb` porte désormais le **schéma cible complet** (§9) et un compte admin. Voir §14 pour le détail de ce qui est réellement codé à date.
 
@@ -317,18 +318,18 @@ Documentation complète des futures commandes (`events:archive-past`, `classifie
 |---|---|---|
 | 1. Audit | Analyse complète ancien site + base — voir §1-6 | ✅ Terminé |
 | 2. Architecture & BDD | Stack, schéma cible, plan de migration — voir §7-11 | ✅ Terminé |
-| 3. Design system & layout | Scaffold Laravel + Filament, Tailwind config, composants Blade de base, layout public | 🔜 Prochaine étape |
-| 4. Administration | Resources Filament par entité, rôles/permissions | À venir |
-| 5. Migration des données | Exécution des commandes `migrate:*` sur environnement local | À venir |
-| 6. Annuaire | Listings, catégories, recherche, fiches payantes/gratuites, dépôt public | ✅ Fait (§13) — reste : recherche géographique |
-| 7. Agenda / événements / théâtre | Listing, filtres, calendrier, scraping événements | 🟡 Fait — scraping construit pour les 12 sources réelles de la liste de cron de production (§13), 10/12 pleinement fonctionnelles |
-| 8. Cinéma | Modèle, scraping AlloCiné réécrit (une source par salle), UI | ✅ Fait (§13) — reste : vérification en direct dès accès réseau disponible |
-| 9. Annonces | Dépôt public, modération admin, catégories dynamiques | À venir |
-| 10. Homepage | Slider admin, sections dynamiques | À venir |
-| 11. SEO/GEO, URLs, redirections | `seo_meta`, sitemap, redirections, structured data | À venir |
-| 12. Performance & sécurité | Cache, index, audit sécurité complet | À venir |
-| 13. Tests | Tests fonctionnels critiques (modération, migration, SEO) | À venir |
-| 14. Déploiement | Procédure cPanel, cron, checklist mise en prod | À venir |
+| 3. Design system & layout | Scaffold Laravel + Filament, Tailwind config, composants Blade de base, layout public | ✅ Fait — composants de base + toutes les pages de contenu (annuaire/agenda/cinéma/actualités/annonces/homepage) construites dessus (§13) |
+| 4. Administration | Resources Filament par entité, rôles/permissions | ✅ Fait — 21 ressources, gestion utilisateurs/rôles, dashboard stats (§13) |
+| 5. Migration des données | Exécution des commandes `migrate:*` sur environnement local | ✅ Fait — contre `toulouseweb_old` réelle (§13) |
+| 6. Annuaire | Listings, catégories, recherche, fiches payantes/gratuites, dépôt public | 🟡 Fait (§13) — reste : recherche géographique par RAYON (lat/lng), filtre par ville livré en attendant |
+| 7. Agenda / événements / théâtre | Listing, filtres, calendrier, scraping événements, proposition publique | 🟡 Fait — scraping construit pour les 12 sources réelles de la liste de cron de production (§13), 10/12 pleinement fonctionnelles ; dépôt public livré |
+| 8. Cinéma | Modèle, scraping AlloCiné réécrit (une source par salle), UI | ✅ Fait — vérifié en direct (25/25 sources, §13) |
+| 9. Annonces | Dépôt public, modération admin, catégories dynamiques | ✅ Fait (§13) |
+| 10. Homepage | Slider admin, sections dynamiques | ✅ Fait — vérifiée avec les vraies données migrées (§13) |
+| 11. SEO/GEO, URLs, redirections | `seo_meta`, sitemap, redirections, structured data | 🟡 Fait — redirections 301, sitemap.xml, robots.txt, canonical/OG/Twitter/JSON-LD opérationnels (§13) |
+| 12. Performance & sécurité | Cache, index, audit sécurité complet | 🟡 Sécurité amorcée (en-têtes, uploads, cookies — §13) ; audit de performance fait, 2 index manquants corrigés (§13) |
+| 13. Tests | Tests fonctionnels critiques (modération, migration, SEO) | 🟡 138 tests / 376 assertions couvrant tous les modules livrés ; pas de campagne de charge/perf dédiée |
+| 14. Déploiement | Procédure cPanel, cron, checklist mise en prod | 🔜 À venir |
 
 Ce tableau est mis à jour à la fin de chaque phase.
 
@@ -675,3 +676,13 @@ En attendant cette décision, un filtre par VILLE est livré (`?city=` sur `/ann
 - `LegacyCleaner::postalAndCity()` (nouveau) extrait code postal + ville depuis `t_article.adresse` (texte libre, souvent truffé de HTML/liens/texte marketing côté legacy) via une regex sur le format français standard "{...} {5 chiffres} {Ville}" en fin de chaîne, après suppression du HTML. Casse normalisée (le legacy mélange `COLOMIERS`/`Colomiers`/`Plaisance du touch`/`Plaisance-du-touch`...).
 - Best-effort assumé et documenté : **1155/2978 fiches (~39%)** obtiennent une ville exploitable après ré-exécution de `migrate:listings` (idempotente) contre la vraie base ; le reste des adresses ne se termine pas par un format reconnaissable (URLs, texte générique, adresses sans code postal, formats étrangers) — laissé `null` plutôt que deviné.
 - `ListingController` liste les 30 villes les plus représentées (parmi les fiches publiées) pour peupler le filtre ; `tests/Unit/LegacyCleanerTest.php` verrouille le comportement du parseur (cas positifs et négatifs réels observés en base) et `tests/Feature/PublicContentPagesTest.php::test_annuaire_city_filter` verrouille le filtre bout en bout.
+
+### Performance — audit des requêtes réelles (brief §12, 25/08/2026)
+
+Audit des index existants (`SHOW INDEX`) contre les WHERE/ORDER BY/GROUP BY réellement exécutés par les contrôleurs/widgets, plutôt qu'une passe générique. Couverture déjà bonne : `listings`/`events`/`classifieds`/`news` ont chacun un index composite `(status, ...)` posé dès la migration initiale, `redirects`/`missed_redirects` sont indexés sur leur clé de lookup (`from_path`/`path`, hot path — évalué à chaque requête non matchée par les routes), N+1 déjà globalement évités (`->with(...)` posé sur toutes les listes avec relations : `Event::with(['area','categories'])`, `Listing::with('categories')`, `Classified::with('category')`...).
+
+Deux trous réels trouvés et corrigés (migration `2026_08_25_110000_add_performance_indexes.php`) :
+- **`listings.city`** : filtré par le nouveau `?city=` (recherche géographique, voir plus haut), sans index.
+- **`click_events.created_at`** : `ClickTrackingService::totalCount()`/`totalsByType()`/`topEntities()` (widgets `ClicksOverview`/`ClicksByTypeChart`/`TopClickedEntities`, tous `$isLazy = false` — rendus immédiatement) filtrent **uniquement** par plage `created_at`, sans `entity_type`. L'index composite existant `(entity_type, entity_id, created_at)` ne peut pas servir ces requêtes (colonne de tri/range en 3e position, pas en tête) — sur la plus grosse table de la base (**2,78M lignes**, l'historique de clics migré), ces 3 requêtes tournaient en **full scan à chaque chargement du dashboard admin**. `EXPLAIN` avant/après : `type: ALL` (scan complet) → `type: range` + `Using index` (index-covering, ~92k lignes lues sur 2,78M pour une fenêtre de 30 jours) après ajout de l'index `(created_at, entity_type, entity_id)`.
+
+Pas de cache applicatif ajouté à ce stade : les tables de référence interrogées à chaque page (catégories, zones...) sont petites (quelques dizaines de lignes, lookups déjà indexés) — mise en cache jugée prématurée (complexité + risque de péremption pour un gain non mesurable à ce volume). À reconsidérer si le volume de trafic réel révèle un besoin (ex. cache court sur les agrégations homepage).
