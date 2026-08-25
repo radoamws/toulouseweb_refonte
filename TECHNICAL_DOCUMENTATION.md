@@ -1,7 +1,7 @@
 # ToulouseWeb — Documentation technique
 
 > Document vivant : à mettre à jour à chaque modification importante du code ou de l'architecture.
-> Dernière mise à jour : 2026-08-25 — **Phases 1, 2, 5, 6, 8 terminées ; Phase 3 (design system + layout) et Phase 4 (admin, dont page Paramètres du site) bien avancées ; premières briques de la Phase 10 (homepage) livrées.**
+> Dernière mise à jour : 2026-08-25 — **Phases 1, 2, 5, 6, 8 terminées ; Phase 3 (design system + layout), Phase 4 (admin) et Phase 7 (agenda, scraper amorcé) bien avancées ; premières briques de la Phase 10 (homepage) livrées.**
 
 ---
 
@@ -15,7 +15,7 @@
 | 4. Administration | 🟡 21 ressources Filament créées et testées (dont gestion utilisateurs/rôles) + relation manager Séances (Phase 8) + page Paramètres du site (dont SEO/Analytics globaux) + dashboard stats de clics (§13) |
 | 5. Migration des données | ✅ Terminé — 11 commandes `migrate:*` exécutées avec succès contre `toulouseweb_old` réelle (§13, dont `migrate:partner-sites` ajoutée le 2026-08-24 — table oubliée à l'audit initial) + 7 commandes `images:*` ayant réimporté l'écrasante majorité des visuels de contenu retrouvés sous `old/backEnd/public/` (33 000+ fichiers, voir §13) |
 | 6. Annuaire | 🟡 Pages publiques (index par catégorie + recherche, fiche détail) livrées et vérifiées avec les vraies données, désormais avec photo principale + galerie réelles + dépôt public de fiche (modération stricte, tier toujours gratuit) — voir §13 ; pas encore de recherche géographique |
-| 7. Agenda / événements / théâtre | 🟡 Pages publiques (index + filtre catégorie dont "theatre", fiche détail, **calendrier visuel**) livrées ; proposition d'événement par le public pas encore faite ; scraper agenda confirmé **inexistant côté legacy** (routes mortes, aucune méthode réelle — voir §13), décision produit requise avant de construire quoi que ce soit |
+| 7. Agenda / événements / théâtre | 🟡 Pages publiques (index + filtre catégorie dont "theatre", fiche détail, calendrier visuel) livrées ; proposition d'événement par le public pas encore faite ; scraper agenda **construit et vérifié en direct** pour une salle (Théâtre de la Cité, `scrape:events`, 30/30 événements réels importés) — voir §13, autres salles identifiées mais pas encore construites |
 | 8. Cinéma | 🟡 Pages publiques + scraper AlloCiné réécrit (`scrape:cinema`, une source par salle — 24/27 — fiches film + salle + horaires précis, planifié quotidien) + relation manager Séances (saisie manuelle en complément) ; scraper non re-vérifié en direct (accès réseau bloqué depuis ce sandbox, voir §13) |
 | 9. Annonces | 🟡 Pages publiques + dépôt avec workflow de modération strict (jamais de publication automatique, honeypot anti-spam) livrés et testés (§13) |
 | 10. Homepage | 🟡 Fonctionnelle et vérifiée avec les vraies données migrées (slider, actus, agenda, cinéma, annuaire, annonces désormais dépôt-able) |
@@ -268,7 +268,7 @@ Un seul cron serveur, à configurer en production : `* * * * * php artisan sched
 | `queue:work --stop-when-empty` | Traite la file (emails, images) | Chaque minute | ✅ Implémenté |
 | `sitemap:generate` | Régénère `sitemap.xml` en fichier statique caché | Quotidien | ✅ Implémenté (§13) |
 | `scrape:cinema` | Fiches film + association salle depuis les sources actives (`scraper_sources`, type `cinema`) | Quotidien à 5h | ✅ Implémenté (§13 — voir détail ci-dessous) |
-| `scrape:events` | Scraping agenda (sources dans `scraper_sources`, type `agenda`) | Toutes les 3-6h | ❌ Pas encore écrit |
+| `scrape:events` | Scraping agenda (sources dans `scraper_sources`, type `agenda`) | Quotidien à 5h30 | ✅ Implémenté pour 1 salle (§13 — voir détail) |
 | `events:archive-past` | Statut `expired` sur événements passés | Quotidien | ❌ Pas encore écrit |
 | `classifieds:expire` | Statut `expired` sur annonces dépassant leur durée de publication | Quotidien | ❌ Pas encore écrit |
 | `redirects:audit` | Repère les 404 fréquentes sans redirection associée | Hebdomadaire | ✅ Implémenté (§13 — voir détail ci-dessous) |
@@ -309,7 +309,7 @@ Repère les 404 fréquentes sans redirection associée. Nécessitait d'abord de 
 - Tests : `tests/Feature/RedirectsTest.php` (chemin inconnu journalisé et incrémenté sur répétition, redirection connue jamais journalisée comme manquée, commande filtrée par seuil).
 - Vérifié en HTTP réel (`php artisan serve` + `curl`) : deux 404 de nature différente (résolution manuelle via `redirectOrAbort` et fallback générique) correctement journalisées et incrémentées en base MySQL réelle.
 
-Documentation complète des futures commandes (`scrape:events`, `events:archive-past`, `classifieds:expire`) à produire au moment de leur implémentation, dans ce même tableau.
+Documentation complète des futures commandes (`events:archive-past`, `classifieds:expire`) à produire au moment de leur implémentation, dans ce même tableau.
 
 ## 12. Plan de développement par phases (mise à jour post-décisions)
 
@@ -321,7 +321,7 @@ Documentation complète des futures commandes (`scrape:events`, `events:archive-
 | 4. Administration | Resources Filament par entité, rôles/permissions | À venir |
 | 5. Migration des données | Exécution des commandes `migrate:*` sur environnement local | À venir |
 | 6. Annuaire | Listings, catégories, recherche, fiches payantes/gratuites, dépôt public | ✅ Fait (§13) — reste : recherche géographique |
-| 7. Agenda / événements / théâtre | Listing, filtres, calendrier, scraping événements | 🟡 Fait sauf scraping (§13) — décision produit en attente |
+| 7. Agenda / événements / théâtre | Listing, filtres, calendrier, scraping événements | 🟡 Fait — scraping construit pour 1 salle sur ~6 sources identifiées (§13), les autres restent à construire au cas par cas |
 | 8. Cinéma | Modèle, scraping AlloCiné réécrit (une source par salle), UI | ✅ Fait (§13) — reste : vérification en direct dès accès réseau disponible |
 | 9. Annonces | Dépôt public, modération admin, catégories dynamiques | À venir |
 | 10. Homepage | Slider admin, sections dynamiques | À venir |
@@ -580,9 +580,43 @@ Vues publiques mises à jour en conséquence pour exploiter ces données désorm
 
 La proposition d'événement par le public (agenda). Le scraper cinéma AlloCiné existe (`scrape:cinema`, ci-dessus, 24 salles/27, fiches film + horaires précis) mais reste à vérifier en direct. Pas d'audit Search Console/logs pour les URLs legacy hors du périmètre couvert par la continuité de slug en base (voir §10) — `redirects:audit`/`missed_redirects` couvre désormais les 404 générées PAR ce dépôt en conditions réelles, mais pas un historique Search Console antérieur à sa mise en place. Cache applicatif, optimisation des requêtes N+1 à grande échelle et tests de charge (reste de la Phase 12), procédure de déploiement (Phase 14).
 
-**Scraper agenda : investigation terminée, conclusion définitive (2026-08-24)** — contrairement au cinéma où `autoUpdateCinemaAllocine` était un vrai mécanisme fonctionnel (juste mal documenté), **le scraper agenda n'existe nulle part dans le code legacy final** :
-- `t_agenda_scrapping` liste 18 sources (Zenith, Théâtre du Capitole, Stade Toulousain, TFC, Bikini, Odyssud, Théâtre Garonne...) avec une colonne `lien` du type `updateAgendaforZenith`, `updateAgendaRugby`, etc. — qui ressemblent à des noms de méthode de contrôleur.
-- `old/backEnd/routes/api.php` (lignes 203-221) déclare bien 18 routes `Route::get('updateAgendafor{Venue}/{isLaunch?}', 'AgendaController@updateAgendafor{Venue}')` correspondant exactement à ces noms.
-- **Mais `AgendaController.php` ne contient AUCUNE de ces méthodes** (15 méthodes au total, toutes du CRUD classique — `getCategory`, `getBydate`, `getByCategory`, `getById`, `search`, `categories`, `areas`, `add`... rien d'autre). Confirmé par recherche exhaustive dans tout `old/backEnd/app/` : ces noms de méthode n'existent nulle part dans le code.
-- Conclusion : ces 18 routes sont **mortes** (elles planteraient avec une `BadMethodCallException` si jamais appelées) — le scraper a soit été supprimé sans que les routes/la table de config ne soient nettoyées, soit n'a jamais été terminé. Dans les deux cas, **il n'y a aucune implémentation de référence à reproduire**, contrairement au cinéma.
-- **Décision produit requise avant toute implémentation** : construire un scraper agenda signifierait partir de zéro (pas une réécriture) — à décider avec vous quelles sources cibler en priorité et par quel mécanisme (flux iCal/RSS quand la salle en propose un, sinon scraping HTML dédié par site, au cas par cas). Non entamé, en attente d'arbitrage.
+### Scraper agenda — investigation approfondie et implémentation (brief §6/§21)
+
+**Round 1 (2026-08-24)** : contrairement au cinéma où `autoUpdateCinemaAllocine` était un vrai mécanisme fonctionnel (juste mal documenté), l'audit du code (`AgendaController.php`, `routes/api.php`, `Console/Kernel.php`) n'avait trouvé AUCUN scraper agenda fonctionnel :
+- `t_agenda_scrapping` liste 18 sources (Zenith, Théâtre du Capitole, Stade Toulousain, TFC, Bikini, Odyssud, Théâtre Garonne...) avec une colonne `lien` du type `updateAgendaforZenith`, `updateAgendaRugby`, etc.
+- `old/backEnd/routes/api.php` (lignes 203-221) déclare bien 18 routes vers ces noms de méthode — **mais `AgendaController.php` n'en contient AUCUNE** (15 méthodes au total, toutes du CRUD classique). Confirmé par recherche exhaustive dans tout `old/backEnd/app/`.
+- Conclusion round 1 : ces 18 routes sont mortes, aucune implémentation de référence à reproduire — décision produit demandée avant de construire quoi que ce soit.
+
+**Round 2 (2026-08-25, sur nouvelle demande client)** — investigation élargie à TOUT `old/` (pas seulement `backEnd/app/Http/Controllers/`) :
+- `old/a_traiter/` et `old/backup/` : notes et fichiers `.env` de sauvegarde, rien de pertinent.
+- **`AgendaController::formatData()` (route `GET agenda/import`) : une vraie méthode d'import existe**, lisant des tables `agenda`/`events` (sans préfixe `t_`) pour alimenter `t_agendas`/`t_agenda_cat` — mais ces deux tables **n'existent plus dans le dump `toulouseweb_old` actuel** (`SHOW TABLES LIKE 'agenda'` : vide). Conclusion : mécanisme d'import ponctuel (bootstrap depuis un système antérieur), pas un scraper actif — même famille que les scripts `dupliquer`/`dupliquer2` trouvés dans `CinemaController` (code de migration ponctuelle, pas de production courante).
+- `old/client-app/server/` (le Nuxt SSR) : uniquement gestion des redirections 301, rien côté scraping.
+- `SortiesController`/`SoireesController` : modules "sorties"/"soirées" utilisateur (proches de Rencontres), sans rapport avec le scraping agenda.
+- **Découverte décisive : les données réelles parlent.** `t_agendas.lien_detail` (lien de détail d'un événement) contient, pour des lignes **datées de la saison 2026-2027** (donc alimentées EN PRODUCTION, après la date de cette copie du dépôt), de vraies URLs vers de vrais sites de salles :
+
+  | Domaine source | Volume (événements valides à date) | Accessible depuis ce sandbox |
+  |---|---|---|
+  | `ardei-soft.com` (+ www.) | ~92 | ✅ (200) — mais contenu chargé en JS via une plateforme de billetterie propriétaire obfusquée (`/SenousritPGI?JAVOPP=...`) |
+  | `leventdessignes.fr` | 49 | à re-vérifier (404 sur le chemin deviné, site non totalement exploré) |
+  | `le-bijou.soticket.net` | 37 | ✅ (200), non exploré en détail |
+  | `theatre-cite.com` | 32 | ✅ (200, redirige vers `/programmation`) |
+  | `openagenda.com` | 12 | agrégateur tiers, lien déjà absolu (rien à scraper) |
+  | `casinosbarriere.com`, `odyssud.com` | 4 chacun | non explorés |
+
+  Conclusion round 2 : le MÉCANISME de scraping (le code) reste introuvable dans cette copie de `old/` — mais les VRAIS sites cibles, eux, sont identifiés avec certitude et, pour plusieurs, accessibles depuis cet environnement (contrairement à AlloCiné/Pathé-Gaumont, bloqués par pare-feu). Conformément à la consigne du client ("ajuste/optimise si du scraping existe déjà, sinon construire from scratch"), et faute de code à ajuster, **construction from scratch, mais informée par de vraies cibles vérifiées** plutôt que devinée à l'aveugle.
+
+**Implémentation livrée : `TheatreDeLaCiteDriver`** (theatre-cite.com, 32 événements réels) — le candidat le plus fiable (site propre, rendu côté serveur, classes CSS stables et sémantiques) :
+- Page de programmation (`/programmation`) : cartes `.programmation-grid__item--evenements`, titre (`.programmation-grid__item__title__inner`), image (`img.desktop-image[data-original]`), date en texte libre français (`.programmation-grid__item__date` + `.period-heure` pour l'heure).
+- Page de détail (une par événement, pour le lien de réservation réel et le tarif) : lien "Réserver" (`.../billets?&seance=...`), ligne d'information libre (`.spectacle__informations__content__line`).
+- Parsing de date français robuste (`19 septembre 2026` + `10:00`), sans dépendance à la locale système — table de correspondance mois FR → numéro, comme `AllocineDriver::safeParseDate`.
+- Dédoublonnage par `external_ref` (dernier segment de l'URL de détail), rattachement à `Area` (slug `tnt-theatre-de-la-cite`, déjà migré) et `EventCategory` (slug `theatre`).
+- **Vérifié en conditions réelles, pas seulement en test** : `php artisan scrape:events` exécuté contre le vrai site → **30 événements trouvés, 30 créés, 0 ignoré**, vérifié en base MySQL réelle (titres/dates/images/liens de réservation corrects, y compris les accents — un doute initial sur un encodage `Journ�es` s'est révélé être un artefact d'affichage du client `mysql` en ligne de commande, pas un vrai problème de stockage : les octets UTF-8 réels sont corrects, confirmé en HTTP réel sur `/agenda/rendez-vous-complicite` où "Complicité" s'affiche correctement).
+- Tests : `tests/Feature/ScrapeEventsTest.php` (création avec la structure HTML réelle du site, mise à jour sans doublon, carte à date illisible ignorée, échec amont géré proprement, source inactive non exécutée).
+- Commande `scrape:events` (nouvelle, architecture identique à `scrape:cinema`), planifiée quotidiennement à 5h30, seedée via `AgendaScraperSourcesSeeder`.
+
+**Ce qui reste** — sources identifiées mais non construites, par ordre de volume :
+- `ardei-soft.com` (~92 événements, la plus grosse source réelle) : nécessiterait de rétro-ingénierier une plateforme de billetterie tierce obfusquée (JS minifié, endpoint `SenousritPGI`) — effort substantiel, non tenté ici.
+- `le-bijou.soticket.net`, `leventdessignes.fr` : accessibles mais non explorés en profondeur (structure HTML non inspectée).
+- `casinosbarriere.com`, `odyssud.com` : volumes faibles (4 chacun), non explorés.
+
+Chaque nouvelle source suit le même moule (`ScraperDriver`, une classe par site, ajoutée au seeder) — pas de blocage architectural, seulement du temps d'investigation par site.
