@@ -32,6 +32,24 @@ class SecurityTest extends TestCase
         $this->get('/admin/login')->assertHeader('X-Content-Type-Options', 'nosniff');
     }
 
+    /**
+     * HSTS (brief §18/§14 déploiement) — uniquement en production, jamais en
+     * dev/staging HTTP (voir docblock de SecurityHeaders).
+     */
+    public function test_hsts_header_is_absent_outside_production(): void
+    {
+        $this->assertNotSame('production', app()->environment());
+
+        $this->get('/')->assertHeaderMissing('Strict-Transport-Security');
+    }
+
+    public function test_hsts_header_is_present_in_production(): void
+    {
+        app()->instance('env', 'production');
+
+        $this->get('/')->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+
     public function test_classified_description_is_escaped_when_rendered(): void
     {
         $category = ClassifiedCategory::create(['name' => 'Voitures', 'slug' => 'voitures']);

@@ -5,7 +5,7 @@
 
 ## État du projet
 
-**Phase actuelle : 5, 6 et 8 terminées ; 7/9-12 et 3/4/10 bien avancées.**
+**Phase actuelle : 1, 2, 3, 4, 5, 8, 9, 10 terminées ; 6, 7, 11, 12, 13 bien avancées ; 14 (déploiement) reste à faire.**
 Le schéma de base cible est appliqué sur `toulouseweb` et **peuplé avec les vraies données de production** (2 978 fiches annuaire, 18 724 événements, 17 304 films, 6 191 actus, 135 sliders...). L'administration (18 ressources Filament) et les pages publiques principales sont en ligne et vérifiées : homepage, annuaire, agenda (dont la catégorie Théâtre sur sa propre URL), cinéma, actualités, annonces (dépôt public avec modération non contournable), contact. Les redirections 301 (6 710 entrées migrées) et le sitemap.xml (4 036 URLs) sont opérationnels. Le scraper cinéma (`scrape:cinema`, une source AlloCiné par salle — 25 des 28 salles legacy, dont Pathé-Gaumont Wilson qui n'a pas de traitement spécial) est réécrit, gère films **et horaires précis**, et est planifié quotidiennement — **vérifié en direct le 25/08/2026** contre les 25 vraies sources (25/25 exécutions réussies, 397 séances trouvées). Une première passe de sécurité corrige les principales failles constatées dans l'ancien système à l'audit. Les images de contenu (annuaire, films, actualités, agenda, sliders) ont été réimportées depuis `old/backEnd/public/` (33 000+ fichiers retrouvés, correction d'une estimation initiale erronée à seulement 48 — voir §13) ; l'annuaire affiche désormais photo principale et galerie réelles. Une page "Paramètres du site" administre désormais le nom, la description, le logo et les réseaux sociaux (JSON-LD Organization, meta OG, pied de page), auparavant en dur dans le layout. Le dépôt public de fiche annuaire (`/annuaire/deposer`) est en ligne, sur le même modèle de modération stricte que les annonces (toujours `pending`/gratuite, jamais publiée automatiquement) ; l'annuaire propose désormais aussi un **filtre par ville** (`?city=`) — recherche géographique par rayon (lat/lng) hors scope, la base legacy n'ayant jamais stocké de coordonnées structurées (voir §13). L'agenda dispose désormais d'un calendrier visuel (`/agenda?view=calendar`) en complément de la vue liste, ainsi que d'une **proposition d'événement par le public** (`/agenda/proposer`, même modération stricte) — un bug préexistant de double-échappement HTML (`href="{{ }}"` au lieu de `:href="..."` sur `x-ui.button`, invisible avec un seul paramètre de requête) a été trouvé et corrigé au passage. Le scraper agenda (`scrape:events`) couvre désormais les **12 sources réelles de la liste de tâches cron de production** fournie par le client (Zenith, Théâtre de la Cité, Casino Théâtre Barrière, Théâtre Garonne, Le Vent des Signes, Odyssud, L'Escale, Théâtre du Grand Rond, Les Grands Interprètes, Toulouse Métropole, Le Bijou, Aria/Cornebarrieu), reconstruites à partir du vrai code legacy que le client a ajouté au dépôt et vérifiées en direct contre les vrais sites (10/12 pleinement fonctionnelles ; 2 avec une limite documentée — sites source ayant changé de CMS depuis l'écriture du legacy, voir §13) — plusieurs bugs réels du code legacy ont été trouvés et corrigés au passage (dates mal parsées, appels API cassés par des limites/formats d'URL désormais différents). Ce qui manque encore : performance à grande échelle, déploiement. Voir [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §0 et §13 pour l'état exact et détaillé du code, y compris la liste des hypothèses de mapping à valider avec vous.
 
 Avant de reprendre ce projet dans une nouvelle session : lire ce fichier, lire `TECHNICAL_DOCUMENTATION.md`, puis regarder l'état réel du code (`git log`, arborescence) avant de continuer — ne jamais repartir de zéro sur une fonctionnalité déjà faite.
@@ -125,4 +125,82 @@ php artisan images:sliders        # images de sliders (recherche large, peu de c
 
 ## Déploiement
 
-_À documenter en Phase 14._
+Checklist opérationnelle (Phase 14). Pas de déploiement réel effectué depuis cet environnement de développement (pas d'accès à un serveur de production/cPanel) — procédure écrite pour être suivie telle quelle par qui a cet accès. Détail technique et justifications : `TECHNICAL_DOCUMENTATION.md` §14.
+
+### Prérequis serveur
+
+- PHP 8.2+ avec extensions : `pdo_mysql`, `mbstring`, `bcmath`, `intl`, `gd` (ou `imagick`), `zip`, `curl`, `fileinfo`.
+- MySQL 8+ (ou MariaDB équivalent).
+- Composer 2, Node 18+ (build des assets, pas nécessaire à l'exécution une fois `public/build/` généré).
+- Accès à la crontab (un seul cron nécessaire, voir plus bas) — HTTPS obligatoire (certificat valide, brief §18).
+
+### Procédure de mise en production (première fois)
+
+```bash
+git clone <dépôt> && cd toulouseweb_refonte
+composer install --no-dev --optimize-autoloader
+npm ci && npm run build
+
+cp .env.example .env
+# Éditer .env : APP_ENV=production, APP_DEBUG=false, APP_URL=https://toulouseweb.com,
+# SESSION_SECURE_COOKIE=true, DB_*, MAIL_*, retirer LEGACY_DB_* une fois la
+# migration de données terminée (accès en lecture à l'ancienne base plus utile
+# après ce point). Voir les commentaires inline de .env.example.
+php artisan key:generate
+
+php artisan migrate --force
+php artisan storage:link
+
+# Données de référence + comptes (une fois) :
+php artisan db:seed --class=RolesAndAdminSeeder
+php artisan db:seed --class=ScraperSourcesSeeder
+php artisan db:seed --class=AgendaScraperSourcesSeeder
+
+# Si migration depuis toulouseweb_old pas déjà faite sur cet environnement,
+# voir section "Migration des données" plus haut (ordre des commandes important).
+
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan event:cache
+
+php artisan sitemap:generate
+```
+
+Crontab (une seule ligne, le scheduler Laravel gère toutes les tâches planifiées — voir `routes/console.php`) :
+
+```
+* * * * * cd /chemin/vers/toulouseweb_refonte && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Le worker de file d'attente (`queue:work --stop-when-empty`) tourne DANS ce même cron, minute par minute — pas de processus permanent à superviser (choix adapté à un hébergement mutualisé, voir `routes/console.php`).
+
+### Checklist avant bascule DNS / mise en ligne définitive
+
+- [ ] `APP_ENV=production` et `APP_DEBUG=false` (jamais de stack trace exposée, brief §18).
+- [ ] `APP_URL` en `https://`, certificat SSL valide, `SESSION_SECURE_COOKIE=true`.
+- [ ] Vérifier les en-têtes de sécurité en conditions réelles (`curl -I https://...` : `Strict-Transport-Security` doit apparaître — n'est envoyé qu'en production, voir `SecurityHeaders`).
+- [ ] Compte admin par défaut (`RolesAndAdminSeeder`) : mot de passe changé immédiatement après premher login.
+- [ ] `php artisan migrate:redirects` exécutée (6 710 redirections 301 legacy) — indispensable pour ne pas perdre le référencement acquis.
+- [ ] `sitemap.xml` généré et accessible, soumis à Google Search Console/Bing Webmaster Tools.
+- [ ] Balise de vérification Search Console + Google Analytics renseignées dans "Paramètres du site" (`/admin/site-settings`) si souhaité.
+- [ ] `robots.txt` vérifié (bloque `/admin`, `/track-click`).
+- [ ] Sources de scraping (`scraper_sources`) vérifiées actives avec les bonnes URLs — voir limites connues §13 (Casino Barrière, Les Grands Interprètes) et saison codée en dur pour Les Grands Interprètes (`InterpreteDriver`, à remettre à jour chaque rentrée).
+- [ ] Sauvegardes base de données planifiées côté hébergeur (hors scope applicatif).
+- [ ] DNS basculé en dernier, une fois tout ce qui précède vérifié sur le nouveau serveur via son IP/un domaine de test.
+
+### Mises à jour ultérieures (déploiement continu)
+
+```bash
+git pull
+composer install --no-dev --optimize-autoloader
+npm ci && npm run build
+php artisan down --render="errors::503" --retry=60   # optionnel, coupure courte
+php artisan migrate --force
+php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan event:cache
+php artisan up
+```
+
+### Rollback
+
+`git checkout <tag/commit précédent>` + rejouer `composer install`/`npm run build`/caches. Les migrations de ce projet sont additives (nouvelles colonnes/tables/index, jamais de suppression destructive sans migration `down()` correspondante) — un rollback de code sans rollback de schéma reste presque toujours compatible ; vérifier au cas par cas avant un rollback qui traverserait une migration non additive.

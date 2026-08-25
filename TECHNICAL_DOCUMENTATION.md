@@ -25,7 +25,7 @@
 | 13. Tests complets | 🟡 138 tests / 376 assertions (feature + unit), couvrant modération/sécurité/scraping/migration/SEO sur tous les modules livrés — pas de campagne de charge/perf dédiée |
 | 14. Préparation au déploiement | 🔜 Non démarrée |
 
-Le dossier `old/` contient l'ancien site (backend Laravel 7 + frontend Nuxt 2), conservé en lecture seule pour référence. La base `toulouseweb_old` contient les données de production, non migrées. La base `toulouseweb` porte désormais le **schéma cible complet** (§9) et un compte admin. Voir §14 pour le détail de ce qui est réellement codé à date.
+Le dossier `old/` contient l'ancien site (backend Laravel 7 + frontend Nuxt 2), conservé en lecture seule pour référence. La base `toulouseweb_old` contient les données de production, non migrées. La base `toulouseweb` porte désormais le **schéma cible complet** (§9) et un compte admin. Voir §13 pour le détail de ce qui est réellement codé à date, §14 pour la procédure de déploiement.
 
 ---
 
@@ -686,3 +686,32 @@ Deux trous réels trouvés et corrigés (migration `2026_08_25_110000_add_perfor
 - **`click_events.created_at`** : `ClickTrackingService::totalCount()`/`totalsByType()`/`topEntities()` (widgets `ClicksOverview`/`ClicksByTypeChart`/`TopClickedEntities`, tous `$isLazy = false` — rendus immédiatement) filtrent **uniquement** par plage `created_at`, sans `entity_type`. L'index composite existant `(entity_type, entity_id, created_at)` ne peut pas servir ces requêtes (colonne de tri/range en 3e position, pas en tête) — sur la plus grosse table de la base (**2,78M lignes**, l'historique de clics migré), ces 3 requêtes tournaient en **full scan à chaque chargement du dashboard admin**. `EXPLAIN` avant/après : `type: ALL` (scan complet) → `type: range` + `Using index` (index-covering, ~92k lignes lues sur 2,78M pour une fenêtre de 30 jours) après ajout de l'index `(created_at, entity_type, entity_id)`.
 
 Pas de cache applicatif ajouté à ce stade : les tables de référence interrogées à chaque page (catégories, zones...) sont petites (quelques dizaines de lignes, lookups déjà indexés) — mise en cache jugée prématurée (complexité + risque de péremption pour un gain non mesurable à ce volume). À reconsidérer si le volume de trafic réel révèle un besoin (ex. cache court sur les agrégations homepage).
+
+---
+
+## 14. Déploiement (brief §26/Phase 14)
+
+Checklist opérationnelle complète : `README.md` § Déploiement (procédure copier-coller). Cette section documente le RAISONNEMENT derrière les choix — aucun déploiement réel n'a été effectué depuis cet environnement de développement (pas d'accès à un serveur de production/cPanel), la procédure est écrite pour être suivie telle quelle par qui a cet accès.
+
+### Pourquoi un seul cron (pas de worker de queue permanent)
+
+Le brief cible un hébergement type cPanel/mutualisé (cohérent avec le legacy, dont les crons étaient de simples `wget` — voir la liste de tâches cron réelle fournie par le client pour l'agenda, §13). Sur ce type d'hébergement, un processus `php artisan queue:work` permanent (supervisé par Supervisor/systemd) n'est généralement PAS disponible. Solution retenue (`routes/console.php`) : `Schedule::command('queue:work --stop-when-empty')->everyMinute()` — le scheduler Laravel (lui-même déclenché par la SEULE ligne de cron serveur requise, `* * * * * php artisan schedule:run`) lance un worker qui traite tout ce qu'il y a dans la file puis s'arrête proprement (`--stop-when-empty`), plutôt que de tourner indéfiniment. Latence de traitement de queue de l'ordre de la minute — largement suffisant ici (les jobs de cette application sont des tâches différées non urgentes, pas du temps réel).
+
+### Pourquoi `APP_DEBUG=false` est non négociable
+
+L'audit du legacy (§4) a trouvé des messages d'erreur PHP bruts exposés au public (stack traces, chemins serveur). `APP_DEBUG=true` en production reproduirait exactement cette faille côté Laravel (pages d'erreur Whoops complètes, y compris variables d'environnement). Documenté dans `.env.example` en tête de fichier pour que l'oubli soit difficile.
+
+### Ordre des caches au déploiement
+
+`config:cache` DOIT être exécuté après que `.env` soit définitivement configuré (il "fige" `.env` dans un fichier compilé — toute modification de `.env` après un `config:cache` sans le regénérer est silencieusement ignorée, piège classique Laravel). D'où l'ordre dans la procédure README : `.env` → `migrate` → caches, jamais l'inverse.
+
+### Migrations : sûres pour un rollback de code
+
+Toutes les migrations de ce projet sont additives (nouvelles tables/colonnes/index — voir par exemple `2026_08_25_110000_add_performance_indexes.php`, §12) ou correctives non-destructives (`2026_08_24_090500_drop_screenings_unique_constraint.php` retire une contrainte unique trop stricte découverte en cours de route, sans perte de données). Aucune migration ne supprime de colonne contenant des données réelles. Conséquence pratique : un rollback de CODE (revenir à un commit précédent) reste compatible avec un schéma DB plus récent dans l'immense majorité des cas — la checklist README ne demande donc pas systématiquement un rollback de schéma symétrique.
+
+### Ce qui reste hors de portée de ce dépôt
+
+- Provisioning serveur (PHP/MySQL/certificat SSL) — dépend de l'hébergeur choisi, non tranché ici.
+- Sauvegardes base de données — responsabilité hébergeur/infra, pas applicative.
+- Un vrai service de géocodage pour la recherche géographique par rayon (brief §5, voir §13) — décision produit (fournisseur, budget/clé API) à trancher par le client.
+- Décodage du payload Nuxt de casinosbarriere.com et reconstruction complète du driver Les Grands Interprètes (nouveau CMS) — voir §13, limites connues du scraper agenda.

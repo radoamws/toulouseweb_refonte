@@ -23,6 +23,14 @@ class SecurityHeaders
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'geolocation=(), camera=(), microphone=()');
 
+        // HSTS uniquement en production : un en-tête envoyé par erreur en
+        // dev/staging HTTP est inoffensif (ignoré par les navigateurs sur
+        // une réponse non-HTTPS) mais autant rester explicite — voir
+        // checklist de déploiement, TECHNICAL_DOCUMENTATION.md §14.
+        if (app()->environment('production')) {
+            $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        }
+
         return $response;
     }
 }

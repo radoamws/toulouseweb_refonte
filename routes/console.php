@@ -19,8 +19,8 @@ Schedule::command('sitemap:generate')->daily();
 // suffit largement et reste légère pour l'API distante.
 Schedule::command('scrape:cinema')->dailyAt('05:00')->withoutOverlapping();
 
-// Scraping agenda (brief §6/§21) — quotidien, léger (une salle pour
-// l'instant, voir TECHNICAL_DOCUMENTATION.md §13).
+// Scraping agenda (brief §6/§21) — quotidien, 12 sources réelles (liste de
+// cron de production fournie par le client), voir TECHNICAL_DOCUMENTATION.md §13.
 Schedule::command('scrape:events')->dailyAt('05:30')->withoutOverlapping();
 
 // Repérage des 404 fréquentes sans redirection (brief §15) — hebdomadaire,
