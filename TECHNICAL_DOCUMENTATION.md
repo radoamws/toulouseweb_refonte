@@ -1,7 +1,7 @@
 # ToulouseWeb — Documentation technique
 
 > Document vivant : à mettre à jour à chaque modification importante du code ou de l'architecture.
-> Dernière mise à jour : 2026-08-25 — **Phases 1, 2, 5, 6, 8 terminées ; Phase 3 (design system + layout), Phase 4 (admin) et Phase 7 (agenda, scraper amorcé) bien avancées ; premières briques de la Phase 10 (homepage) livrées.**
+> Dernière mise à jour : 2026-08-25 — **Phases 1, 2, 5, 6, 8 terminées ; Phase 3 (design system + layout), Phase 4 (admin) et Phase 7 (agenda, scraper des 12 sources réelles de la liste de cron de production) bien avancées ; premières briques de la Phase 10 (homepage) livrées.**
 
 ---
 
@@ -15,7 +15,7 @@
 | 4. Administration | 🟡 21 ressources Filament créées et testées (dont gestion utilisateurs/rôles) + relation manager Séances (Phase 8) + page Paramètres du site (dont SEO/Analytics globaux) + dashboard stats de clics (§13) |
 | 5. Migration des données | ✅ Terminé — 11 commandes `migrate:*` exécutées avec succès contre `toulouseweb_old` réelle (§13, dont `migrate:partner-sites` ajoutée le 2026-08-24 — table oubliée à l'audit initial) + 7 commandes `images:*` ayant réimporté l'écrasante majorité des visuels de contenu retrouvés sous `old/backEnd/public/` (33 000+ fichiers, voir §13) |
 | 6. Annuaire | 🟡 Pages publiques (index par catégorie + recherche, fiche détail) livrées et vérifiées avec les vraies données, désormais avec photo principale + galerie réelles + dépôt public de fiche (modération stricte, tier toujours gratuit) — voir §13 ; pas encore de recherche géographique |
-| 7. Agenda / événements / théâtre | 🟡 Pages publiques (index + filtre catégorie dont "theatre", fiche détail, calendrier visuel) livrées ; proposition d'événement par le public pas encore faite ; scraper agenda **construit et vérifié en direct** pour une salle (Théâtre de la Cité, `scrape:events`, 30/30 événements réels importés) — voir §13, autres salles identifiées mais pas encore construites |
+| 7. Agenda / événements / théâtre | 🟡 Pages publiques (index + filtre catégorie dont "theatre", fiche détail, calendrier visuel) livrées ; proposition d'événement par le public pas encore faite ; scraper agenda **construit pour les 12 sources réelles de la liste de cron de production** (reconstruites à partir du vrai code legacy fourni par le client), vérifié en direct — 10/12 pleinement fonctionnelles, 2 avec limite connue documentée (sites source refondus depuis le legacy) — voir §13 |
 | 8. Cinéma | 🟡 Pages publiques + scraper AlloCiné réécrit (`scrape:cinema`, une source par salle — 24/27 — fiches film + salle + horaires précis, planifié quotidien) + relation manager Séances (saisie manuelle en complément) ; scraper non re-vérifié en direct (accès réseau bloqué depuis ce sandbox, voir §13) |
 | 9. Annonces | 🟡 Pages publiques + dépôt avec workflow de modération strict (jamais de publication automatique, honeypot anti-spam) livrés et testés (§13) |
 | 10. Homepage | 🟡 Fonctionnelle et vérifiée avec les vraies données migrées (slider, actus, agenda, cinéma, annuaire, annonces désormais dépôt-able) |
@@ -268,7 +268,7 @@ Un seul cron serveur, à configurer en production : `* * * * * php artisan sched
 | `queue:work --stop-when-empty` | Traite la file (emails, images) | Chaque minute | ✅ Implémenté |
 | `sitemap:generate` | Régénère `sitemap.xml` en fichier statique caché | Quotidien | ✅ Implémenté (§13) |
 | `scrape:cinema` | Fiches film + association salle depuis les sources actives (`scraper_sources`, type `cinema`) | Quotidien à 5h | ✅ Implémenté (§13 — voir détail ci-dessous) |
-| `scrape:events` | Scraping agenda (sources dans `scraper_sources`, type `agenda`) | Quotidien à 5h30 | ✅ Implémenté pour 1 salle (§13 — voir détail) |
+| `scrape:events` | Scraping agenda (sources dans `scraper_sources`, type `agenda`) | Quotidien à 5h30 | ✅ Implémenté pour 12 salles (liste cron de production réelle), 10/12 pleinement fonctionnelles (§13 — voir détail) |
 | `events:archive-past` | Statut `expired` sur événements passés | Quotidien | ❌ Pas encore écrit |
 | `classifieds:expire` | Statut `expired` sur annonces dépassant leur durée de publication | Quotidien | ❌ Pas encore écrit |
 | `redirects:audit` | Repère les 404 fréquentes sans redirection associée | Hebdomadaire | ✅ Implémenté (§13 — voir détail ci-dessous) |
@@ -321,7 +321,7 @@ Documentation complète des futures commandes (`events:archive-past`, `classifie
 | 4. Administration | Resources Filament par entité, rôles/permissions | À venir |
 | 5. Migration des données | Exécution des commandes `migrate:*` sur environnement local | À venir |
 | 6. Annuaire | Listings, catégories, recherche, fiches payantes/gratuites, dépôt public | ✅ Fait (§13) — reste : recherche géographique |
-| 7. Agenda / événements / théâtre | Listing, filtres, calendrier, scraping événements | 🟡 Fait — scraping construit pour 1 salle sur ~6 sources identifiées (§13), les autres restent à construire au cas par cas |
+| 7. Agenda / événements / théâtre | Listing, filtres, calendrier, scraping événements | 🟡 Fait — scraping construit pour les 12 sources réelles de la liste de cron de production (§13), 10/12 pleinement fonctionnelles |
 | 8. Cinéma | Modèle, scraping AlloCiné réécrit (une source par salle), UI | ✅ Fait (§13) — reste : vérification en direct dès accès réseau disponible |
 | 9. Annonces | Dépôt public, modération admin, catégories dynamiques | À venir |
 | 10. Homepage | Slider admin, sections dynamiques | À venir |
@@ -614,9 +614,41 @@ La proposition d'événement par le public (agenda). Le scraper cinéma AlloCin�
 - Tests : `tests/Feature/ScrapeEventsTest.php` (création avec la structure HTML réelle du site, mise à jour sans doublon, carte à date illisible ignorée, échec amont géré proprement, source inactive non exécutée).
 - Commande `scrape:events` (nouvelle, architecture identique à `scrape:cinema`), planifiée quotidiennement à 5h30, seedée via `AgendaScraperSourcesSeeder`.
 
-**Ce qui reste** — sources identifiées mais non construites, par ordre de volume :
-- `ardei-soft.com` (~92 événements, la plus grosse source réelle) : nécessiterait de rétro-ingénierier une plateforme de billetterie tierce obfusquée (JS minifié, endpoint `SenousritPGI`) — effort substantiel, non tenté ici.
-- `le-bijou.soticket.net`, `leventdessignes.fr` : accessibles mais non explorés en profondeur (structure HTML non inspectée).
-- `casinosbarriere.com`, `odyssud.com` : volumes faibles (4 chacun), non explorés.
+**Round 3 (2026-08-25, le client fournit le VRAI code legacy)** — le client a personnellement ajouté le vrai code source de production à `old/backEnd/app/Http/Controllers/AgendaController.php` (passé de 171 à 4820 lignes), et fourni la vraie liste des 12 tâches cron de production (`updateAgendafor{Salle}` sur `toulouseweb.com/backend/public/api/`) :  Zenith, Cite, CasinoBarriere, Garonne, Leventdessignes, Odyssud, Escale, GrandRond, Interprete, Metropole, Bijou, Ardei. Ce round remplace intégralement la stratégie de reverse-engineering à l'aveugle du Round 2 par une lecture exhaustive de ce vrai code, venue par venue — avec une correction importante :
 
-Chaque nouvelle source suit le même moule (`ScraperDriver`, une classe par site, ajoutée au seeder) — pas de blocage architectural, seulement du temps d'investigation par site.
+> ⚠️ **Le constat du Round 2 sur `ardei-soft.com` ("plateforme obfusquée, effort substantiel") était FAUX.** Le vrai code legacy (`updateAgendaforEscale`/`updateAgendaforArdei`) montre un simple `file_get_contents()` sur `/{ville}/SenousritPGI?JAVOPP=GnAPIPlus&reqData={JSON}` — aucun JS à exécuter, l'API répond directement du JSON. Le blocage perçu (JS minifié `VEL-javi.js`) était une fausse piste : l'API sous-jacente n'a jamais nécessité ce JS. Corrigé et implémenté ci-dessous (`EscaleDriver`/`ArdeiDriver`, 90/90 événements importés en direct).
+
+Pour chacune des 12 salles, le vrai code a été lu intégralement puis adapté à l'architecture `ScraperDriver` (résolution `Area`/`EventCategory` par `legacy_id` — voir plus bas — au lieu d'ids `t_areas`/`t_agenda_categories` codés en dur), **puis vérifié en conditions réelles** (`php artisan scrape:events --source={id}` contre le vrai site, pas seulement `Http::fake()`). Résultat de cette vérification live (25/08/2026) :
+
+| Salle (cron legacy) | Driver | Source | Résultat live | Statut |
+|---|---|---|---|---|
+| Cite | `TheatreDeLaCiteDriver` | HTML theatre-cite.com | 30/30 (déjà en prod, Round 2) | ✅ |
+| Zenith | `ZenithDriver` | API OpenAgenda | 94/94 créés | ✅ |
+| Metropole | `MetropoleDriver` | API OpenAgenda | 300/300 créés (plafond API, voir limite ci-dessous) | ✅ |
+| Garonne | `GaronneDriver` | HTML theatregaronne.com | 29/29 (0 ignoré après correctif) | ✅ |
+| Leventdessignes | `LeventDesSignesDriver` | HTML leventdessignes.fr | 48 trouvés, 41 datables importés, 7 pages éditoriales ignorées (légitime) | ✅ |
+| Odyssud | `OdyssudDriver` | HTML odyssud.com | 48/48 (0 ignoré après 2 correctifs) | ✅ |
+| Escale | `EscaleDriver` | JSON ardei-soft.com/tournefeuille | 72/72 créés | ✅ |
+| Ardei | `ArdeiDriver` | JSON ardei-soft.com/cornebarrieu | 18/18 créés | ✅ |
+| Bijou | `BijouDriver` | JSON API le-bijou.soticket.net | 39/39 créés (jeton Bearer legacy toujours valide) | ✅ |
+| GrandRond | `GrandRondDriver` | HTML grand-rond.org | 1 trouvé (le site lui-même n'a pas encore publié sa saison 2026-2027, "rendez-vous en septembre") | ✅ (comportement correct) |
+| CasinoBarriere | `CasinoBarriereDriver` | HTML casinosbarriere.com | 133 trouvés, 133 ignorés | ⚠️ limite connue |
+| Interprete | `InterpreteDriver` | HTML grandsinterpretes.fr | 0 trouvé | ❌ limite connue |
+
+**Bugs legacy réels découverts et corrigés pendant la vérification live** (pas de simples ajustements de sélecteurs — de vraies erreurs de logique, dont certaines préexistaient probablement dans le code de production) :
+- **Garonne/Leventdessignes — plage de dates à 2 nœuds sans mois sur le premier** : quand une date "du 07 au 15 octobre" est rendue par le site en 2 éléments (`"07"` puis `"15 Oct"`), le legacy traite chaque nœud comme une date complète indépendante → `$months['']` (clé vide) côté 1er nœud → date invalide. Corrigé : le mois du 2e nœud est réutilisé pour le 1er si celui-ci ne contient aucune lettre.
+- **Translittération d'accents via `iconv('...//TRANSLIT...')`** : produit des apostrophes parasites sur ce serveur (`"Déc"` → `"D'ec"` au lieu de `"Dec"`), cassant la reconnaissance de mois abrégés accentués. Remplacé par une table de correspondance manuelle (`ParsesFrenchDates::ACCENT_MAP`), stable quel que soit l'environnement.
+- **Odyssud — 3 `<span>` de date dont le 1er est vide** : le legacy suppose que 3 `<span>` = toujours une plage (jour début + "et" + jour+mois fin) ; le site laisse parfois le 1er `<span>` vide (pictogramme sans texte) quand il n'y a qu'UNE seule date → reconstruction absurde ("mois" sans jour). Corrigé : si le 1er `<span>` est vide, on traite comme une date unique.
+- **Odyssud — absence de `<span>` imbriqué** : le site ne rend plus systématiquement le `<span>` que le legacy filtrait (`.duration-day span`) ; repli ajouté sur le texte direct de `.duration-day`.
+- **OpenAgenda (Zenith/Metropole) — paramètres d'URL obsolètes** : le legacy appelle l'API avec `size=500`, qui renvoie désormais une erreur 400 ("size must not exceed 300", l'API a durci sa limite depuis l'écriture du legacy) — plafonné à 300. Idem pour le domaine d'image codé en dur (`https://images.openagenda.com/`), remplacé par le champ `image.base` réellement renvoyé par l'API (`https://img.openagenda.com/main/`).
+- **Ardei-Soft — accolades/guillemets non encodés dans l'URL** : le legacy interpole le JSON `reqData` brut dans l'URL (`?reqData={"APIFunction":...}`) ; curl en CLI tolère ces caractères non conformes à la RFC 3986, mais le client HTTP Guzzle (utilisé par Laravel `Http::`) échoue silencieusement à parser l'URL. Corrigé avec `rawurlencode()`.
+
+**Limites connues, documentées plutôt que masquées (consigne client)** :
+- **`CasinoBarriereDriver`** : casinosbarriere.com a migré vers un front Nuxt3/Vue3 depuis l'écriture du legacy. Les blocs de catégorie (`.CsnNationalShowsPreviewCategory`) et les cartes spectacle (`.CsnCardShowPortrait`, nouveau sélecteur réel) existent toujours, MAIS leur `<a>` englobant n'a plus d'attribut `href` server-side — navigation 100% client-side (JS). Le scraper détecte donc bien les 133 spectacles (`found`) mais ne peut atteindre aucune fiche détail (`skipped`). Piste non creusée : le payload Nuxt `/nos-spectacles/_payload.json` contient probablement les données mais dans un format `devalue` (pas du JSON standard) nécessitant un désérialiseur dédié.
+- **`InterpreteDriver`** : grandsinterpretes.com a changé de domaine (`.com` → `.fr`), de schéma d'URL de saison (`/saison/2023-2024/` → `/saison2026-2027/`) ET de CMS complet (thème WordPress "EventChamp"/"The Events Calendar" — plus aucune trace de `.concert-title`/`.fake-link`/`.taviraj.date`). Driver non fonctionnel (`found=0`) ; reconstruction complète des sélecteurs nécessaire contre le nouveau CMS, hors budget de cette phase.
+- **`GrandRondDriver`** : fonctionnellement correct mais peu de contenu à date de vérification — le site annonce lui-même que sa saison 2026-2027 est "décalée" et sera publiée en détail début septembre.
+- **`MetropoleDriver`/`ZenithDriver`** : l'API OpenAgenda plafonne désormais les réponses à 300 événements par requête (`aggsSizeLimit`/`size`) — au-delà, une pagination serait nécessaire (non implémentée), donc seuls les ~300 prochains événements de l'agenda "Toulouse Métropole" sont couverts par exécution (Zenith, avec 94 événements réels, n'atteint pas cette limite).
+
+**Correspondance `legacy_id` → tables migrées** — chaque driver résout sa salle et sa/ses catégorie(s) via les colonnes `areas.legacy_id`/`event_categories.legacy_id` (PAS des slugs ou ids codés en dur), pour rester correct même si les tables migrées évoluent. Exemple vérifié : `id_area=3` (legacy, Théâtre de la Cité) → `Area::where('legacy_id', 3)` → id migré `2`, slug `tnt-theatre-de-la-cite` (confirme que `TheatreDeLaCiteDriver`, construit au Round 2 par déduction, pointait déjà sur la bonne salle). Deux helpers réutilisables portent cette logique : `Concerns\ResolvesCategory` (résolution par `legacy_id` + correspondance approximative de libellé pour les cas de catégorisation dynamique du legacy comme `getCategIdByLikeLib()`) et `Concerns\FetchesHttp`/`Concerns\ParsesFrenchDates` (réseau et dates FR, partagés par tous les nouveaux drivers). Deux bases abstraites factorisent les 2 familles de sources API JSON identifiées : `Concerns\AbstractOpenAgendaDriver` (Zenith, Metropole) et `Concerns\AbstractArdeiSoftDriver` (Escale, Ardei).
+
+Chaque nouvelle source suit le même moule (`ScraperDriver`, une classe par site, ajoutée au seeder `AgendaScraperSourcesSeeder`) — architecture confirmée scalable à 12 sources réelles sans changement structurel.
