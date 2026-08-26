@@ -91,4 +91,23 @@ class HomepageTest extends TestCase
             ->assertSee('Une annonce de test')
             ->assertSee('Restaurants');
     }
+
+    /** Flèches précédent/suivant du slider (demande client) — voir components/site/hero-slider.blade.php. */
+    public function test_slider_shows_chevron_arrows_only_with_multiple_slides(): void
+    {
+        $single = Slider::create(['title' => 'Seul slide', 'image' => 'https://example.test/img.jpg', 'is_active' => true]);
+        $single->placements()->create(['page' => 'home']);
+
+        $response = $this->get('/')->assertOk();
+        $response->assertDontSee('Diapositive précédente');
+        $response->assertDontSee('Diapositive suivante');
+
+        $second = Slider::create(['title' => 'Second slide', 'image' => 'https://example.test/img2.jpg', 'is_active' => true]);
+        $second->placements()->create(['page' => 'home']);
+
+        $response = $this->get('/')->assertOk();
+        $response->assertSee('Diapositive précédente');
+        $response->assertSee('Diapositive suivante');
+        $response->assertSee('#CC0000', false);
+    }
 }

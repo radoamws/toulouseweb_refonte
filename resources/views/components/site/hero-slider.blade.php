@@ -53,6 +53,29 @@
     </div>
 
     @if ($slides->count() > 1)
+        {{-- Flèches précédent/suivant (demande client) — chevrons #CC0000 sur
+        fond blanc pour rester lisibles quelle que soit l'image du slide. --}}
+        <button
+            type="button"
+            @click="active = (active - 1 + count) % count"
+            class="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 shadow-sm transition hover:bg-white sm:left-4 sm:h-12 sm:w-12"
+            aria-label="Diapositive précédente"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#CC0000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true">
+                <path d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+        </button>
+        <button
+            type="button"
+            @click="active = (active + 1) % count"
+            class="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 shadow-sm transition hover:bg-white sm:right-4 sm:h-12 sm:w-12"
+            aria-label="Diapositive suivante"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#CC0000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true">
+                <path d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+        </button>
+
         <div class="absolute inset-x-0 bottom-4 flex justify-center gap-2">
             @foreach ($slides as $i => $slide)
                 <button
