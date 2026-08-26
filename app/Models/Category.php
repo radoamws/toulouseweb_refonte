@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasSeoMeta;
+use App\Models\Concerns\ResolvesImageUrl;
 use App\Models\Concerns\Trackable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -18,7 +20,7 @@ use Spatie\Sluggable\SlugOptions;
  */
 class Category extends Model
 {
-    use HasSlug, HasSeoMeta, Trackable;
+    use HasSlug, HasSeoMeta, Trackable, ResolvesImageUrl;
 
     protected $fillable = [
         'parent_id', 'name', 'slug', 'level', 'icon', 'description', 'order', 'is_active', 'legacy_id',
@@ -27,6 +29,11 @@ class Category extends Model
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    protected function iconUrl(): Attribute
+    {
+        return Attribute::get(fn () => static::resolveImageUrl($this->icon));
+    }
 
     public function getSlugOptions(): SlugOptions
     {

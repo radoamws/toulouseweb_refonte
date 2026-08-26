@@ -45,10 +45,11 @@ class CategoryResource extends Resource
                     ->maxLength(255)
                     ->unique(ignoreRecord: true)
                     ->helperText('Utilisé dans l\'URL publique — modifier casse le référencement, préférer une redirection (module Redirections).'),
-                Forms\Components\TextInput::make('icon')
+                Forms\Components\FileUpload::make('icon')
                     ->label('Icône')
-                    ->maxLength(255)
-                    ->default(null),
+                    ->image()
+                    ->maxSize(2048)
+                    ->directory('categories'),
                 Forms\Components\Textarea::make('description')
                     ->columnSpanFull(),
                 Forms\Components\TextInput::make('order')
@@ -83,8 +84,8 @@ class CategoryResource extends Resource
                 Tables\Columns\TextColumn::make('level')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('icon')
-                    ->searchable(),
+                Tables\Columns\ImageColumn::make('icon_url')
+                    ->label('Icône'),
                 Tables\Columns\TextColumn::make('order')
                     ->numeric()
                     ->sortable(),

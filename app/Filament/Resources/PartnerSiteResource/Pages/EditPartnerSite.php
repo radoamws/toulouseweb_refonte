@@ -6,8 +6,12 @@ use App\Filament\Resources\PartnerSiteResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 
+use App\Filament\Concerns\RedirectsToIndexAfterSave;
+
 class EditPartnerSite extends EditRecord
 {
+    use RedirectsToIndexAfterSave;
+
     protected static string $resource = PartnerSiteResource::class;
 
     protected function getHeaderActions(): array

@@ -6,7 +6,11 @@ use App\Filament\Resources\PageResource;
 use Filament\Actions;
 use Filament\Resources\Pages\CreateRecord;
 
+use App\Filament\Concerns\RedirectsToIndexAfterSave;
+
 class CreatePage extends CreateRecord
 {
+    use RedirectsToIndexAfterSave;
+
     protected static string $resource = PageResource::class;
 }

@@ -80,6 +80,21 @@ class PublicContentPagesTest extends TestCase
         $this->get('/annuaire/fiche/fiche-gratuite')->assertOk()->assertSee('1 rue de Test')->assertDontSee('Visiter le site');
     }
 
+    /** Liens externes en target="_blank" (demande client, "partout") — voir annuaire/show.blade.php. */
+    public function test_annuaire_show_reservation_link_opens_in_new_tab(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants']);
+        $listing = Listing::create([
+            'title' => 'Resto Réservable', 'slug' => 'resto-reservable', 'tier' => 'paid', 'status' => 'published',
+            'reservation_url' => 'https://reservation.example.test/resto',
+        ]);
+        $listing->categories()->attach($category);
+
+        $response = $this->get('/annuaire/fiche/resto-reservable')->assertOk();
+        $response->assertSee('target="_blank" rel="noopener"', false);
+        $response->assertSee('href="https://reservation.example.test/resto"', false);
+    }
+
     public function test_unpublished_listing_is_not_accessible(): void
     {
         Listing::create(['title' => 'Brouillon', 'slug' => 'brouillon', 'tier' => 'free', 'status' => 'draft']);
@@ -142,6 +157,20 @@ class PublicContentPagesTest extends TestCase
         ]);
 
         $this->get('/agenda/concert-test')->assertOk()->assertSee('Concert Test');
+    }
+
+    /** Liens externes en target="_blank" (demande client, "partout") — voir agenda/show.blade.php. */
+    public function test_agenda_show_booking_link_opens_in_new_tab(): void
+    {
+        $event = Event::create([
+            'title' => 'Concert Booké', 'slug' => 'concert-booke',
+            'status' => 'published', 'start_date' => now()->addDay(),
+            'booking_url' => 'https://billetterie.example.test/concert',
+        ]);
+
+        $response = $this->get('/agenda/concert-booke')->assertOk();
+        $response->assertSee('target="_blank" rel="noopener"', false);
+        $response->assertSee('href="https://billetterie.example.test/concert"', false);
     }
 
     public function test_cinema_index_and_movie_and_salle_pages_render(): void

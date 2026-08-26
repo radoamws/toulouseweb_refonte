@@ -132,7 +132,7 @@
                             </div>
                         @endif
                         @if ($listing->reservation_url)
-                            <x-ui.button :href="$listing->reservation_url" variant="primary" class="w-full !justify-center" data-track="listing:{{ $listing->id }}:reservation_click">
+                            <x-ui.button :href="$listing->reservation_url" target="_blank" rel="noopener" variant="primary" class="w-full !justify-center" data-track="listing:{{ $listing->id }}:reservation_click">
                                 Réserver
                             </x-ui.button>
                         @endif

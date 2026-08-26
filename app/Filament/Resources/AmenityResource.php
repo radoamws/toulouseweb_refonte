@@ -28,9 +28,11 @@ class AmenityResource extends Resource
                 Forms\Components\TextInput::make('name')
                     ->required()
                     ->maxLength(255),
-                Forms\Components\TextInput::make('icon')
-                    ->maxLength(255)
-                    ->default(null),
+                Forms\Components\FileUpload::make('icon')
+                    ->label('Icône')
+                    ->image()
+                    ->maxSize(2048)
+                    ->directory('amenities'),
                 Forms\Components\TextInput::make('legacy_id')
                     ->numeric()
                     ->default(null),
@@ -41,9 +43,9 @@ class AmenityResource extends Resource
     {
         return $table
             ->columns([
+                Tables\Columns\ImageColumn::make('icon_url')
+                    ->label('Icône'),
                 Tables\Columns\TextColumn::make('name')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('icon')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('legacy_id')
                     ->numeric()

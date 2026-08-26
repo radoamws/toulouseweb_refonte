@@ -38,9 +38,11 @@ class EventCategoryResource extends Resource
                     ->helperText('Le slug "theatre" est celui exploité par la page THÉÂTRE du menu principal (brief §6).'),
                 Forms\Components\ColorPicker::make('color')
                     ->label('Couleur'),
-                Forms\Components\TextInput::make('icon')
-                    ->maxLength(255)
-                    ->default(null),
+                Forms\Components\FileUpload::make('icon')
+                    ->label('Icône')
+                    ->image()
+                    ->maxSize(2048)
+                    ->directory('event-categories'),
                 Forms\Components\TextInput::make('order')
                     ->required()
                     ->numeric()
@@ -61,8 +63,8 @@ class EventCategoryResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('color')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('icon')
-                    ->searchable(),
+                Tables\Columns\ImageColumn::make('icon_url')
+                    ->label('Icône'),
                 Tables\Columns\TextColumn::make('order')
                     ->numeric()
                     ->sortable(),

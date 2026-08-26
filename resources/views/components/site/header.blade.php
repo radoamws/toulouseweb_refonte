@@ -34,7 +34,12 @@
                 répété à côté (déjà présent dans le logo lui-même). Encart
                 sur toute la hauteur de l'entête (demande client) en rouge
                 #CC0000 (couleur de marque, PAS un fond sombre neutre). --}}
-                <span class="flex h-full items-center rounded-lg bg-[#CC0000] px-4">
+                {{-- style inline en complément de la classe Tailwind : la
+                classe arbitraire bg-[#CC0000] dépend d'un rebuild des assets
+                (npm run build) pour apparaître dans le CSS compilé — le
+                style inline garantit la couleur même si ce rebuild est
+                oublié après un futur changement. --}}
+                <span class="flex h-full items-center rounded-lg bg-[#CC0000] px-4" style="background-color:#CC0000">
                     <img src="{{ $siteSettings->logo_url }}" alt="{{ $siteSettings->site_name }}" class="h-11 w-auto">
                 </span>
             @else
@@ -57,17 +62,28 @@
                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                     </svg>
                 </button>
+                {{-- Le décalage visuel entre le bouton et le sous-menu se fait
+                via `pt-1` DANS ce conteneur (pas `mt-1` sur la boîte visible) :
+                un `margin-top` externe laisse un espace mort entre le bouton
+                et le sous-menu qui n'appartient à AUCUN des deux — la souris
+                y déclenche `mouseleave` sur le parent en traversant cet
+                espace, fermant le menu avant même de l'atteindre. Avec
+                `pt-1`, cet espace fait partie de la boîte de CE conteneur
+                (positionné juste sous le bouton via `top-full`), donc le
+                survol y reste bien "dans" un descendant du parent. --}}
                 <div
                     x-show="annuaireOpen"
                     x-transition
                     x-cloak
-                    class="absolute left-0 mt-1 w-56 rounded-xl border border-ink-100 bg-white p-2 shadow-lg"
+                    class="absolute left-0 top-full w-56 pt-1"
                 >
-                    @foreach ($annuaireNav as $item)
-                        <a href="{{ $item['href'] }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50 hover:text-brand-700">
-                            {{ $item['label'] }}
-                        </a>
-                    @endforeach
+                    <div class="rounded-xl border border-ink-100 bg-white p-2 shadow-lg">
+                        @foreach ($annuaireNav as $item)
+                            <a href="{{ $item['href'] }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50 hover:text-brand-700">
+                                {{ $item['label'] }}
+                            </a>
+                        @endforeach
+                    </div>
                 </div>
             </div>
 

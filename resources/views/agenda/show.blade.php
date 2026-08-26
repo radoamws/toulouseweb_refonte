@@ -79,7 +79,7 @@
         @endif
 
         @if ($event->booking_url)
-            <x-ui.button :href="$event->booking_url" variant="primary" size="lg" class="mt-8" data-track="event:{{ $event->id }}:booking_click">
+            <x-ui.button :href="$event->booking_url" target="_blank" rel="noopener" variant="primary" size="lg" class="mt-8" data-track="event:{{ $event->id }}:booking_click">
                 Réserver / en savoir plus
             </x-ui.button>
         @endif
