@@ -29,6 +29,15 @@ class SiteSetting extends Model
         return static::query()->firstOrCreate([], [
             'site_name' => 'ToulouseWeb',
             'description' => "Portail local de Toulouse et sa région : actualités, agenda, cinéma, annuaire, annonces.",
+            // Vrai logo ToulouseWeb (confirmé identique octet pour octet à
+            // celui servi par toulouseweb.com/_nuxt/img/logo.c085ee1.png le
+            // 26/08/2026), commité en asset statique versionné — PAS via le
+            // disque `public` habituel (storage/app/public/, ignoré par git,
+            // réservé au contenu réellement uploadé en environnement réel) :
+            // un logo de marque doit être présent dès un premier `git clone`,
+            // pas dépendre d'un re-upload manuel. `ResolvesImageUrl` renvoie
+            // ce chemin absolu tel quel (préfixe "/"), sans résolution disque.
+            'logo' => '/branding/toulouseweb-logo.png',
         ]);
     }
 

@@ -10,7 +10,14 @@
     <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div class="grid gap-10 md:grid-cols-4">
             <div>
-                <p class="font-heading text-lg font-bold text-white">{{ $siteSettings->site_name }}</p>
+                @if ($siteSettings->logo_url)
+                    {{-- Fond sombre du footer : le vrai logo ToulouseWeb
+                    (texte blanc) s'y affiche nativement, contrairement à
+                    l'entête clair (voir components/site/header.blade.php). --}}
+                    <img src="{{ $siteSettings->logo_url }}" alt="{{ $siteSettings->site_name }}" class="h-8 w-auto">
+                @else
+                    <p class="font-heading text-lg font-bold text-white">{{ $siteSettings->site_name }}</p>
+                @endif
                 <p class="mt-3 text-sm text-ink-300">
                     {{ $siteSettings->description ?: 'Le portail pour découvrir Toulouse et sa région : actualités, agenda, cinéma, annuaire et annonces locales.' }}
                 </p>

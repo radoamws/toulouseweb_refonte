@@ -27,11 +27,18 @@
     <div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <a href="{{ url('/') }}" class="flex shrink-0 items-center gap-2 font-heading text-xl font-bold text-brand-600">
             @if ($siteSettings->logo_url)
-                <img src="{{ $siteSettings->logo_url }}" alt="{{ $siteSettings->site_name }}" class="h-8 w-auto">
+                {{-- Logo réel ToulouseWeb : texte blanc sur fond transparent
+                (confirmé identique octet pour octet à la prod, voir
+                TECHNICAL_DOCUMENTATION.md §13) — invisible sur l'entête clair
+                de la refonte sans ce fond sombre, le nom du site n'est donc
+                pas répété à côté (déjà présent dans le logo lui-même). --}}
+                <span class="flex h-10 items-center rounded-lg bg-ink-900 px-3 py-1.5">
+                    <img src="{{ $siteSettings->logo_url }}" alt="{{ $siteSettings->site_name }}" class="h-5 w-auto">
+                </span>
             @else
                 <span class="inline-block h-2.5 w-2.5 rounded-full bg-accent-500" aria-hidden="true"></span>
+                {{ $siteSettings->site_name }}
             @endif
-            {{ $siteSettings->site_name }}
         </a>
 
         <nav class="hidden items-center gap-1 lg:flex" aria-label="Navigation principale">

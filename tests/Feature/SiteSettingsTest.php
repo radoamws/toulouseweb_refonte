@@ -105,4 +105,31 @@ class SiteSettingsTest extends TestCase
         $response->assertSee('"@context":"https:\/\/schema.org"', false);
         $response->assertSee('Une description personnalisée.', false);
     }
+
+    /**
+     * Vrai logo ToulouseWeb (brief, voir docblock de SiteSetting::current()
+     * et TECHNICAL_DOCUMENTATION.md §13) — asset statique versionné, PAS un
+     * upload sur le disque `public` (ignoré par git).
+     */
+    public function test_default_logo_is_the_real_toulouseweb_asset(): void
+    {
+        $this->assertSame('/branding/toulouseweb-logo.png', SiteSetting::current()->logo_url);
+        $this->assertFileExists(public_path('branding/toulouseweb-logo.png'));
+    }
+
+    public function test_header_and_footer_render_the_logo_image(): void
+    {
+        $response = $this->get('/');
+
+        $response->assertOk();
+        $response->assertSee('branding/toulouseweb-logo.png', false);
+    }
+
+    public function test_favicon_and_apple_touch_icon_use_the_real_icon(): void
+    {
+        $this->assertFileExists(public_path('branding/toulouseweb-icon.png'));
+
+        $response = $this->get('/');
+        $response->assertSee('branding/toulouseweb-icon.png', false);
+    }
 }

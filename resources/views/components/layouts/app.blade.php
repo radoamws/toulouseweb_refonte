@@ -19,6 +19,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
+    {{-- Favicon réel ToulouseWeb (la coccinelle de la marque, voir
+    TECHNICAL_DOCUMENTATION.md §13) — remplace `public/favicon.ico`
+    (fallback générique Laravel toujours en place pour les navigateurs qui
+    ignorent ces balises et redemandent /favicon.ico directement). --}}
+    <link rel="icon" type="image/png" href="{{ asset('branding/toulouseweb-icon.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('branding/toulouseweb-icon.png') }}">
+
     <title>{{ $seo['title'] }}</title>
     <meta name="description" content="{{ $seo['description'] }}">
     <meta name="robots" content="{{ $seo['robots'] }}">
