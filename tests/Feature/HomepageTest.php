@@ -92,6 +92,22 @@ class HomepageTest extends TestCase
             ->assertSee('Restaurants');
     }
 
+    /**
+     * Icône de catégorie définie dans l'admin (demande client) — voir
+     * home.blade.php, section "Catégories populaires". Repli sur l'icône
+     * générique par défaut si non renseignée (2e assertion).
+     */
+    public function test_homepage_category_uses_admin_icon_when_set(): void
+    {
+        Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'icon' => 'categories/fork.png']);
+        Category::create(['name' => 'Sports', 'slug' => 'sports']);
+
+        $response = $this->get('/')->assertOk();
+        $response->assertSee('src="'.\Illuminate\Support\Facades\Storage::disk('public')->url('categories/fork.png').'"', false);
+        // Sports (sans icône admin) garde l'icône SVG générique par défaut.
+        $response->assertSee('stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 1015 0 7.5 7.5 0 00-15 0z"', false);
+    }
+
     /** Flèches précédent/suivant du slider (demande client) — voir components/site/hero-slider.blade.php. */
     public function test_slider_shows_chevron_arrows_only_with_multiple_slides(): void
     {

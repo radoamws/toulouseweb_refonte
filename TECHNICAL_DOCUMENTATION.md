@@ -734,3 +734,12 @@ Six demandes ponctuelles, traitées ensemble :
 - **`target="_blank"` sur tous les liens externes** : déjà en place pour les sliders/réseaux sociaux/sites partenaires/site web annuaire (référence). Deux vrais oublis trouvés et corrigés : le lien de réservation d'un événement (`agenda/show.blade.php`, `Event::booking_url`) et le bouton "Réserver" d'une fiche annuaire (`annuaire/show.blade.php`, `Listing::reservation_url`). Audit complet des `<a href>`/`<x-ui.button>` du projet fait pour ne rien manquer — le reste pointe soit vers des routes internes (pas de `target="_blank"` à ajouter), soit n'est pas encore rendu comme lien cliquable (`ScreeningTime::booking_url`, `Listing::click_collect_url` : présents en base, scrapés/saisissables, mais aucune vue ne les affiche encore comme lien — hors scope de cette demande, à traiter si un besoin réel est signalé). Tests dédiés dans `tests/Feature/PublicContentPagesTest.php`.
 
 Suite complète : 161 tests / 448 assertions, tous verts.
+
+### Icône de catégorie et lightbox photos annuaire (27/08/2026, demande client)
+
+- **Icônes de catégorie sur la homepage** (`home.blade.php`, section "Catégories populaires") : utilise désormais `$category->icon_url` quand une icône a été uploadée dans l'admin (`CategoryResource`, voir plus haut), avec repli sur le SVG générique par défaut sinon — auparavant la même icône générique s'affichait pour TOUTES les catégories, sans distinction.
+- **Lightbox photos annuaire** (`annuaire/show.blade.php`, section "Photos") : cliquer une miniature ouvrait auparavant la photo dans un nouvel onglet (`target="_blank"`) — remplacé par un aperçu grand format en overlay (Alpine.js, cohérent avec le reste du site — pas de nouvelle dépendance JS), navigation chevron gauche/droite entre toutes les photos de la galerie, fermeture par bouton dédié ou clic sur le fond de l'overlay, navigation clavier (flèches, Échap). Tableau des URLs de photos injecté via `@js()` (échappement HTML sûr pour un attribut Alpine `x-data`).
+
+Tests : `tests/Feature/HomepageTest.php::test_homepage_category_uses_admin_icon_when_set`, `tests/Feature/PublicContentPagesTest.php::test_annuaire_show_gallery_renders_lightbox_with_all_photos` (upload de vraies images factices via `Storage::fake('public')` + `UploadedFile::fake()`, pas une simple assertion de texte).
+
+Rappel (voir section précédente) : `npm run build` relancé après ces changements de classes Tailwind (`max-h-[85vh]`, `max-w-[90vw]`, `bg-white/10`...), vérifié présent dans le CSS compilé avant de conclure.

@@ -12,6 +12,8 @@ use App\Models\Listing;
 use App\Models\Movie;
 use App\Models\Screening;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -93,6 +95,31 @@ class PublicContentPagesTest extends TestCase
         $response = $this->get('/annuaire/fiche/resto-reservable')->assertOk();
         $response->assertSee('target="_blank" rel="noopener"', false);
         $response->assertSee('href="https://reservation.example.test/resto"', false);
+    }
+
+    /**
+     * Aperçu grand format des photos en overlay avec navigation chevron
+     * (demande client) — voir annuaire/show.blade.php, section "Photos".
+     */
+    public function test_annuaire_show_gallery_renders_lightbox_with_all_photos(): void
+    {
+        Storage::fake('public');
+
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants']);
+        $listing = Listing::create([
+            'title' => 'Resto Avec Photos', 'slug' => 'resto-avec-photos', 'tier' => 'paid', 'status' => 'published',
+        ]);
+        $listing->categories()->attach($category);
+        $listing->addMedia(UploadedFile::fake()->image('salle.jpg'))->preservingOriginal()->toMediaCollection('gallery');
+        $listing->addMedia(UploadedFile::fake()->image('terrasse.jpg'))->preservingOriginal()->toMediaCollection('gallery');
+
+        $response = $this->get('/annuaire/fiche/resto-avec-photos')->assertOk();
+        $response->assertSee('role="dialog"', false);
+        $response->assertSee('Photo précédente');
+        $response->assertSee('Photo suivante');
+        $response->assertSee('Fermer');
+        // Les 2 photos apparaissent (miniatures + tableau Alpine `photos`).
+        $response->assertSeeInOrder(['salle.jpg', 'terrasse.jpg']);
     }
 
     public function test_unpublished_listing_is_not_accessible(): void

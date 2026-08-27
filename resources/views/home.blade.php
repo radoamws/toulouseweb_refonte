@@ -14,9 +14,15 @@
                             class="flex flex-col items-center gap-2 rounded-2xl border border-ink-100 bg-white p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
                         >
                             <span class="flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 1015 0 7.5 7.5 0 00-15 0z" />
-                                </svg>
+                                @if ($category->icon_url)
+                                    {{-- Icône définie dans l'admin (CategoryResource, brief) — repli sur
+                                    l'icône générique par défaut ci-dessous si non renseignée. --}}
+                                    <img src="{{ $category->icon_url }}" alt="" class="h-5 w-5 object-contain" loading="lazy">
+                                @else
+                                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 1015 0 7.5 7.5 0 00-15 0z" />
+                                    </svg>
+                                @endif
                             </span>
                             <span class="text-sm font-medium text-ink-800">{{ $category->name }}</span>
                         </a>

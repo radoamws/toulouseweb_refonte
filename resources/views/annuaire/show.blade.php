@@ -67,14 +67,85 @@
                 @endif
 
                 @if ($listing->getMedia('gallery')->isNotEmpty())
-                    <div class="mt-6">
+                    {{-- Aperçu grand format en overlay avec navigation chevron
+                    gauche/droite (demande client) — remplace l'ouverture en
+                    nouvel onglet. `photos` : URLs en JSON pour Alpine.js
+                    (@js échappe correctement pour un attribut HTML). --}}
+                    <div
+                        x-data="{ open: false, index: 0, photos: @js($listing->getMedia('gallery')->map(fn ($m) => $m->getUrl())->values()) }"
+                        @keydown.escape.window="open = false"
+                        @keydown.arrow-left.window="if (open) index = (index - 1 + photos.length) % photos.length"
+                        @keydown.arrow-right.window="if (open) index = (index + 1) % photos.length"
+                        class="mt-6"
+                    >
                         <h2 class="font-heading text-lg font-semibold text-ink-900">Photos</h2>
                         <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                            @foreach ($listing->getMedia('gallery') as $photo)
-                                <a href="{{ $photo->getUrl() }}" target="_blank" rel="noopener" class="aspect-square overflow-hidden rounded-xl bg-ink-100">
+                            @foreach ($listing->getMedia('gallery') as $i => $photo)
+                                <button
+                                    type="button"
+                                    @click="open = true; index = {{ $i }}"
+                                    class="aspect-square overflow-hidden rounded-xl bg-ink-100"
+                                    aria-label="Agrandir la photo {{ $i + 1 }}"
+                                >
                                     <img src="{{ $photo->getUrl() }}" alt="{{ $listing->title }}" loading="lazy" class="h-full w-full object-cover transition hover:scale-105">
-                                </a>
+                                </button>
                             @endforeach
+                        </div>
+
+                        {{-- Overlay plein écran --}}
+                        <div
+                            x-show="open"
+                            x-cloak
+                            x-transition.opacity
+                            @click="open = false"
+                            class="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/95 p-4"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label="Photo en grand format"
+                        >
+                            <button
+                                type="button"
+                                @click="open = false"
+                                class="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                                aria-label="Fermer"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6" aria-hidden="true">
+                                    <path d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+
+                            <button
+                                type="button"
+                                @click.stop="index = (index - 1 + photos.length) % photos.length"
+                                x-show="photos.length > 1"
+                                class="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:left-6"
+                                aria-label="Photo précédente"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6" aria-hidden="true">
+                                    <path d="M15.75 19.5L8.25 12l7.5-7.5" />
+                                </svg>
+                            </button>
+
+                            <img
+                                :src="photos[index]"
+                                @click.stop
+                                alt="{{ $listing->title }}"
+                                class="max-h-[85vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+                            >
+
+                            <button
+                                type="button"
+                                @click.stop="index = (index + 1) % photos.length"
+                                x-show="photos.length > 1"
+                                class="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:right-6"
+                                aria-label="Photo suivante"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6" aria-hidden="true">
+                                    <path d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                                </svg>
+                            </button>
+
+                            <p x-show="photos.length > 1" class="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm text-white/70" x-text="(index + 1) + ' / ' + photos.length"></p>
                         </div>
                     </div>
                 @endif
