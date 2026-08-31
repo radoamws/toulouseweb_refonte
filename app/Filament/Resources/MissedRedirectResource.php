@@ -43,6 +43,7 @@ class MissedRedirectResource extends Resource
                 Tables\Columns\TextColumn::make('path')
                     ->label('Chemin demandé')
                     ->searchable()
+                    ->sortable()
                     ->copyable(),
                 Tables\Columns\TextColumn::make('hits_count')
                     ->label('Occurrences')

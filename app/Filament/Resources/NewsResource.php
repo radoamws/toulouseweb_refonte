@@ -75,12 +75,13 @@ class NewsResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\ImageColumn::make('image')->label(''),
-                Tables\Columns\TextColumn::make('title')->label('Titre')->searchable(),
-                Tables\Columns\TextColumn::make('category.name')->label('Catégorie')->badge(),
-                Tables\Columns\TextColumn::make('author.name')->label('Auteur'),
+                Tables\Columns\TextColumn::make('title')->label('Titre')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('category.name')->label('Catégorie')->badge()->sortable(),
+                Tables\Columns\TextColumn::make('author.name')->label('Auteur')->sortable(),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Statut')
                     ->badge()
+                    ->sortable()
                     ->color(fn (string $state) => match ($state) {
                         'published' => 'success',
                         'pending' => 'warning',
@@ -94,7 +95,7 @@ class NewsResource extends Resource
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('deleted_at')
                     ->dateTime()
                     ->sortable()

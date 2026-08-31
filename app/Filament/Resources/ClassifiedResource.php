@@ -81,13 +81,14 @@ class ClassifiedResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('title')->label('Titre')->searchable(),
-                Tables\Columns\TextColumn::make('category.name')->label('Catégorie')->badge(),
-                Tables\Columns\TextColumn::make('user.name')->label('Auteur')->placeholder('Invité'),
+                Tables\Columns\TextColumn::make('title')->label('Titre')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('category.name')->label('Catégorie')->badge()->sortable(),
+                Tables\Columns\TextColumn::make('user.name')->label('Auteur')->placeholder('Invité')->sortable(),
                 Tables\Columns\TextColumn::make('price')->label('Prix')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Statut')
                     ->badge()
+                    ->sortable()
                     ->color(fn (string $state) => match ($state) {
                         'published' => 'success',
                         'pending' => 'warning',
@@ -95,7 +96,7 @@ class ClassifiedResource extends Resource
                         'expired' => 'gray',
                         default => 'gray',
                     }),
-                Tables\Columns\IconColumn::make('is_featured')->label('Mise en avant')->boolean(),
+                Tables\Columns\IconColumn::make('is_featured')->label('Mise en avant')->boolean()->sortable(),
                 Tables\Columns\TextColumn::make('created_at')->label('Déposée le')->dateTime('d/m/Y H:i')->sortable(),
             ])
             ->defaultSort('created_at', 'desc')

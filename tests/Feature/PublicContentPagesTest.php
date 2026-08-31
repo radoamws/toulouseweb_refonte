@@ -176,6 +176,47 @@ class PublicContentPagesTest extends TestCase
         $response->assertDontSee('&amp;amp;', false);
     }
 
+    /**
+     * "Le mois précédent du calendrier ne fonctionne pas" (retour client) —
+     * date figée (`Carbon::setTestNow`) pour un test déterministe, sans
+     * dépendre du jour réel d'exécution. Vérifie explicitement 2 clics
+     * "précédent" consécutifs (pas juste 1, pour couvrir une régression qui
+     * ne se manifesterait qu'à la 2e navigation) et le lien "suivant" en
+     * symétrie. À l'investigation (26/08-01/09/2026), le calcul serveur
+     * s'est révélé correct dans tous les cas testés manuellement (navigation
+     * via URL directe, plusieurs mois de suite) — l'horloge système de ce
+     * bac à sable accusait un décalage de quelques heures par rapport à la
+     * date de référence, une piste plausible pour ce qui a été observé côté
+     * client sans être un vrai bug de code. Ce test verrouille le
+     * comportement correct pour détecter une vraie régression future.
+     */
+    public function test_agenda_calendar_previous_month_navigation(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 9, 15));
+
+        try {
+            $response = $this->get('/agenda?view=calendar');
+            $response->assertOk();
+            $response->assertSee('septembre 2026');
+            $response->assertSee('http://localhost:8000/agenda?view=calendar&amp;month=2026-08', false);
+            $response->assertSee('http://localhost:8000/agenda?view=calendar&amp;month=2026-10', false);
+
+            $response = $this->get('/agenda?view=calendar&month=2026-08');
+            $response->assertOk();
+            $response->assertSee('août 2026');
+            $response->assertSee('http://localhost:8000/agenda?view=calendar&amp;month=2026-07', false);
+            $response->assertSee('http://localhost:8000/agenda?view=calendar&amp;month=2026-09', false);
+
+            // Un 2e clic "précédent" de suite (juillet -> juin).
+            $response = $this->get('/agenda?view=calendar&month=2026-07');
+            $response->assertOk();
+            $response->assertSee('juillet 2026');
+            $response->assertSee('http://localhost:8000/agenda?view=calendar&amp;month=2026-06', false);
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
     public function test_agenda_slug_resolves_event_when_not_a_category(): void
     {
         $event = Event::create([

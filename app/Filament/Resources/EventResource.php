@@ -99,6 +99,7 @@ class EventResource extends Resource
                     ->default('manual'),
                 Forms\Components\TextInput::make('external_ref')
                     ->label('Référence externe (dédup scraper)')
+                    ->helperText("Identifiant unique côté site source (ex. dernier segment de l'URL de la fiche événement), utilisé par les scrapers agenda (scrape:events) pour reconnaître un événement déjà importé et le mettre à jour plutôt que le dupliquer à chaque exécution. Sans objet pour un événement saisi à la main — laisser vide.")
                     ->maxLength(255)
                     ->default(null)
                     ->disabled(fn (string $operation) => $operation === 'edit'),
@@ -113,6 +114,7 @@ class EventResource extends Resource
                 Tables\Columns\TextColumn::make('title')
                     ->label('Titre')
                     ->searchable()
+                    ->sortable()
                     ->description(fn (Event $record) => $record->subtitle),
                 Tables\Columns\TextColumn::make('area.name')
                     ->label('Lieu')
@@ -127,6 +129,7 @@ class EventResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Statut')
                     ->badge()
+                    ->sortable()
                     ->color(fn (string $state) => match ($state) {
                         'published' => 'success',
                         'pending' => 'warning',
@@ -135,11 +138,12 @@ class EventResource extends Resource
                     }),
                 Tables\Columns\TextColumn::make('source')
                     ->label('Origine')
-                    ->badge(),
+                    ->badge()
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('deleted_at')
                     ->dateTime()
                     ->sortable()

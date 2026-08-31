@@ -134,15 +134,18 @@ class ListingResource extends Resource
                 Tables\Columns\TextColumn::make('title')
                     ->label('Titre')
                     ->searchable()
+                    ->sortable()
                     ->description(fn (Listing $record) => $record->city),
                 Tables\Columns\TextColumn::make('tier')
                     ->label('Type')
                     ->badge()
+                    ->sortable()
                     ->color(fn (string $state) => $state === 'paid' ? 'success' : 'gray')
                     ->formatStateUsing(fn (string $state) => $state === 'paid' ? 'Payante' : 'Gratuite'),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Statut')
                     ->badge()
+                    ->sortable()
                     ->color(fn (string $state) => match ($state) {
                         'published' => 'success',
                         'pending' => 'warning',
@@ -150,11 +153,11 @@ class ListingResource extends Resource
                         default => 'gray',
                     }),
                 Tables\Columns\TextColumn::make('categories.name')->label('Catégories')->badge(),
-                Tables\Columns\TextColumn::make('phone')->label('Téléphone'),
+                Tables\Columns\TextColumn::make('phone')->label('Téléphone')->sortable(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('deleted_at')
                     ->dateTime()
                     ->sortable()
