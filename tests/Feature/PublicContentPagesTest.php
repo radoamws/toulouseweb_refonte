@@ -257,6 +257,41 @@ class PublicContentPagesTest extends TestCase
         $this->get('/cinema/salles/gaumont-wilson')->assertOk()->assertSee('Le Comte de Toulouse');
     }
 
+    /**
+     * Régression réelle (signalée par le client, 01/09/2026) : scraping
+     * réussi (25 films, milliers d'horaires pour CGR Blagnac) mais AUCUNE
+     * séance affichée en front. Cause : `screenings.start_date`/`end_date`
+     * sont des colonnes DATE pures (pas DATETIME) — comparer
+     * `end_date >= now()` comparait donc une date normalisée à minuit à
+     * l'heure COMPLÈTE actuelle, excluant le dernier jour de la fenêtre de
+     * programmation dès la première seconde après minuit (donc quasiment
+     * toujours). Voir docblock de `CinemaController::currentlyValid()`.
+     * Date figée en fin de journée (23h) pour reproduire exactement le
+     * scénario qui plantait.
+     */
+    public function test_cinema_screening_ending_today_remains_visible_all_day(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 9, 1, 23, 0));
+
+        try {
+            $cinema = Cinema::create(['name' => 'CGR Blagnac', 'slug' => 'cgr-blagnac', 'is_active' => true]);
+            $movie = Movie::create(['title' => 'The Dog Stars', 'slug' => 'the-dog-stars']);
+            $screening = Screening::create([
+                'cinema_id' => $cinema->id, 'movie_id' => $movie->id,
+                // Fenêtre de programmation se terminant AUJOURD'HUI (même
+                // jour que "now", mais sans heure — comme le stocke
+                // réellement AllocineDriver::currentProgrammingWeek()).
+                'start_date' => '2026-08-26', 'end_date' => '2026-09-01',
+            ]);
+            $screening->times()->create(['weekday' => 2, 'time' => '22:05:00']);
+
+            $this->get('/cinema')->assertOk()->assertSee('The Dog Stars');
+            $this->get('/cinema/salles/cgr-blagnac')->assertOk()->assertSee('The Dog Stars');
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
     public function test_cinema_movie_with_no_current_screenings_renders_without_error(): void
     {
         Movie::create(['title' => 'Vieux Film', 'slug' => 'vieux-film']);

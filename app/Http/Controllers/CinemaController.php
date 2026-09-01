@@ -100,10 +100,35 @@ class CinemaController extends Controller
      *                                   (`whereHas`). Les deux exposent les
      *                                   mêmes méthodes `where`/`with` utilisées ici.
      */
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (01/09/2026, signalé par le client :
+     * scraping réussi — 25 films, milliers d'horaires — mais aucune séance
+     * affichée en front). `screenings.start_date`/`end_date` sont des
+     * colonnes `DATE` pures (pas `DATETIME`, voir migration
+     * `adjust_cinema_schedule_columns`, et le commentaire de cast sur
+     * `App\Models\Screening` — un bug voisin y avait déjà été documenté).
+     * Comparer `end_date >= now()` compare donc une date normalisée à
+     * minuit (ex. "2026-09-01 00:00:00") à l'heure COMPLÈTE actuelle
+     * ("2026-09-01 19:13:54") : dès la première seconde après minuit, le
+     * dernier jour de la fenêtre de programmation
+     * (`AllocineDriver::currentProgrammingWeek()`) était donc déjà exclu —
+     * en pratique, quasi INSTANTANÉMENT après chaque scraping.
+     *
+     * Fix : comparer à une chaîne `'Y-m-d'` nue (`now()->toDateString()`),
+     * PAS un objet `Carbon`/une chaîne datetime complète — un objet Carbon
+     * lié en paramètre de requête se sérialise en `'Y-m-d H:i:s'`, ce que
+     * MySQL coerce silencieusement au bon résultat pour une colonne `DATE`
+     * (d'où le bug resté invisible en test manuel superficiel), mais que
+     * SQLite (moteur de test) compare en texte BRUT — `'2026-09-01'` est
+     * lexicographiquement INFÉRIEUR à `'2026-09-01 00:00:00'` (chaîne plus
+     * courte). Une chaîne date nue élimine l'ambiguïté sur les deux moteurs.
+     */
     protected function currentlyValid(Builder|Relation $query): Builder|Relation
     {
+        $today = now()->toDateString();
+
         return $query
-            ->where(fn ($q) => $q->whereNull('start_date')->orWhere('start_date', '<=', now()))
-            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', now()));
+            ->where(fn ($q) => $q->whereNull('start_date')->orWhere('start_date', '<=', $today))
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $today));
     }
 }
