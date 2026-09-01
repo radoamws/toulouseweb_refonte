@@ -258,6 +258,35 @@ class PublicContentPagesTest extends TestCase
     }
 
     /**
+     * Horaires cliquables vers la réservation sur le vrai site source
+     * (demande client — "2e scraping" du legacy, `autoUpdateCinemaAllocineLiens`/
+     * `Liens2`, voir docblock d'`AllocineDriver::extractBookingUrl()`). Un
+     * horaire SANS lien capturé reste un simple badge non cliquable (pas de
+     * lien "default" renvoyé par AlloCiné pour cette séance précise).
+     */
+    public function test_cinema_screening_time_with_booking_url_is_clickable(): void
+    {
+        $cinema = Cinema::create(['name' => 'CGR Blagnac', 'slug' => 'cgr-blagnac', 'is_active' => true]);
+        $movie = Movie::create(['title' => 'The Dog Stars', 'slug' => 'the-dog-stars']);
+        $screening = Screening::create([
+            'cinema_id' => $cinema->id, 'movie_id' => $movie->id,
+            'start_date' => now()->subDay(), 'end_date' => now()->addWeek(),
+        ]);
+        $withLink = $screening->times()->create(['weekday' => 1, 'time' => '20:30:00', 'booking_url' => 'https://achat.cgrcinemas.fr/blagnac/r/566854']);
+        $withoutLink = $screening->times()->create(['weekday' => 2, 'time' => '22:05:00']);
+
+        foreach (['/cinema/films/the-dog-stars', '/cinema/salles/cgr-blagnac'] as $url) {
+            $response = $this->get($url)->assertOk();
+            $response->assertSee('href="https://achat.cgrcinemas.fr/blagnac/r/566854"', false);
+            $response->assertSee('target="_blank"', false);
+            $response->assertSee('rel="noopener"', false);
+            $response->assertSee('data-track="screening_time:'.$withLink->id.':cinema_booking_click"', false);
+            // L'horaire sans lien reste un <span>, jamais un <a href="">.
+            $response->assertDontSee('data-track="screening_time:'.$withoutLink->id.':cinema_booking_click"', false);
+        }
+    }
+
+    /**
      * Régression réelle (signalée par le client, 01/09/2026) : scraping
      * réussi (25 films, milliers d'horaires pour CGR Blagnac) mais AUCUNE
      * séance affichée en front. Cause : `screenings.start_date`/`end_date`

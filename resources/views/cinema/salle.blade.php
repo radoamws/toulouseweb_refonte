@@ -43,9 +43,24 @@
                         @foreach ($screenings as $screening)
                             <div class="mt-3 flex flex-wrap gap-2 text-sm">
                                 @foreach ($screening->times as $time)
-                                    <span class="rounded-lg bg-ink-50 px-2 py-1 text-ink-700">
-                                        {{ $weekdays[$time->weekday] ?? '' }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}
-                                    </span>
+                                    {{-- Horaire cliquable vers la réservation sur le vrai site source
+                                    (demande client — "2e scraping" du legacy, autoUpdateCinemaAllocineLiens/Liens2,
+                                    voir docblock d'AllocineDriver::extractBookingUrl()) quand un lien a
+                                    été capturé ; simple badge non cliquable sinon. --}}
+                                    @if ($time->booking_url)
+                                        <a
+                                            href="{{ $time->booking_url }}"
+                                            target="_blank"
+                                            rel="noopener"
+                                            data-track="screening_time:{{ $time->id }}:cinema_booking_click"
+                                            title="Réserver — {{ $weekdays[$time->weekday] ?? '' }}"
+                                            class="rounded-lg bg-ink-50 px-2 py-1 text-ink-700 underline decoration-dotted underline-offset-2 transition hover:bg-brand-50 hover:text-brand-700"
+                                        >{{ $weekdays[$time->weekday] ?? '' }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}</a>
+                                    @else
+                                        <span class="rounded-lg bg-ink-50 px-2 py-1 text-ink-700">
+                                            {{ $weekdays[$time->weekday] ?? '' }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}
+                                        </span>
+                                    @endif
                                 @endforeach
                             </div>
                         @endforeach
