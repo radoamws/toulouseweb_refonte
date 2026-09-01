@@ -5,8 +5,11 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\CinemaResource\Pages;
 use App\Filament\Resources\CinemaResource\RelationManagers;
 use App\Models\Cinema;
+use App\Models\ScraperSource;
+use App\Services\Scraping\ScraperRunner;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -90,11 +93,52 @@ class CinemaResource extends Resource
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('last_scraped_at')
+                    ->label('Dernier scraping')
+                    ->state(fn (Cinema $record) => static::scraperSourceFor($record)?->last_run_at?->diffForHumans() ?? '—')
+                    ->toggleable(),
             ])
             ->filters([
                 //
             ])
             ->actions([
+                // Lancement manuel du scraper AlloCiné pour CETTE salle
+                // (demande client) — même orchestration (ScraperRun,
+                // last_run_at/last_status) qu'un lancement cron via
+                // `scrape:cinema`, voir ScraperRunner. Le "loader" pendant
+                // l'exécution est natif à Filament (état de chargement
+                // Livewire sur le bouton), rien à coder en plus.
+                Tables\Actions\Action::make('scrape')
+                    ->label('Scraper')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('gray')
+                    ->visible(fn (Cinema $record) => static::scraperSourceFor($record) !== null)
+                    ->action(function (Cinema $record) {
+                        $source = static::scraperSourceFor($record);
+
+                        if (! $source) {
+                            Notification::make()->title('Aucune source de scraping configurée pour cette salle')->warning()->send();
+
+                            return;
+                        }
+
+                        $result = app(ScraperRunner::class)->run($source);
+
+                        if ($result['success']) {
+                            $stats = $result['stats'];
+                            Notification::make()
+                                ->title('Scraping terminé')
+                                ->body("Trouvés : {$stats['found']}, créés : {$stats['created']}, mis à jour : {$stats['updated']}, ignorés : {$stats['skipped']}.")
+                                ->success()
+                                ->send();
+                        } else {
+                            Notification::make()
+                                ->title('Échec du scraping')
+                                ->body($result['error'])
+                                ->danger()
+                                ->send();
+                        }
+                    }),
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([
@@ -102,6 +146,21 @@ class CinemaResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Source de scraping AlloCiné associée à cette salle — voir
+     * `ScraperSourcesSeeder`, `config->cinema_id` (une source par salle,
+     * jamais partagée). `null` pour les 3 salles sans identifiant AlloCiné
+     * exploitable (UGC Toulouse, Le Mermoz, Espace des Nouveautés), voir
+     * son docblock.
+     */
+    protected static function scraperSourceFor(Cinema $cinema): ?ScraperSource
+    {
+        return ScraperSource::query()
+            ->where('type', 'cinema')
+            ->where('config->cinema_id', $cinema->id)
+            ->first();
     }
 
     public static function getRelations(): array
