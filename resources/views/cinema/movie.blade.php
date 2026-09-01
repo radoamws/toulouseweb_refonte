@@ -1,8 +1,19 @@
 @php
-    // Convention reprise du legacy (t_cine_proj_heures.jour, 0-6) — non
-    // documentée côté ancien système, hypothèse Lundi=0…Dimanche=6 à
-    // confirmer (voir TECHNICAL_DOCUMENTATION.md §13).
-    $weekdays = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    // ⚠️ Bug réel trouvé et corrigé (01/09/2026, signalé par le client : lien
+    // de réservation d'un horaire renvoyant vers le mauvais jour sur le site
+    // d'origine). Confirmé via `old/backEnd/.../CinemaController.php` :
+    // `jour = $date->format('w')` (PHP `date('w')` = 0 Dimanche…6 Samedi) et
+    // la requête SQL historique (`jour = 0 as sunday`, `jour = 1 as monday`,
+    // …) — convention aussi reprise, correctement, par `AllocineDriver`
+    // (`$startsAt->dayOfWeek`, même échelle Carbon) et par
+    // `ScreeningsRelationManager::WEEKDAYS` dans l'admin. Cette vue utilisait
+    // un tableau Lundi=0…Dimanche=6 (jamais confirmé, voir ancien
+    // commentaire) : chaque horaire était donc affiché avec le jour suivant
+    // celui réellement scrapé (Lundi affiché pour un horaire réellement
+    // scrapé un Dimanche, etc.) — d'où le lien de réservation (correct,
+    // pointant vers le vrai jour scrapé) qui semblait "en décalage" avec le
+    // jour affiché sur notre front.
+    $weekdays = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
     $jsonLd = array_filter([
         '@context' => 'https://schema.org',

@@ -287,6 +287,36 @@ class PublicContentPagesTest extends TestCase
     }
 
     /**
+     * ⚠️ Bug réel trouvé et corrigé (01/09/2026, signalé par le client : le
+     * jour affiché sur le front ne correspondait pas au jour réel de la
+     * séance sur le site de réservation d'origine). `screening_times.weekday`
+     * suit la convention confirmée par le legacy (`jour = $date->format('w')`,
+     * PHP `date('w')` = 0 Dimanche…6 Samedi — voir `old/backEnd/.../CinemaController.php`
+     * et `ScreeningsRelationManager::WEEKDAYS` dans l'admin), PAS un tableau
+     * Lundi=0 comme utilisaient (à tort) les vues publiques.
+     */
+    public function test_cinema_screening_time_weekday_label_matches_legacy_convention(): void
+    {
+        $cinema = Cinema::create(['name' => 'CGR Blagnac', 'slug' => 'cgr-blagnac-2', 'is_active' => true]);
+        $movie = Movie::create(['title' => 'Sunday Show', 'slug' => 'sunday-show']);
+        $screening = Screening::create([
+            'cinema_id' => $cinema->id, 'movie_id' => $movie->id,
+            'start_date' => now()->subDay(), 'end_date' => now()->addWeek(),
+        ]);
+        // weekday=0 => Dimanche (PHP date('w')/Carbon dayOfWeek), jamais "Lundi".
+        $screening->times()->create(['weekday' => 0, 'time' => '18:00:00']);
+        // weekday=1 => Lundi, jamais "Mardi".
+        $screening->times()->create(['weekday' => 1, 'time' => '18:00:00']);
+
+        foreach (['/cinema/films/sunday-show', '/cinema/salles/cgr-blagnac-2'] as $url) {
+            $response = $this->get($url)->assertOk();
+            $response->assertSee('Dimanche 18:00');
+            $response->assertSee('Lundi 18:00');
+            $response->assertDontSee('Mardi 18:00');
+        }
+    }
+
+    /**
      * Régression réelle (signalée par le client, 01/09/2026) : scraping
      * réussi (25 films, milliers d'horaires pour CGR Blagnac) mais AUCUNE
      * séance affichée en front. Cause : `screenings.start_date`/`end_date`

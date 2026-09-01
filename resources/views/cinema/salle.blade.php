@@ -1,5 +1,10 @@
 @php
-    $weekdays = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    // Convention confirmée par le legacy (`jour = $date->format('w')`, PHP
+    // `date('w')` = 0 Dimanche…6 Samedi), reprise par `AllocineDriver`
+    // (`$startsAt->dayOfWeek`) et par `ScreeningsRelationManager::WEEKDAYS`
+    // dans l'admin — voir le correctif du 01/09/2026 documenté dans
+    // resources/views/cinema/movie.blade.php et TECHNICAL_DOCUMENTATION.md.
+    $weekdays = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
     $jsonLd = array_filter([
         '@context' => 'https://schema.org',
