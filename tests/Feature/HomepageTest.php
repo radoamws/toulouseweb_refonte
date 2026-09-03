@@ -108,6 +108,24 @@ class HomepageTest extends TestCase
         $response->assertSee('stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 1015 0 7.5 7.5 0 00-15 0z"', false);
     }
 
+    /**
+     * Miniature actu de la home (demande client, 03/09/2026) : affiche la
+     * date de début → fin de l'ÉVÉNEMENT décrit par l'article (pas la date
+     * de publication) quand elle est renseignée. Repli sur la date de
+     * publication pour une actu classique sans dates d'événement.
+     */
+    public function test_homepage_news_card_shows_event_date_range_when_set(): void
+    {
+        $news = News::create([
+            'title' => 'Salon du jouet', 'slug' => 'salon-du-jouet', 'body' => '<p>x</p>', 'status' => 'published',
+            'published_at' => now(), 'start_date' => now()->addDays(3), 'end_date' => now()->addDays(5),
+        ]);
+
+        // Recalculé via l'accesseur du modèle plutôt que reconstruit à la main,
+        // pour ne pas dépliquer/désynchroniser le format exact (séparateur inclus).
+        $this->get('/')->assertOk()->assertSee($news->fresh()->event_date_range);
+    }
+
     /** Flèches précédent/suivant du slider (demande client) — voir components/site/hero-slider.blade.php. */
     public function test_slider_shows_chevron_arrows_only_with_multiple_slides(): void
     {

@@ -41,6 +41,77 @@ class PublicFormsAndNewsTest extends TestCase
         $this->get('/actualites/brouillon')->assertNotFound();
     }
 
+    /**
+     * Demande client (03/09/2026) : une actualité-événement dont la date de
+     * fin est dépassée ne doit plus s'afficher sur le site public, même
+     * publiée. Comparaison en date pure (voir News::scopePublished()).
+     */
+    public function test_news_with_end_date_in_the_past_is_no_longer_publicly_visible(): void
+    {
+        News::create([
+            'title' => 'Événement terminé', 'slug' => 'evenement-termine', 'body' => 'x', 'status' => 'published',
+            'start_date' => now()->subWeek(), 'end_date' => now()->subDay(),
+        ]);
+
+        $this->get('/actualites/evenement-termine')->assertNotFound();
+        $this->get('/actualites')->assertOk()->assertDontSee('Événement terminé');
+    }
+
+    /** end_date == aujourd'hui (juste les dates, pas l'heure) doit rester visible toute la journée. */
+    public function test_news_ending_today_remains_visible_all_day(): void
+    {
+        News::create([
+            'title' => 'Événement du jour', 'slug' => 'evenement-du-jour', 'body' => 'x', 'status' => 'published',
+            'start_date' => now()->subDay(), 'end_date' => now(),
+        ]);
+
+        $this->get('/actualites/evenement-du-jour')->assertOk()->assertSee('Événement du jour');
+    }
+
+    /** Un article sans start_date/end_date (actu classique, sans événement) reste visible normalement. */
+    public function test_news_without_event_dates_remains_publicly_visible(): void
+    {
+        News::create([
+            'title' => 'Actu classique', 'slug' => 'actu-classique', 'body' => 'x',
+            'status' => 'published', 'published_at' => now(),
+        ]);
+
+        $this->get('/actualites/actu-classique')->assertOk()->assertSee('Actu classique');
+    }
+
+    /**
+     * Champs "informations pratiques" (demande client, 03/09/2026) : chacun
+     * ne s'affiche que s'il a une valeur, avec target="_blank" pour le site
+     * web et la vidéo YouTube intégrée en iframe.
+     */
+    public function test_news_show_renders_event_fields_only_when_present(): void
+    {
+        News::create([
+            'title' => 'Brocante du quartier', 'slug' => 'brocante-du-quartier', 'body' => '<p>x</p>', 'status' => 'published',
+            'start_date' => now()->addWeek(), 'end_date' => now()->addWeek()->addDay(),
+            'schedule' => 'Tous les jours de 9h à 18h', 'address' => 'Place du Capitole, Toulouse',
+            'price' => 'Entrée gratuite', 'phone' => '0561000000', 'email' => 'contact@brocante.test',
+            'website' => 'https://brocante.example.test', 'youtube_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        ]);
+
+        $response = $this->get('/actualites/brocante-du-quartier')->assertOk();
+        $response->assertSee('Tous les jours de 9h à 18h');
+        $response->assertSee('Place du Capitole, Toulouse');
+        $response->assertSee('Entrée gratuite');
+        $response->assertSee('href="tel:0561000000"', false);
+        $response->assertSee('href="mailto:contact@brocante.test"', false);
+        $response->assertSee('href="https://brocante.example.test"', false);
+        $response->assertSee('target="_blank"', false);
+        $response->assertSee('src="https://www.youtube.com/embed/dQw4w9WgXcQ"', false);
+
+        $minimal = News::create([
+            'title' => 'Actu sans infos pratiques', 'slug' => 'actu-sans-infos', 'body' => '<p>x</p>', 'status' => 'published',
+        ]);
+        $response = $this->get('/actualites/actu-sans-infos')->assertOk();
+        $response->assertDontSee('Tarif');
+        $response->assertDontSee('<iframe', false);
+    }
+
     public function test_classified_submission_always_starts_pending_and_is_not_publicly_visible(): void
     {
         $category = ClassifiedCategory::create(['name' => 'Voitures', 'slug' => 'voitures']);

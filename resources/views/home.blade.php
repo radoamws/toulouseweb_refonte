@@ -42,7 +42,7 @@
                             :image="$news->image_url"
                             :eyebrow="$news->category?->name"
                             :title="$news->title"
-                            :meta="$news->published_at?->translatedFormat('d M Y')"
+                            :meta="$news->event_date_range ?? $news->published_at?->translatedFormat('d M Y')"
                             :track="'news:'.$news->id.':homepage_news'"
                         />
                     @endforeach

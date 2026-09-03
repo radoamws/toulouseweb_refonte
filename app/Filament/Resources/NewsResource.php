@@ -67,6 +67,51 @@ class NewsResource extends Resource
                     ->required()
                     ->default('draft'),
                 Forms\Components\DateTimePicker::make('published_at')->label('Date de publication'),
+
+                Forms\Components\Section::make("Informations de l'événement")
+                    ->description("Si l'article décrit un événement (salon, brocante, animation...) — laissez vide sinon. L'article ne s'affiche plus sur le site public une fois la date de fin dépassée, quel que soit son statut.")
+                    ->collapsible()
+                    ->columns(2)
+                    ->schema([
+                        Forms\Components\DatePicker::make('start_date')
+                            ->label('Date de début de l\'événement'),
+                        Forms\Components\DatePicker::make('end_date')
+                            ->label('Date de fin de l\'événement')
+                            ->afterOrEqual('start_date')
+                            ->helperText("Une fois cette date dépassée, l'article disparaît automatiquement du site public."),
+                        Forms\Components\TextInput::make('schedule')
+                            ->label('Horaire')
+                            ->maxLength(500)
+                            ->placeholder('Ex : Tous les jours de 10h à 18h, sauf le lundi')
+                            ->columnSpanFull(),
+                        Forms\Components\TextInput::make('address')
+                            ->label('Adresse')
+                            ->maxLength(255)
+                            ->columnSpanFull(),
+                        Forms\Components\TextInput::make('price')
+                            ->label('Tarif')
+                            ->maxLength(255)
+                            ->placeholder('Ex : Gratuit, 5€ - 12€...'),
+                        Forms\Components\TextInput::make('phone')
+                            ->label('Téléphone')
+                            ->tel()
+                            ->maxLength(30),
+                        Forms\Components\TextInput::make('email')
+                            ->label('Email')
+                            ->email()
+                            ->maxLength(255),
+                        Forms\Components\TextInput::make('website')
+                            ->label('Site web')
+                            ->url()
+                            ->maxLength(255)
+                            ->helperText('Lien vers le site officiel, ouvert dans un nouvel onglet sur le site public.'),
+                        Forms\Components\TextInput::make('youtube_url')
+                            ->label('Lien YouTube')
+                            ->url()
+                            ->maxLength(255)
+                            ->helperText('Vidéo affichée dans la fiche détaillée de l\'article.')
+                            ->columnSpanFull(),
+                    ]),
             ]);
     }
 
