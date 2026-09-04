@@ -103,12 +103,13 @@ class NewsResource extends Resource
                         Forms\Components\TextInput::make('website')
                             ->label('Site web')
                             ->url()
-                            ->maxLength(255)
+                            // Pas de ->maxLength() (demande client, 04/09/2026) : certains
+                            // liens dépassent largement 255 caractères (paramètres UTM/tracking),
+                            // voir migration widen_news_url_columns (colonne passée en `text`).
                             ->helperText('Lien vers le site officiel, ouvert dans un nouvel onglet sur le site public.'),
                         Forms\Components\TextInput::make('youtube_url')
                             ->label('Lien YouTube')
                             ->url()
-                            ->maxLength(255)
                             ->helperText('Vidéo affichée dans la fiche détaillée de l\'article.')
                             ->columnSpanFull(),
                     ]),

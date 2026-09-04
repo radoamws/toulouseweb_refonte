@@ -82,6 +82,41 @@ class NewsResourceEventFieldsTest extends TestCase
             ->assertHasFormErrors(['website']);
     }
 
+    /**
+     * Demande client (04/09/2026, /admin/news/create) : "ne pas limiter la
+     * longueur du texte car il y a des liens très long" — website/youtube_url
+     * n'ont plus de ->maxLength() côté formulaire, et les colonnes ont été
+     * élargies en `text` (migration widen_news_url_columns). Un lien de plus
+     * de 255 caractères (paramètres UTM/tracking réalistes) doit être accepté
+     * sans erreur ET conservé intégralement en base.
+     */
+    public function test_very_long_website_and_youtube_urls_are_accepted_without_truncation(): void
+    {
+        $this->actingAs($this->authenticatedAdmin());
+
+        $longWebsite = 'https://billetterie.example.test/reservation?'.str_repeat('utm_source=toulouseweb&utm_campaign=brocante-quartier&', 10);
+        $longYoutube = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list='.str_repeat('a1B2c3D4e5', 30);
+
+        $this->assertGreaterThan(255, strlen($longWebsite));
+        $this->assertGreaterThan(255, strlen($longYoutube));
+
+        Livewire::test(CreateNews::class)
+            ->fillForm([
+                'title' => 'Actu avec liens longs',
+                'slug' => 'actu-avec-liens-longs',
+                'body' => '<p>x</p>',
+                'status' => 'draft',
+                'website' => $longWebsite,
+                'youtube_url' => $longYoutube,
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $news = News::where('slug', 'actu-avec-liens-longs')->firstOrFail();
+        $this->assertSame($longWebsite, $news->website);
+        $this->assertSame($longYoutube, $news->youtube_url);
+    }
+
     public function test_admin_can_edit_event_fields_on_existing_news(): void
     {
         $this->actingAs($this->authenticatedAdmin());
