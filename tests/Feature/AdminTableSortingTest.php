@@ -87,6 +87,34 @@ class AdminTableSortingTest extends TestCase
             ->assertSuccessful();
     }
 
+    /**
+     * Colonnes "Début événement"/"Fin événement"/Statut (demande client,
+     * 05/09/2026) — vérifie que le tri fonctionne réellement, pas
+     * seulement que la page s'affiche (voir docblock de la classe).
+     */
+    public function test_news_table_sorts_by_event_dates_and_status(): void
+    {
+        $this->actingAs($this->authenticatedAdmin());
+        $early = News::create([
+            'title' => 'Événement de septembre', 'slug' => 'evenement-septembre', 'body' => 'x',
+            'status' => 'draft', 'start_date' => '2026-09-01', 'end_date' => '2026-09-05',
+        ]);
+        $late = News::create([
+            'title' => 'Événement de décembre', 'slug' => 'evenement-decembre', 'body' => 'x',
+            'status' => 'published', 'start_date' => '2026-12-01', 'end_date' => '2026-12-05',
+        ]);
+
+        Livewire::test(ListNews::class)
+            ->sortTable('start_date')
+            ->assertCanSeeTableRecords([$early, $late], inOrder: true)
+            ->sortTable('start_date', 'desc')
+            ->assertCanSeeTableRecords([$late, $early], inOrder: true)
+            ->sortTable('end_date')
+            ->assertCanSeeTableRecords([$early, $late], inOrder: true)
+            ->sortTable('status')
+            ->assertSuccessful();
+    }
+
     /** Agrégat `counts('users')` — pas une vraie colonne, cas le plus susceptible de casser le tri. */
     public function test_role_table_sorts_by_users_count(): void
     {

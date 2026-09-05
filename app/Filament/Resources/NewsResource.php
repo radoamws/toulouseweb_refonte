@@ -134,6 +134,16 @@ class NewsResource extends Resource
                         'archived' => 'danger',
                         default => 'gray',
                     }),
+                Tables\Columns\TextColumn::make('start_date')
+                    ->label('Début événement')
+                    ->date('d/m/Y')
+                    ->sortable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('end_date')
+                    ->label('Fin événement')
+                    ->date('d/m/Y')
+                    ->sortable()
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('published_at')
                     ->label('Publié le')
                     ->dateTime('d/m/Y H:i')
