@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\HasCloudflarePurgeUrls;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\Trackable;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,7 +21,7 @@ use Spatie\Sluggable\SlugOptions;
  * public (voir brief §5) — la richesse des champs ci-dessous ne s'applique
  * pleinement qu'au tier 'paid'.
  */
-class Listing extends Model implements HasMedia
+class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls
 {
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, InteractsWithMedia;
 
@@ -73,5 +74,24 @@ class Listing extends Model implements HasMedia
         return $this->cuisine_type !== null || $this->categories->contains(
             fn (Category $category) => $category->slug === 'restaurants'
         );
+    }
+
+    /**
+     * Toujours inclure la home (demande client, TECHNICAL_DOCUMENTATION.md
+     * §17) : simplification volontaire plutôt que de ne l'inclure que si
+     * `tier === 'paid'` (seules les fiches payantes publiées y apparaissent,
+     * voir HomeController) — couvre aussi le cas d'un passage gratuit ↔
+     * payant sans logique supplémentaire, au prix d'une purge de la home un
+     * peu plus fréquente que strictement nécessaire (négligeable, une URL
+     * de plus dans le même lot).
+     */
+    public function cloudflarePurgeUrls(): array
+    {
+        // `categories()->get()` (requête fraîche), pas `$this->categories` —
+        // voir le commentaire équivalent sur Event::cloudflarePurgeUrls().
+        return array_filter(array_merge(
+            [route('home'), route('annuaire.index'), route('annuaire.show', $this->slug)],
+            $this->categories()->get()->map(fn (Category $c) => route('annuaire.category', $c->slug))->all(),
+        ));
     }
 }

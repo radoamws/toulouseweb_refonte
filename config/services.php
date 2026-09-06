@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    /*
+     * Purge du cache Cloudflare (demande client, voir
+     * App\Services\Cache\CloudflareCachePurger et TECHNICAL_DOCUMENTATION.md
+     * §17). `enabled` est une double sécurité en plus de zone_id/api_token
+     * vides : les deux doivent être vrais pour qu'un appel HTTP sortant soit
+     * tenté — jamais activé en local/dev/test (voir phpunit.xml).
+     */
+    'cloudflare' => [
+        'enabled' => (bool) env('CLOUDFLARE_CACHE_PURGE_ENABLED', false),
+        'zone_id' => env('CLOUDFLARE_ZONE_ID'),
+        'api_token' => env('CLOUDFLARE_API_TOKEN'),
+    ],
+
 ];

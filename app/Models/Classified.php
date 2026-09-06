@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\HasCloudflarePurgeUrls;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\Trackable;
 use Illuminate\Database\Eloquent\Model;
@@ -18,7 +19,7 @@ use Spatie\Sluggable\SlugOptions;
  * published (voir Http\Controllers\ClassifiedController et
  * Filament\Resources\ClassifiedResource).
  */
-class Classified extends Model implements HasMedia
+class Classified extends Model implements HasMedia, HasCloudflarePurgeUrls
 {
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, InteractsWithMedia;
 
@@ -57,5 +58,16 @@ class Classified extends Model implements HasMedia
     public function moderator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'moderated_by');
+    }
+
+    /** Toujours inclure la home (demande client, TECHNICAL_DOCUMENTATION.md §17) — voir docblock de News::cloudflarePurgeUrls(). */
+    public function cloudflarePurgeUrls(): array
+    {
+        return array_filter([
+            route('home'),
+            route('annonces.index'),
+            route('annonces.bySlug', $this->slug),
+            $this->category ? route('annonces.bySlug', $this->category->slug) : null,
+        ]);
     }
 }

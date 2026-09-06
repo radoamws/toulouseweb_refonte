@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\HasCloudflarePurgeUrls;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\ResolvesImageUrl;
 use App\Models\Concerns\Trackable;
@@ -12,7 +13,7 @@ use Spatie\Sluggable\HasSlug;
 use Spatie\Sluggable\SlugOptions;
 
 /** Fiche film (remplace t_cine_film). */
-class Movie extends Model
+class Movie extends Model implements HasCloudflarePurgeUrls
 {
     use HasSlug, HasSeoMeta, Trackable, ResolvesImageUrl;
 
@@ -41,5 +42,20 @@ class Movie extends Model
     public function comments(): HasMany
     {
         return $this->hasMany(MovieComment::class);
+    }
+
+    /**
+     * Toujours inclure la home (demande client, TECHNICAL_DOCUMENTATION.md
+     * §17) — voir docblock de News::cloudflarePurgeUrls(). Déclenché aussi
+     * par `scrape:cinema` (AllocineDriver::upsertMovie() sauvegarde chaque
+     * film rencontré) : sans découplage, un scraping quotidien de ~24 salles
+     * déclencherait des centaines d'appels HTTP à l'API Cloudflare — voir
+     * docblock de App\Observers\CloudflarePurgeObserver pour le mécanisme
+     * qui évite ça (accumulation en mémoire, un seul lot d'appels en fin de
+     * commande).
+     */
+    public function cloudflarePurgeUrls(): array
+    {
+        return array_filter([route('home'), route('cinema.index'), route('cinema.movie', $this->slug)]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\HasCloudflarePurgeUrls;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\ResolvesImageUrl;
 use App\Models\Concerns\Trackable;
@@ -27,7 +28,7 @@ use Spatie\Sluggable\SlugOptions;
  * migration `add_event_fields_to_news_table` et dans
  * `CinemaController::currentlyValid()`).
  */
-class News extends Model
+class News extends Model implements HasCloudflarePurgeUrls
 {
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, ResolvesImageUrl;
 
@@ -121,5 +122,21 @@ class News extends Model
     {
         return $query->where('status', 'published')
             ->where(fn (Builder $q) => $q->whereNull('end_date')->orWhere('end_date', '>=', now()->toDateString()));
+    }
+
+    /**
+     * Toujours inclure la home (demande client, TECHNICAL_DOCUMENTATION.md
+     * §17) : `HomeController` affiche les 4 dernières actualités publiées,
+     * donc n'importe quel ajout/modif/suppression peut changer ce qui s'y
+     * affiche, pas seulement l'article concerné.
+     */
+    public function cloudflarePurgeUrls(): array
+    {
+        return array_filter([
+            route('home'),
+            route('actualites.index'),
+            route('actualites.bySlug', $this->slug),
+            $this->category ? route('actualites.bySlug', $this->category->slug) : null,
+        ]);
     }
 }

@@ -269,9 +269,8 @@ Un seul cron serveur, à configurer en production : `* * * * * php artisan sched
 | `queue:work --stop-when-empty` | Traite la file (emails, images) | Chaque minute | ✅ Implémenté |
 | `sitemap:generate` | Régénère `sitemap.xml` en fichier statique caché | Quotidien | ✅ Implémenté (§13) |
 | `scrape:cinema` | Fiches film + association salle depuis les sources actives (`scraper_sources`, type `cinema`) | Quotidien à 5h | ✅ Implémenté (§13 — voir détail ci-dessous) |
-| `scrape:events` | Scraping agenda (sources dans `scraper_sources`, type `agenda`) | Quotidien à 5h30 | ✅ Implémenté pour 12 salles (liste cron de production réelle), 10/12 pleinement fonctionnelles (§13 — voir détail) |
-| `events:archive-past` | Statut `expired` sur événements passés | Quotidien | ❌ Pas encore écrit |
-| `classifieds:expire` | Statut `expired` sur annonces dépassant leur durée de publication | Quotidien | ❌ Pas encore écrit |
+| `scrape:events` | Scraping agenda (sources dans `scraper_sources`, type `agenda`) | Quotidien à 5h30 | ✅ Implémenté pour 12 salles (liste cron de production réelle), 10/12 pleinement fonctionnelles (§13 — voir détail, réaudité §17) |
+| `content:mark-expired` | Statut `expired` sur événements ET annonces passés (fusionne `events:archive-past`/`classifieds:expire`, jamais écrites séparément) | Quotidien à 4h30 | ✅ Implémenté (voir `MarkExpiredContent`) |
 | `redirects:audit` | Repère les 404 fréquentes sans redirection associée | Hebdomadaire | ✅ Implémenté (§13 — voir détail ci-dessous) |
 
 **Commandes de récupération ponctuelle (pas de cron, à rejouer manuellement contre une source de données)** : `migrate:partner-sites` et les 7 commandes `images:{movies,news,listings,amenities,partner-sites,events,sliders}` — voir "Import des images" en §13 pour le détail, les volumes réels et la justification de ne pas committer les fichiers importés dans git.
@@ -309,8 +308,6 @@ Repère les 404 fréquentes sans redirection associée. Nécessitait d'abord de 
 - **Bug MySQL trouvé et corrigé avant tout commit** : la migration initiale déclarait `first_seen_at`/`last_seen_at` en `timestamp` NOT NULL sans défaut — MySQL en mode strict refuse deux colonnes timestamp NOT NULL sans valeur par défaut sur une même table (`SQLSTATE[42000]: ... Invalid default value`). Invisible sur SQLite (tests), révélé uniquement en migrant contre la vraie base MySQL locale. Corrigé en rendant les deux colonnes nullable (toujours renseignées en pratique par `MissedRedirect::record()`).
 - Tests : `tests/Feature/RedirectsTest.php` (chemin inconnu journalisé et incrémenté sur répétition, redirection connue jamais journalisée comme manquée, commande filtrée par seuil).
 - Vérifié en HTTP réel (`php artisan serve` + `curl`) : deux 404 de nature différente (résolution manuelle via `redirectOrAbort` et fallback générique) correctement journalisées et incrémentées en base MySQL réelle.
-
-Documentation complète des futures commandes (`events:archive-past`, `classifieds:expire`) à produire au moment de leur implémentation, dans ce même tableau.
 
 ## 12. Plan de développement par phases (mise à jour post-décisions)
 
@@ -834,3 +831,85 @@ Fonctionnement : une poignée de redimensionnement (`::after`-like, `<span>` abs
 Piège évité : les tableaux Filament sont rendus par Livewire et se re-rendent (remplacement du DOM) au tri/filtre/pagination sans rechargement de page complet — un simple listener au chargement de la page aurait perdu les poignées et les largeurs après la première interaction. Un `MutationObserver` sur `document.documentElement` ré-applique donc les largeurs sauvegardées et ré-attache les poignées à chaque mutation du DOM (avec un garde `dataset.twWidth` pour rester idempotent et ne pas re-déclencher indéfiniment l'observateur lui-même).
 
 Test : `AdminPanelSmokeTest::test_resizable_columns_script_is_present_on_admin_pages` — vérifie que le script est bien servi sur une page admin représentative (le hook étant partagé par toutes les ressources, un test par ressource serait redondant).
+
+## 17. Purge automatique du cache Cloudflare (06/09/2026, demande client)
+
+Demande client : *"en prod, il y a Cloudflare et pour chaque ajout/modif/suppression, ça doit supprimer les caches Cloudflare des pages correspondantes (aussi pour la homepage si par exemple il s'agit d'un article qui s'affiche dans la page d'accueil)."*
+
+**Analyse du mécanisme legacy** (`old/backEnd/app/Http/Controllers/SharedController.php` lignes ~1149-1430) : un mécanisme de purge Cloudflare existe déjà, avec les identifiants Cloudflare (Zone ID, email, clé API) codés EN CLAIR dans le code source. Vérification faite de sa couverture réelle : `purgeEntityCache($entity)` n'est réellement câblée que sur **3 entités** — `slider` (`SharedController.php`), `news` (`NewsController.php`), `agenda` (`AgendaController.php`). L'annuaire (`t_article`), le cinéma et les annonces classées **n'ont jamais eu** de purge Cloudflare, même dans le legacy. Un appel générique dans `BOController::create()` (lignes 279-289) qui aurait pu couvrir plus de cas est présent mais **commenté/mort** — jamais exécuté en production. Donc : la demande du client va au-delà de ce que faisait même l'ancien système, pas une simple reproduction.
+
+**Implémentation** (`App\Services\Cache\CloudflareCachePurger`, `App\Contracts\HasCloudflarePurgeUrls`, `App\Observers\CloudflarePurgeObserver`) :
+
+- **Tous** les modèles de contenu public sont couverts : `News`, `Event`, `Listing`, `Classified`, `Movie`, `Cinema`, `Slider`, `Page` — chacun implémente `cloudflarePurgeUrls(): array` retournant les URLs front impactées par son état actuel (sa propre fiche, l'index de sa section, ses catégories, et **la home** quand c'est pertinent — `News`/`Event`/`Listing`/`Classified`/`Movie` y apparaissent tous potentiellement, voir `HomeController::index()`).
+- **Authentification par jeton API** (`Authorization: Bearer`), pas le couple email + clé API globale du legacy (identifiants en clair, mécanisme moins sûr et déprécié côté Cloudflare) — un jeton scopé "Zone.Cache Purge" limite les dégâts en cas de fuite. Config : `CLOUDFLARE_CACHE_PURGE_ENABLED` (défaut `false`, **jamais** activé en local/dev/test — forcé explicitement dans `phpunit.xml` en plus du défaut, défense en profondeur), `CLOUDFLARE_ZONE_ID`, `CLOUDFLARE_API_TOKEN`.
+- **Découplage accumulation/envoi, essentiel** : un `Observer` générique (un seul, partagé par les 8 modèles) accumule les URLs en mémoire (`CloudflareCachePurger::queue()`, singleton, dédoublonnage par clé) à chaque sauvegarde/suppression — **aucun appel HTTP immédiat**. L'envoi réel (`flush()`, par lots de 30 URLs — limite de l'API Cloudflare `purge_cache` par liste de fichiers) n'a lieu qu'**une seule fois**, à la toute fin du processus (`app()->terminating()`, enregistré dans `AppServiceProvider`). Sans ce découplage, `scrape:cinema`/`scrape:events` (des centaines de `Movie`/`Event` sauvegardés en une seule exécution quotidienne) déclencheraient autant d'appels HTTP à l'API Cloudflare qu'il y a de lignes touchées — au-delà des quotas de purge de la plupart des plans Cloudflare. `app()->terminating()` se déclenche aussi bien en fin de requête HTTP (une sauvegarde admin Filament) qu'en fin de commande artisan (un scraping cron) : le même mécanisme couvre les deux cas sans code spécifique.
+- **Changement de slug** : purge à la fois la nouvelle ET l'ancienne URL (sinon Cloudflare continuerait à servir la version en cache de l'ancienne URL jusqu'à expiration du TTL, alors que l'appli renvoie déjà un 404 dessus). Piège Eloquent rencontré et corrigé pendant l'implémentation : `getOriginal('slug')` ne convient PAS dans un listener `saved` — à ce stade, `performUpdate()` a déjà exécuté `syncChanges()` mais surtout, en pratique (vérifié empiriquement), la valeur retournée est déjà la NOUVELLE, pas l'ancienne. L'accesseur correct pour "la valeur juste avant CETTE sauvegarde" est `getPrevious()['slug']` — ajouté par Eloquent précisément pour ce besoin.
+- **Piège de relation mise en cache** rencontré et corrigé (`Event::categories`, `Listing::categories`, `Slider::placements`) : `$this->categories` (accesseur magique) charge et **met en cache** la collection sur l'instance dès le premier accès. Si l'observer accède à cette collection lors du `saved()` du `create()` initial (relation encore vide), puis qu'on `attach()`/`create()` sur la relation et qu'on resauvegarde la MÊME instance en mémoire, l'accesseur magique renvoie la collection VIDE mise en cache, pas l'état réel en base — découvert via un test qui échouait (`Http::assertSent` ne trouvait pas les URLs de catégorie attendues). Fix : `$this->categories()->get()` (requête fraîche à chaque appel) au lieu de `$this->categories`.
+- Ne lève jamais d'exception : une purge manquée (Cloudflare indisponible, jeton expiré...) est un défaut de fraîcheur temporaire (TTL du cache), jamais une raison de faire échouer une sauvegarde admin ou un cron de scraping — erreurs journalisées (`Log::channel('single')`), pas remontées.
+- **Limitation assumée** : les pages `seo-menu-{slug}` (métadonnées SEO migrées du legacy via `migrate:seo`, une par ligne `t_seo`) ne sont actuellement rattachées à aucune route publique rendue (seule `seo-menu-annuaire` l'est, via `ListingController`) — `Page::cloudflarePurgeUrls()` ne mappe donc que les 3 clés effectivement lues (`home`, `contact`, `seo-menu-annuaire`), les autres ne purgent rien (pas de page cible réelle à purger).
+
+**Tests** : `tests/Feature/CloudflareCachePurgeTest.php` (14 tests) — désactivé par défaut même avec zone/token configurés, activé mais mal configuré (skip propre), URLs correctes par modèle (home + index + fiche + catégories), changement de slug purge les deux URLs, une création ne tente jamais de purger une "ancienne" URL inexistante, suppression, lots de plus de 30 URLs envoyés en plusieurs appels, et une preuve de bout en bout via une VRAIE requête HTTP publique (`POST /annuaire/deposer`) confirmant que `app()->terminating()` déclenche bien le flush automatiquement (les autres tests appellent `flush()` manuellement, car `Livewire::test()` ne traverse pas le cycle complet requête → `Kernel::terminate()`).
+
+**Ce qui reste à faire pour activer en production** : créer un jeton API Cloudflare (dashboard Cloudflare → Mes profils → Jetons API → modèle "Modifier le cache Cloudflare", restreint à la zone `toulouseweb.com`), renseigner `CLOUDFLARE_ZONE_ID`/`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_CACHE_PURGE_ENABLED=true` dans le `.env` de production. Rien d'autre à configurer côté serveur — le mécanisme est déjà entièrement câblé dans le code applicatif (pas un script cron séparé).
+
+## 18. Audit des scrapers agenda vs. legacy (06/09/2026, demande client)
+
+Demande client : *"vérifie bien les scrapings agendas que tout est bien fonctionnel par rapport à /old/."* Ré-audit complet, driver par driver, des 12 sources réelles (`app/Services/Scraping/Agenda/*Driver.php`) contre les méthodes `updateAgendafor*`/`getIdTheater*` correspondantes du contrôleur legacy (`old/backEnd/app/Http/Controllers/AgendaController.php`, ~4800 lignes) — sans modifier de code (audit de lecture seule), sans exécuter `scrape:events` (appels réseau réels non pertinents en sandbox).
+
+**Résultat global : 4 OK, 6 problème mineur, 2 problème majeur (inchangé sur ces 2 derniers, déjà documentés) :**
+
+| Driver | Verdict | Constat |
+|---|---|---|
+| TheatreDeLaCiteDriver | ✅ OK | Fidèle, live-vérifié 30/30 ; capture du tarif même améliorée vs. le `price=0` mort du legacy. |
+| ZenithDriver | ✅ OK | Portage OpenAgenda correct (domaine image, plafond de taille) ; live-vérifié 94/94. |
+| GrandRondDriver | ✅ OK | Seul driver à répliquer intégralement le champ `schedule` ; site en creux de saison au moment de l'audit (légitime, documenté). |
+| LeventDesSignesDriver | ✅ OK | Fidèle champ pour champ, y compris le correctif de succession de mois documenté. |
+| MetropoleDriver | ⚠️ Mineur | Mapping de catégories (le plus complexe des 12) parfaitement répliqué, MAIS le plafond de 300 événements de l'API OpenAgenda fait perdre silencieusement des événements réels sur cette agenda volumineuse, sans signal distinctif dans `ScraperRun` (un run "propre" à 300/300 ressemble à un run complet). |
+| GaronneDriver | ⚠️ Mineur | Live-vérifié 29/29, mais ne capture JAMAIS `price`/`schedule` (le legacy fait un 2e appel HTTP vers la billetterie que le driver ne reproduit pas) — perte silencieuse non documentée. Écart non documenté sur la catégorie de repli (legacy=7/Spectacles, refonte=`theatre`). |
+| OdyssudDriver | ⚠️ Mineur | Les 2 correctifs de parsing de date documentés sont bien présents et corrects, mais `schedule` (plusieurs horaires par spectacle) n'est jamais capturé. |
+| EscaleDriver | ⚠️ Mineur | Réhabilitation correcte de la fausse piste "JS obfusqué" ; même perte de `schedule` que Garonne/Odyssud (base commune `AbstractArdeiSoftDriver`). |
+| ArdeiDriver | ⚠️ Mineur | Meilleure reproduction du mapping dynamique par thème (le plus subtil des 12) ; lien de réservation même amélioré vs. le lien générique statique du legacy ; même perte de `schedule`. |
+| BijouDriver | ⚠️ Mineur | Live-vérifié 39/39 (jeton Bearer encore valide) ; perte de `schedule` la plus impactante des 5 (le legacy concatène chaque horaire de chaque séance, perdu ici). |
+| CasinoBarriereDriver | ❌ Majeur (inchangé) | Site migré en Nuxt3/Vue3 : 133 spectacles trouvés mais 133 `skipped, aucune donnée de détail (date, prix, lien) importable. Piste de fix (déchiffrer le payload Nuxt `_payload.json`) documentée mais non tentée — travail non trivial. |
+| InterpreteDriver | ❌ Majeur (inchangé) | CMS entièrement remplacé (domaine `.fr`, WordPress "The Events Calendar") : `found=0`. URL de saison mise à jour (fetch réussit désormais) mais sélecteurs jamais reconstruits contre le nouveau CMS. |
+
+**Constat transversal nouveau (5 drivers : Garonne, Odyssud, Escale, Ardei, Bijou) — perte silencieuse du champ `schedule`** : chacune de ces 5 méthodes legacy calcule un `schedule` (horaire(s) au format texte/tableau) que le driver refonte correspondant ne reporte jamais dans `Event::updateOrCreate()`, sans que ce soit documenté comme une simplification volontaire (contrairement aux autres écarts, tous explicitement commentés). **Impact utilisateur actuel : nul** — vérifié, `resources/views/agenda/show.blade.php`/`index.blade.php` n'affichent `schedule` nulle part sur le front à ce jour, donc cette perte est une dette silencieuse sans conséquence visible pour l'instant, mais deviendrait un vrai manque le jour où `schedule` serait affiché (ex. pour Le Bijou, un club où plusieurs séances/soir sont réellement utiles à afficher).
+
+**Constat transversal nouveau — aucun des 12 drivers ne désactive un événement disparu de sa source** : 5 méthodes legacy (Zenith, Metropole, Garonne, Casino Barrière, Odyssud, via `flushAgenda()`/un balayage `NOT IN` sur les slugs) mettaient `status = 0` sur les événements qui disparaissaient de la source avant de réinsérer les événements actuels — ce qui gérait le cas d'un spectacle annulé/retiré AVANT sa date prévue. Aucun driver refonte ne reproduit ce mécanisme. Impact partiellement atténué par `Event::scopeUpcoming()` (filtre par date, cache automatiquement un événement une fois sa date passée) mais **pas** un événement annulé avant sa date, qui resterait visible indéfiniment sur ces 5 sources. Non documenté jusqu'ici comme limitation.
+
+**Constat transversal (déjà connu, confirmé hérité, pas introduit)** : `events.external_ref` est indexé mais pas contraint unique en base, et aucun driver ne scope son `updateOrCreate` par `area_id` — deux venues dont le dédoublonnage collide (peu probable, chaque venue slugifie ses propres titres de spectacle) pourraient s'écraser mutuellement. Le schéma legacy avait la même faiblesse (`t_agendas.slug` non plus unique).
+
+**Câblage cron/config vérifié sain** : `ScrapeEvents::handle()` isole bien les échecs par source (un `\Throwable` par source ne bloque pas les 11 autres) ; les 12 classes driver correspondent exactement aux 12 lignes de `AgendaScraperSourcesSeeder` (aucun orphelin dans un sens ou l'autre) ; `Schedule::command('scrape:events')->withoutOverlapping()` élimine le risque de double exécution concurrente qui aggraverait le risque de collision `external_ref` ci-dessus ; pas de bouton "scraper manuellement" pour l'agenda (contrairement au cinéma), donc pas de risque de run manuel + cron simultanés.
+
+**Couverture de tests vérifiée** : les 12 drivers ont chacun un test dédié (`tests/Feature/Agenda/*ScraperTest.php`, 1 à 2 tests chacun) + `ScrapeEventsTest.php` pour le comportement d'orchestration générique (isolation des échecs, source inactive ignorée). Aucun test n'exerce le champ `schedule` pour les 5 drivers concernés — c'est exactement pourquoi la perte silencieuse n'avait pas été détectée par la suite existante.
+
+**Suite à donner** : ces constats sont remontés au client pour arbitrage — corriger les 6 problèmes mineurs (capturer `schedule` sur 5 drivers + corriger la catégorie de repli Garonne) représente un chantier ciblé mais réel (5 fichiers de driver + tests), non entrepris dans cette session pour rester dans le périmètre "vérifier" demandé plutôt que "corriger" sans validation préalable.
+
+## 19. Inventaire cron serveur (06/09/2026, demande client)
+
+Demande client : *"retourne-moi tous les API et commandes à mettre en place dans des tâches cron du serveur."*
+
+**Différence d'architecture majeure avec le legacy** : l'ancien système n'a PAS de tâche cron interne — la planification est externe, au niveau de l'hébergeur, qui appelle des **URLs API HTTP** (`wget https://toulouseweb.com/backend/public/api/autoUpdateCinemaAllocine/{id}`, une entrée cron par salle/venue) sans dédoublonnage centralisé. La refonte utilise le planificateur natif de Laravel (`routes/console.php`, voir §11) : **une seule entrée cron serveur est nécessaire**, qui exécute des commandes artisan (processus interne PHP CLI), pas des appels HTTP vers des routes publiques. Il n'y a donc **aucune "API" à exposer ni à sécuriser pour le cron** dans la refonte — une simplification et une réduction de surface d'attaque volontaires par rapport au legacy (pas de route `/api/...` déclenchant un scraping accessible sans authentification depuis l'extérieur).
+
+**1. Entrée cron serveur unique à configurer :**
+
+```
+* * * * * cd /chemin/vers/toulouseweb_refonte && php artisan schedule:run >> /dev/null 2>&1
+```
+
+**2. Ce que cette unique entrée déclenche en interne** (planifié dans `routes/console.php`, rien d'autre à ajouter côté serveur) :
+
+| Commande | Rôle | Fréquence |
+|---|---|---|
+| `queue:work --stop-when-empty` | Traite la file d'attente (emails, traitement d'images) | Chaque minute |
+| `sitemap:generate` | Régénère `sitemap.xml` (fichier statique) | Quotidien |
+| `scrape:cinema` | Scraping AlloCiné, 24-25 salles actives (films, séances, horaires, liens de réservation) | Quotidien à 5h00 |
+| `scrape:events` | Scraping agenda, 12 sources réelles (voir §18 pour l'état détaillé de chacune) | Quotidien à 5h30 |
+| `content:mark-expired` | Statut `expired` sur événements/annonces dont la date est dépassée | Quotidien à 4h30 |
+| `redirects:audit` | Repère les 404 fréquentes sans redirection associée (affichage console, pas d'action automatique) | Hebdomadaire |
+| `App\Observers\CloudflarePurgeObserver` (pas une commande — déclenché automatiquement) | Purge Cloudflare des pages impactées par tout ajout/modif/suppression de contenu (voir §17) | À chaque sauvegarde admin ET à chaque exécution de `scrape:cinema`/`scrape:events` (un seul lot d'appels HTTP en fin de commande) |
+
+**3. Commandes de récupération ponctuelle — PAS de cron, à lancer manuellement au besoin** (contre une source de données précise, une seule fois ou en cas de besoin de réimport) :
+`migrate:*` (cinema, events, listings, news, redirects, reference-data, seo, sliders, contacts, click-stats), `migrate:partner-sites`, `images:{movies,news,listings,amenities,partner-sites,events,sliders}` (import différé des médias — voir §13 "Import des images").
+
+**4. Pré-requis serveur pour que le cron fonctionne réellement** (voir §14) : PHP CLI accessible dans le `PATH` (ou chemin absolu dans la ligne cron), `APP_ENV=production`/`APP_DEBUG=false`, connexion DB de production déjà configurée dans le `.env` du serveur (les commandes de scraping/purge écrivent en base), et — pour que §17 (purge Cloudflare) fonctionne réellement en production — `CLOUDFLARE_CACHE_PURGE_ENABLED=true` + `CLOUDFLARE_ZONE_ID`/`CLOUDFLARE_API_TOKEN` renseignés dans ce même `.env` serveur (jamais dans le `.env` de dev/staging).

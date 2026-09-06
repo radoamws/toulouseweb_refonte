@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\HasCloudflarePurgeUrls;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\ResolvesImageUrl;
 use App\Models\Concerns\Trackable;
@@ -15,7 +16,7 @@ use Spatie\Sluggable\HasSlug;
 use Spatie\Sluggable\SlugOptions;
 
 /** Événement d'agenda (remplace t_agendas ; corrige la FK area_id cassée du legacy). */
-class Event extends Model
+class Event extends Model implements HasCloudflarePurgeUrls
 {
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, ResolvesImageUrl;
 
@@ -69,5 +70,26 @@ class Event extends Model
     public function isTheatre(): bool
     {
         return $this->categories->contains(fn (EventCategory $c) => $c->slug === 'theatre');
+    }
+
+    /**
+     * Toujours inclure la home (demande client, TECHNICAL_DOCUMENTATION.md
+     * §17) : `HomeController` affiche les 4 prochains événements publiés,
+     * donc n'importe quel ajout/modif/suppression peut changer ce qui s'y
+     * affiche — y compris depuis `scrape:events` (les URLs sont juste
+     * accumulées en mémoire, pas un appel HTTP par événement scrapé, voir
+     * docblock de App\Observers\CloudflarePurgeObserver).
+     */
+    public function cloudflarePurgeUrls(): array
+    {
+        // `categories()->get()` (requête fraîche), PAS `$this->categories` (la
+        // collection potentiellement déjà chargée EN MÉMOIRE, mise en cache
+        // sur CETTE instance dès le premier accès — un `attach()`/`sync()`
+        // sur la relation pivot ne l'invalide pas automatiquement, elle
+        // resterait "vide" si accédée une première fois avant l'attache).
+        return array_filter(array_merge(
+            [route('home'), route('agenda.index'), route('agenda.bySlug', $this->slug)],
+            $this->categories()->get()->map(fn (EventCategory $c) => route('agenda.bySlug', $c->slug))->all(),
+        ));
     }
 }

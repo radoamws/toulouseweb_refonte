@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\HasCloudflarePurgeUrls;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\Trackable;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +11,7 @@ use Spatie\Sluggable\HasSlug;
 use Spatie\Sluggable\SlugOptions;
 
 /** Salle de cinéma (remplace t_cine). */
-class Cinema extends Model
+class Cinema extends Model implements HasCloudflarePurgeUrls
 {
     use HasSlug, HasSeoMeta, Trackable;
 
@@ -26,5 +27,11 @@ class Cinema extends Model
     public function screenings(): HasMany
     {
         return $this->hasMany(Screening::class);
+    }
+
+    /** Demande client, TECHNICAL_DOCUMENTATION.md §17 — pas la home, une salle n'y apparaît pas directement. */
+    public function cloudflarePurgeUrls(): array
+    {
+        return array_filter([route('cinema.index'), route('cinema.salle', $this->slug)]);
     }
 }

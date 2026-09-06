@@ -32,5 +32,11 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Défense en profondeur : la purge Cloudflare est déjà désactivée
+        par défaut (config/services.php) tant que CLOUDFLARE_ZONE_ID/
+        CLOUDFLARE_API_TOKEN ne sont pas renseignés, mais forcer explicitement
+        false ici garantit qu'aucun test ne tente un vrai appel HTTP sortant,
+        même si une future config locale renseignait ces clés par erreur. -->
+        <env name="CLOUDFLARE_CACHE_PURGE_ENABLED" value="false"/>
     </php>
 </phpunit>
