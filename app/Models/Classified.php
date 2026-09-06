@@ -27,7 +27,7 @@ class Classified extends Model implements HasMedia, HasCloudflarePurgeUrls, HasG
     protected $fillable = [
         'category_id', 'user_id', 'title', 'slug', 'description', 'price', 'location',
         'contact_phone', 'contact_email', 'status', 'is_featured', 'expires_at',
-        'moderated_by', 'moderated_at', 'rejection_reason',
+        'moderated_by', 'moderated_at', 'rejection_reason', 'legacy_id',
     ];
 
     protected $casts = [

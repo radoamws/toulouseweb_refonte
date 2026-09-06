@@ -252,7 +252,8 @@ Principes transversaux : clés primaires `id` auto-incrémentées, `legacy_id` (
 7. `migrate:contacts` — `t_contact_us` (actif) uniquement ; `t_contacts`/`annuaire` archivés en export CSV hors base, non migrés
 8. `migrate:seo` — `t_seo_entity`/`t_seo_groupe`/`t_entete` → `seo_meta` polymorphe (résolution du type d'entité cible par groupe)
 9. `migrate:redirects` — construction de `redirects` à partir de `t_sitemap`/`t_sc_all_urls`/`gsc_suppression` et des patterns d'URL legacy identifiés (annuaire, fiches, agenda pré-Nuxt) vers les nouvelles URLs générées à l'étape 2-3
-10. `migrate:click-stats` — `t_stat_counter` (2,78M lignes) → `click_events`, en dernier, par lots de ~5000, uniquement les `id_stat_entite` réellement utilisés (rubrique/encadré/agenda/accueil/news/sliders)
+10. `migrate:classifieds` — `t_annonce`+`t_annonce_categ` → `classifieds` (ajouté le 06/09/2026, voir §22 — absente du plan initial, volume réel de seulement 3 lignes)
+11. `migrate:click-stats` — **délibérément PAS exécutée en production** depuis la demande client du 05/09/2026 : les statistiques du dashboard doivent repartir de zéro depuis cette refonte, pas continuer l'historique legacy (voir §21, `stats:reset`). Commande conservée dans le code pour un environnement de démo/dev qui voudrait un historique réaliste, mais volontairement omise de la séquence de cutover prod.
 
 **Chaque commande** : lecture chunked (`DB::connection('legacy')->table(...)->orderBy('id')->chunk(500, ...)`), nettoyage (encodage mojibake, dates invalides → `null`, lignes orphelines → loggées et ignorées, jamais insérées), transformation (mapping de champs, normalisation des statuts), écriture idempotente (`updateOrCreate(['legacy_id' => ...], [...])`), log détaillé dans `storage/logs/migration/<domaine>.log` (nombre traité/créé/mis à jour/ignoré + raison).
 
@@ -577,7 +578,8 @@ Vues publiques mises à jour en conséquence pour exploiter ces données désorm
 
 **Ce qui reste non récupérable ou non traité** :
 - `bonsplans/images/` (1 156 fichiers, certains nommés `..._encadre_...`/`..._bon-plan_...`) : recherché exhaustivement dans toutes les colonnes image de `toulouseweb_old` (y compris `t_carousel`, `t_article`) sans trouver la moindre correspondance — ces fichiers sont **orphelins**, la table qui les référençait autrefois n'existe plus dans ce dump. Non importés (aucune fiche à laquelle les rattacher) ; à ré-examiner uniquement si vous disposez d'un ancien schéma ou d'une sauvegarde plus complète.
-- Répertoires non exploités faute de correspondance claire en base (volumes marginaux) : `agendas/` (792 fichiers, doublon probable de `agenda/`), `cinema/` (9), `homepage/` (5), `location/` (1), `customAnnuaire/` (2), `annonce/` (3), `agenda_categories/` (5), `contact/icones` + `contact/pub` (22) — non prioritaires, à investiguer seulement si un besoin précis se présente.
+- ⚠️ **`agendas/` (792 fichiers) N'ÉTAIT PAS un doublon de `agenda/`** — cette conclusion, écrite ici initialement, était erronée : c'était un second dossier legacy distinct, source manquante d'environ 82 % des images d'événements. Corrigé le 06/09/2026 (audit de cutover prod, §22) — `ImportEventImages` indexe désormais les deux dossiers.
+- Répertoires non exploités faute de correspondance claire en base (volumes marginaux, confirmés orphelins par l'audit §22) : `cinema/` (9, icônes de gabarit statique — `t_cine`/`cinemas` n'ont jamais eu de colonne image), `homepage/` (5), `location/` (1), `customAnnuaire/` (2), `agenda_categories/` (5, ne correspond à aucune valeur réelle de `t_agenda_categories.icon`), `contact/icones` + `contact/pub` (22) — non prioritaires, à investiguer seulement si un besoin précis se présente. `annonce/` (3 fichiers) n'est PLUS orphelin : couvert par `images:classifieds` depuis le 06/09/2026 (§22).
 - Le reste des 40-75% de films/actualités/événements sans fichier local (voir tableau) n'a jamais été mis en cache dans ce dépôt de référence — récupérable uniquement via un accès direct au stockage de production.
 - Qualité des données brutes non corrigée : quelques valeurs `t_cine_film.image` contiennent du texte de synopsis ou une URI base64 au lieu d'un nom de fichier (bug legacy, ignoré proprement sans planter) ; au moins un fichier recovré (`agenda/test9876.jpg`) pèse plus de 20 Mo (upload de test jamais optimisé) — l'optimisation/redimensionnement des images reste un futur sujet de performance (Phase 12), pas traité ici.
 
@@ -957,3 +959,75 @@ Demande client : *"active bien les stats dans le dashboard et réinitialise en v
 **Fix** : nouvelle commande ponctuelle `php artisan stats:reset` (`--force` pour ne pas demander de confirmation, ex. script de déploiement) — vide `click_events`, avec confirmation interactive par défaut (action irréversible). À exécuter **une seule fois**, au moment de la bascule en production ("cutover") — après que `migrate:click-stats` ait éventuellement tourné (ou à la place, si on décide de ne jamais migrer l'historique). Pas un cron (voir §19).
 
 Tests : `tests/Feature/ResetClickStatsTest.php` (4 tests — confirmation acceptée/refusée, `--force`, no-op sur une table déjà vide).
+
+## 22. Cutover production — remigration complète depuis `toulouseweb_old` (06/09/2026)
+
+Demande client : *"J'ai mis à jour la base de données toulouseweb_old avec les données de la prod. Efface tout dans la base toulouseweb et remets tout à jour avec les données de toulouseweb_old, sauf le login/mdp admin. Réuploade toutes les images de prod (old/backEnd/public/). Vérifie que tout est conforme."* — dernière étape avant bascule en production (hors du dépôt `old/`).
+
+### Audit préparatoire (avant toute exécution)
+
+Un audit complet en lecture seule a été fait AVANT d'exécuter quoi que ce soit, pour ne pas remigrer/réuploader à l'aveugle :
+- Vérifié que l'admin actuel (`rado.rakotoarivelo@amws.space`) a encore le mot de passe par défaut du seeder — `migrate:fresh --seed` restaure donc exactement le même login, aucune préservation manuelle nécessaire.
+- **Gap réel trouvé** : aucune commande `migrate:classifieds` n'existait — seules les catégories d'annonces (`t_annonce_category`) étaient migrées, jamais le contenu (`t_annonce`). Volume réel : 3 lignes (2020), dont une manifestement frauduleuse ("offre de prêt entre particuliers"). Comblé par une nouvelle commande `migrate:classifieds` + `images:classifieds` — les 3 lignes sont importées en statut `pending` (jamais publiées automatiquement, même pour du contenu migré — cohérent avec le brief §8), donc l'admin doit valider les 2 légitimes et rejeter le spam plutôt que de le voir apparaître en ligne de fait. `classifieds` n'avait pas de colonne `legacy_id` du tout (décision initiale documentée : "quasi inutilisées en legacy, non migrées telles quelles") — ajoutée par une migration dédiée pour permettre l'upsert idempotent comme partout ailleurs.
+- **Bug réel trouvé et corrigé** : `ImportEventImages` n'indexait QUE `old/backEnd/public/agenda/` (sans "s") — une note antérieure de ce document qualifiait à tort `old/backEnd/public/agendas/` (792 fichiers, avec un "s") de "doublon probable, non prioritaire". Vérification faite : ce n'était pas un doublon, c'est un second dossier legacy distinct, source d'environ 82 % des images d'événements manquantes (867/897 échecs du dernier run avant correctif portaient le préfixe `"agendas/"`). Corrigé (le second dossier est maintenant indexé aussi) — **vérifié en conditions réelles après correctif : le taux d'échec est passé de 897 à seulement 30 (÷29)**.
+- **Gap réel trouvé** : les icônes de catégories d'événements (`event_categories.icon`, ex. `agenda/soiree.png`) étaient déjà migrées en base par `migrate:reference-data` mais **jamais résolues/copiées vers le stockage** — cassées partout où affichées (front, admin) depuis le début. Comblé par une nouvelle commande `images:event-categories` (réutilise le même dossier `agenda(s)/` déjà indexé) — **vérifié : 18/21 icônes désormais résolues** (0 avant ce correctif).
+- Portfolio "réalisations" de l'agence (`t_realisation_site`, 7 lignes, `old/backEnd/public/realisations/`) : aucun équivalent dans la refonte (page vitrine de l'agence elle-même, pas du contenu client) — **décision produit à prendre avec le client**, non traité ici faute de direction.
+- Confirmé structurellement non récupérables depuis ce dépôt de référence (nécessitent un accès réel au stockage de production, pas juste au dump SQL) : une partie substantielle des images d'actualités (~40 %), de films (~90 % résolus, le reste en URLs AlloCiné directes déjà valides) et de fiches annuaire (~98 % résolus) — chiffres exacts ci-dessous.
+
+### Séquence exécutée (dans cet ordre, sur la base de dev locale)
+
+1. `php artisan migrate:fresh --seed` — DESTRUCTIF (toutes les tables supprimées et recréées), **action bloquée par le classificateur de permission automatique de l'environnement** jusqu'à autorisation explicite de l'utilisateur (voir aussi `stats:reset` déjà bloqué de la même façon en §21) — jamais contourné, l'utilisateur a confirmé vouloir que l'agent l'exécute directement.
+2. `migrate:reference-data` → `migrate:listings` → `migrate:events` → `migrate:cinema` → `migrate:news` → `migrate:sliders` → `migrate:contacts` → `migrate:partner-sites` → `migrate:classifieds` (nouvelle) → `migrate:seo` → `migrate:redirects` — dans l'ordre documenté en §10, chacune vérifiée individuellement (aucune erreur silencieuse, tous les rejets journalisés sont des cas légitimes — vérifié par échantillonnage des logs, ex. `storage/logs/migration/seo.log` : les 14 390 rejets SEO sont des lignes legacy sans titre ni description).
+3. Re-seed des sources de scraping (`ScraperSourcesSeeder`, `AgendaScraperSourcesSeeder`) — nécessaire après `migrate:fresh`, dépend de `migrate:cinema` déjà exécutée (résolution par `cinema_id`).
+4. `images:amenities`, `images:partner-sites`, `images:sliders`, `images:classifieds` (nouvelle), `images:movies`, `images:news`, `images:listings`, `images:events`, `images:event-categories` (nouvelle) — dans cet ordre, chacune vérifiée.
+5. `migrate:click-stats` **délibérément PAS exécutée** — voir §21/§10 point 11.
+6. `php artisan stats:reset --force` — confirmé no-op (`click_events` déjà vide après `migrate:fresh`), exécuté quand même pour verrouiller explicitement l'intention.
+
+### Résultat (comparé aux volumes legacy réels)
+
+| Domaine | Lignes legacy réelles | Lignes migrées | Écart |
+|---|---|---|---|
+| Catégories (annuaire+agenda+annonces+news) | 1447+25+7+39 | identique | 0 |
+| Areas (lieux) | 3845 | 3845 | 0 |
+| Amenities | 19 | 19 | 0 |
+| Listings (annuaire) | 2984 | 2978 | 6 lignes sans titre exploitable, journalisées |
+| Events (agenda) | 19073 | 18773 | 300 lignes journalisées (dates/titres invalides) |
+| Cinémas | — | 28 | — |
+| Films | 17336 | 17336 | 0 |
+| Séances / horaires | 41543 / — | 41543 / 311386 | 0 |
+| News | 6197 | 6197 (+2 commentaires sur 14) | 0 |
+| Sliders | — | 135 | — |
+| Messages de contact | — | 55 | — |
+| Sites partenaires | — | 8 | — |
+| **Annonces (classifieds)** | **3** | **3** | **0 — comblé ce jour, voir ci-dessus** |
+| Métadonnées SEO | — | 1294 (14390 lignes vides ignorées) | — |
+| Redirections 301 | — | 6710 | — |
+| Statistiques de clics | 2809058 (`t_stat_counter`) | **0 — délibéré** | voir §21 |
+| Utilisateurs admin | 1 (préservé) | 1 (même email/mot de passe) | 0 |
+
+**Résolution des images, vérifiée en conditions réelles après les correctifs ci-dessus** :
+
+| Entité | Résolues / Total | Note |
+|---|---|---|
+| Amenities | 19/19 (100 %) | |
+| Sites partenaires | 8/8 (100 %) | |
+| Sliders | 134/135 (99,3 %) | |
+| **Annonces** | **3/3 (100 %)** | comblé ce jour |
+| Films (posters locaux) | 2553/2676 (95,4 %) | reste en URL AlloCiné directe le cas échéant |
+| Fiches annuaire (logo+galerie) | 1789/1796 (99,6 %) | |
+| Événements | 1752/1782 (98,3 %) | **avant correctif du bug `agendas/` : 881/1778 (49,5 %)** |
+| **Catégories d'événements (icônes)** | **18/21 (85,7 %)** | **comblé ce jour — 0 avant** |
+| Actualités | 2251/5564 (40,5 %) | limite structurelle du dump de référence, pas du code — nécessite un accès réel au stockage de production |
+
+### Vérification finale
+
+- Suite de tests complète rejouée après toutes les migrations : **214 passed (625 assertions)**, aucune régression.
+- Pages publiques vérifiées en HTTP réel (200 partout) : `/`, `/actualites`, `/annuaire`, `/agenda`, `/cinema`, `/annonces`.
+- Connexion admin vérifiée après remigration : même email, même mot de passe, rôle `super_admin` intact.
+- 37 sources de scraping re-seedées (24-25 cinéma + 12 agenda).
+
+### Ce qui reste ouvert, à trancher avec le client avant la mise en prod réelle
+
+1. Portfolio "réalisations" de l'agence — inclure ou abandonner explicitement (voir ci-dessus).
+2. Les images restantes non résolues (actualités en particulier, ~60 %) nécessitent un accès réel au stockage de production (`old/backEnd/public/` du serveur live, potentiellement plus complet que le dump de référence utilisé pour cette copie) — à rejouer une fois cet accès disponible, les commandes `images:*` sont idempotentes (un fichier déjà résolu n'est jamais retraité).
+3. Deux incohérences mineures de nommage de dossier trouvées par l'audit, non bloquantes, non corrigées (hors périmètre "vérifier que tout est conforme") : `ImportEventImages` écrit dans `events/` en pratique un mélange historique `agenda/`+`events/` (fonctionnellement correct, juste incohérent visuellement) ; `PartnerSiteResource`/`MovieResource` n'ont pas de widget d'upload de fichier en admin (les colonnes `logo`/`poster` sont de simples champs texte) — l'import legacy fonctionne, mais un futur ajout manuel par un admin devra coller une URL au lieu d'uploader un fichier.
