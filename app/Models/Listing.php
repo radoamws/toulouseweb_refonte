@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Contracts\HasCloudflarePurgeUrls;
+use App\Contracts\HasGoogleIndexingUrl;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\Trackable;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,7 +22,7 @@ use Spatie\Sluggable\SlugOptions;
  * public (voir brief §5) — la richesse des champs ci-dessous ne s'applique
  * pleinement qu'au tier 'paid'.
  */
-class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls
+class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoogleIndexingUrl
 {
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, InteractsWithMedia;
 
@@ -93,5 +94,15 @@ class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls
             [route('home'), route('annuaire.index'), route('annuaire.show', $this->slug)],
             $this->categories()->get()->map(fn (Category $c) => route('annuaire.category', $c->slug))->all(),
         ));
+    }
+
+    public function publicUrl(): string
+    {
+        return route('annuaire.show', $this->slug);
+    }
+
+    public function isPubliclyVisible(): bool
+    {
+        return $this->status === 'published';
     }
 }

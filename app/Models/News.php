@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Contracts\HasCloudflarePurgeUrls;
+use App\Contracts\HasGoogleIndexingUrl;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\ResolvesImageUrl;
 use App\Models\Concerns\Trackable;
@@ -28,7 +29,7 @@ use Spatie\Sluggable\SlugOptions;
  * migration `add_event_fields_to_news_table` et dans
  * `CinemaController::currentlyValid()`).
  */
-class News extends Model implements HasCloudflarePurgeUrls
+class News extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUrl
 {
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, ResolvesImageUrl;
 
@@ -138,5 +139,17 @@ class News extends Model implements HasCloudflarePurgeUrls
             route('actualites.bySlug', $this->slug),
             $this->category ? route('actualites.bySlug', $this->category->slug) : null,
         ]);
+    }
+
+    public function publicUrl(): string
+    {
+        return route('actualites.bySlug', $this->slug);
+    }
+
+    /** Reproduit exactement la condition de scopePublished() — voir son docblock (piège DATE vs DATETIME). */
+    public function isPubliclyVisible(): bool
+    {
+        return $this->status === 'published'
+            && (! $this->end_date || $this->end_date->toDateString() >= now()->toDateString());
     }
 }

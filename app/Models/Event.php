@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Contracts\HasCloudflarePurgeUrls;
+use App\Contracts\HasGoogleIndexingUrl;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\ResolvesImageUrl;
 use App\Models\Concerns\Trackable;
@@ -16,7 +17,7 @@ use Spatie\Sluggable\HasSlug;
 use Spatie\Sluggable\SlugOptions;
 
 /** Événement d'agenda (remplace t_agendas ; corrige la FK area_id cassée du legacy). */
-class Event extends Model implements HasCloudflarePurgeUrls
+class Event extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUrl
 {
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, ResolvesImageUrl;
 
@@ -91,5 +92,16 @@ class Event extends Model implements HasCloudflarePurgeUrls
             [route('home'), route('agenda.index'), route('agenda.bySlug', $this->slug)],
             $this->categories()->get()->map(fn (EventCategory $c) => route('agenda.bySlug', $c->slug))->all(),
         ));
+    }
+
+    public function publicUrl(): string
+    {
+        return route('agenda.bySlug', $this->slug);
+    }
+
+    /** `EventController::show()` autorise aussi 'expired' (page accessible, juste hors listing) — voir son docblock. */
+    public function isPubliclyVisible(): bool
+    {
+        return in_array($this->status, ['published', 'expired'], true);
     }
 }

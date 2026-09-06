@@ -48,4 +48,18 @@ return [
         'api_token' => env('CLOUDFLARE_API_TOKEN'),
     ],
 
+    /*
+     * Demande d'indexation automatique Google Search Console (demande
+     * client, voir App\Services\Seo\GoogleIndexingService et
+     * TECHNICAL_DOCUMENTATION.md §20). `enabled` : même double sécurité que
+     * Cloudflare, jamais activé en local/dev/test (voir phpunit.xml).
+     * `daily_quota` : l'API Indexing de Google impose 200 requêtes/jour par
+     * défaut — configurable si un compte Cloud a obtenu un quota plus élevé.
+     */
+    'google_indexing' => [
+        'enabled' => (bool) env('GOOGLE_INDEXING_ENABLED', false),
+        'credentials_json_base64' => env('GOOGLE_INDEXING_CREDENTIALS_JSON_BASE64'),
+        'daily_quota' => (int) env('GOOGLE_INDEXING_DAILY_QUOTA', 200),
+    ],
+
 ];

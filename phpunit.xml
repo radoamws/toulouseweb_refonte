@@ -38,5 +38,6 @@
         false ici garantit qu'aucun test ne tente un vrai appel HTTP sortant,
         même si une future config locale renseignait ces clés par erreur. -->
         <env name="CLOUDFLARE_CACHE_PURGE_ENABLED" value="false"/>
+        <env name="GOOGLE_INDEXING_ENABLED" value="false"/>
     </php>
 </phpunit>

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Contracts\HasCloudflarePurgeUrls;
+use App\Contracts\HasGoogleIndexingUrl;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\Trackable;
 use Illuminate\Database\Eloquent\Model;
@@ -19,7 +20,7 @@ use Spatie\Sluggable\SlugOptions;
  * published (voir Http\Controllers\ClassifiedController et
  * Filament\Resources\ClassifiedResource).
  */
-class Classified extends Model implements HasMedia, HasCloudflarePurgeUrls
+class Classified extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoogleIndexingUrl
 {
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, InteractsWithMedia;
 
@@ -69,5 +70,15 @@ class Classified extends Model implements HasMedia, HasCloudflarePurgeUrls
             route('annonces.bySlug', $this->slug),
             $this->category ? route('annonces.bySlug', $this->category->slug) : null,
         ]);
+    }
+
+    public function publicUrl(): string
+    {
+        return route('annonces.bySlug', $this->slug);
+    }
+
+    public function isPubliclyVisible(): bool
+    {
+        return $this->status === 'published';
     }
 }
