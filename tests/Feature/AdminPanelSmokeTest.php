@@ -41,6 +41,22 @@ class AdminPanelSmokeTest extends TestCase
     }
 
     /**
+     * Colonnes de tableau redimensionnables à la souris (demande client,
+     * "réduire un peu la colonne titre, ou mieux, permettre d'étirer/
+     * réduire la largeur des colonnes") — injecté globalement via un
+     * render hook (voir AdminPanelProvider), vérifié ici sur une seule
+     * page représentative plutôt que sur les 20 ressources (le hook est
+     * partagé, un test par ressource serait redondant).
+     */
+    public function test_resizable_columns_script_is_present_on_admin_pages(): void
+    {
+        $this->actingAs($this->authenticatedAdmin())
+            ->get('/admin/news')
+            ->assertOk()
+            ->assertSee('tw-col-resize-handle', false);
+    }
+
+    /**
      * @dataProvider resourceIndexRoutes
      */
     public function test_admin_resource_index_renders(string $route): void

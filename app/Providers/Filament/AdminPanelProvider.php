@@ -10,6 +10,7 @@ use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -53,6 +54,14 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            // Colonnes de tableau redimensionnables à la souris (demande client,
+            // 06/09/2026) — voir resources/views/filament/resizable-columns.blade.php.
+            // BODY_END plutôt qu'un ajout par Resource : couvre toutes les listes
+            // admin d'un coup, Filament n'ayant pas de fonction native équivalente.
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn () => view('filament.resizable-columns'),
+            );
     }
 }
