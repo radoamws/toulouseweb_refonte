@@ -62,6 +62,9 @@ class EscaleScraperTest extends TestCase
         $this->assertSame('de 8 € à 15 €', $event->price);
         $this->assertSame('https://www.ardei-soft.com/tournefeuille/img/le-grand-cirque.jpg', $event->image);
         $this->assertSame('2026-10-12 20:30:00', $event->start_date->format('Y-m-d H:i:s'));
+        // Horaire (06/09/2026, corrigé suite à l'audit §18) : "à partir de {heure de FIN}",
+        // reproduit tel quel du legacy (dateF, pas dateD — une bizarrerie du code source).
+        $this->assertSame(['à partir de 22:0'], $event->schedule);
         $this->assertTrue($event->categories->contains('slug', 'spectacles'));
 
         $run = ScraperRun::where('source_id', $source->id)->first();

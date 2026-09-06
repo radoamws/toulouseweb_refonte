@@ -16,6 +16,12 @@ use App\Services\Scraping\Agenda\Concerns\AbstractArdeiSoftDriver;
  * dans le code source pour cette salle (contrairement à ArdeiDriver/
  * Cornebarrieu qui, lui, résout par thème).
  *
+ * ⚠️ Horaire (06/09/2026, corrigé suite à l'audit §18 de
+ * TECHNICAL_DOCUMENTATION.md) : le legacy affiche `"à partir de {heure de
+ * fin}:{minute de fin}"` (ligne ~2902, `dateF[3]:dateF[4]` — utilise bien la
+ * date de FIN, pas de début, une bizarrerie du code source reproduite telle
+ * quelle) — silencieusement jamais reporté avant ce correctif.
+ *
  * area_slug par défaut résolu via `areas.legacy_id = 3563` : "L'Escale"
  * (slug `lescale-2`).
  */
@@ -41,5 +47,15 @@ class EscaleDriver extends AbstractArdeiSoftDriver
         $category = $this->categoryByLegacyId(7);
 
         return $category ? [$category->id] : [];
+    }
+
+    protected function computeSchedule(array $spectacle): ?array
+    {
+        $dateF = $spectacle['dateF'] ?? null;
+        if (! $dateF || ! isset($dateF[3], $dateF[4])) {
+            return null;
+        }
+
+        return ["à partir de {$dateF[3]}:{$dateF[4]}"];
     }
 }

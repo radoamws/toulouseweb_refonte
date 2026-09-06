@@ -40,11 +40,10 @@ class BijouScraperTest extends TestCase
                 'data' => [[
                     'slug' => 'le-plus-grand-cabaret',
                     'edito' => ['title' => 'Nom du spectacle - Sous titre - Une description complète'],
-                    'sessions' => [[
-                        'range' => ['title' => '15/20/25'],
-                        'start_date' => 1790000000,
-                        'time_zone' => 'Europe/Paris',
-                    ]],
+                    'sessions' => [
+                        ['range' => ['title' => '15/20/25'], 'start_date' => 1790000000, 'time_zone' => 'Europe/Paris'],
+                        ['range' => ['title' => '15/20/25'], 'start_date' => 1790086400, 'time_zone' => 'Europe/Paris'],
+                    ],
                     'picture' => ['src' => 'https://le-bijou.soticket.net/img/show.jpg'],
                     'start_date' => 1790000000,
                     'end_date' => 0,
@@ -62,6 +61,10 @@ class BijouScraperTest extends TestCase
         $this->assertSame('Sous titre', $event->subtitle);
         $this->assertSame('Une description complète', $event->description);
         $this->assertSame('15€ - 20€ - 25€', $event->price);
+        // Horaire (06/09/2026, corrigé suite à l'audit §18) : une entrée par
+        // séance (le legacy les concatène en une seule chaîne " / "-séparée,
+        // reproduit ici en tableau — silencieusement jamais reporté avant ce correctif).
+        $this->assertSame(['2026-09-21 16:13:20', '2026-09-22 16:13:20'], $event->schedule);
         $this->assertTrue($event->categories->contains('slug', 'spectacles'));
 
         $run = ScraperRun::where('source_id', $source->id)->first();

@@ -96,4 +96,31 @@ class OdyssudScraperTest extends TestCase
         $this->assertSame(9, $event->start_date->month);
         $this->assertSame(24, $event->start_date->day);
     }
+
+    /**
+     * Horaire (06/09/2026, corrigé suite à l'audit §18 de
+     * TECHNICAL_DOCUMENTATION.md) : une entrée "jour: heure" par
+     * représentation, silencieusement jamais reportée avant ce correctif.
+     */
+    public function test_schedule_is_captured_per_representation(): void
+    {
+        $source = $this->makeSource();
+
+        Http::fake([
+            'odyssud.com/spectacles/normal' => Http::response($this->listingHtml('/spectacles/cirque/hourvari')),
+            'odyssud.com/spectacles/cirque/hourvari' => Http::response(
+                '<html><body><div class="duration"><div class="duration-day"><span>12 décembre</span></div></div>'
+                .'<div class="field--name-dates">'
+                .'<div class="date-field-item"><span class="duration-day">Vendredi 12 décembre</span><span class="duration-hours">20h30</span></div>'
+                .'<div class="date-field-item"><span class="duration-day">Samedi 13 décembre</span><span class="duration-hours">18h00</span></div>'
+                .'</div></body></html>'
+            ),
+        ]);
+
+        $this->artisan('scrape:events', ['--source' => $source->id])->run();
+
+        $event = Event::where('external_ref', 'hourvari')->first();
+        $this->assertNotNull($event);
+        $this->assertSame(['Vendredi 12 décembre: 20h30', 'Samedi 13 décembre: 18h00'], $event->schedule);
+    }
 }

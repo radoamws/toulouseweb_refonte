@@ -24,6 +24,14 @@ use App\Services\Scraping\Agenda\Concerns\AbstractArdeiSoftDriver;
  * plutôt que par recherche exacte d'un libellé "Agenda X" qui n'existe pas
  * dans la table catégories migrée.
  *
+ * ⚠️ Horaire (06/09/2026, corrigé suite à l'audit §18 de
+ * TECHNICAL_DOCUMENTATION.md) : le legacy affiche `"HH:MM"` zéro-complété
+ * (`addZeroNumberToString`) depuis `dateD[3]:dateD[4]` — la date de DÉBUT,
+ * contrairement à EscaleDriver qui utilise la date de fin (bizarrerie du
+ * code source legacy reproduite telle quelle, chaque salle étant fidèle à
+ * SA propre méthode d'origine) — silencieusement jamais reporté avant ce
+ * correctif.
+ *
  * area_slug par défaut résolu via `areas.legacy_id = 3708` : "Aria"
  * (slug `aria`).
  */
@@ -65,5 +73,15 @@ class ArdeiDriver extends AbstractArdeiSoftDriver
         }
 
         return $this->categoriesMatchingLabel($themeLabel)->pluck('id')->all();
+    }
+
+    protected function computeSchedule(array $spectacle): ?array
+    {
+        $dateD = $spectacle['dateD'] ?? null;
+        if (! $dateD || ! isset($dateD[3], $dateD[4])) {
+            return null;
+        }
+
+        return [sprintf('%02d:%02d', $dateD[3], $dateD[4])];
     }
 }

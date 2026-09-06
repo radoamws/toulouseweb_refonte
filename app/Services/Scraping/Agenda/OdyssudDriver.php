@@ -25,6 +25,12 @@ use Symfony\Component\DomCrawler\Crawler;
  * `.link-zone.type--bloc-lien a`, discipline `.field.field--name-discipline`
  * (utilisée pour la catégorisation, par correspondance de libellé).
  *
+ * ⚠️ Horaire (06/09/2026, corrigé suite à un audit complet des 12 scrapers
+ * agenda, TECHNICAL_DOCUMENTATION.md §18) : le sélecteur `.date-field-item`
+ * ci-dessus était déjà utilisé pour le PARSING des dates mais son contenu
+ * "jour: heure" (une entrée par représentation, comme le fait le legacy)
+ * n'était silencieusement jamais reporté sur `Event.schedule`.
+ *
  * area_slug par défaut résolu via `areas.legacy_id = 16` : "Odyssud Blagnac"
  * (slug `odyssud-blagnac`).
  */
@@ -100,6 +106,7 @@ class OdyssudDriver implements ScraperDriver
                     'subtitle' => $detail['subtitle'],
                     'description' => $detail['description'],
                     'price' => $detail['price'],
+                    'schedule' => $detail['schedule'] ?: null,
                     'image' => $image,
                     'start_date' => $detail['start_date'],
                     'end_date' => $detail['end_date'],
@@ -123,7 +130,7 @@ class OdyssudDriver implements ScraperDriver
         return $stats;
     }
 
-    /** @return array{subtitle:?string,description:?string,price:?string,start_date:?\Carbon\Carbon,end_date:?\Carbon\Carbon,booking_url:?string,discipline:?string}|null */
+    /** @return array{subtitle:?string,description:?string,price:?string,schedule:string[],start_date:?\Carbon\Carbon,end_date:?\Carbon\Carbon,booking_url:?string,discipline:?string}|null */
     protected function fetchDetail(string $url): ?array
     {
         $html = $this->fetchHtml($url);
@@ -185,10 +192,24 @@ class OdyssudDriver implements ScraperDriver
             ? trim($crawler->filter('.field.field--name-discipline')->text(''))
             : null;
 
+        // Horaire(s) par représentation (06/09/2026, corrigé suite à l'audit
+        // §18) : le legacy construit un tableau "jour: heure" par nœud
+        // `.date-field-item` (une entrée par représentation) — silencieusement
+        // jamais reproduit avant ce correctif.
+        $schedule = $crawler->filter('.field--name-dates .date-field-item')
+            ->each(function (Crawler $item) {
+                $day = $item->filter('.duration-day')->count() ? trim($item->filter('.duration-day')->text('')) : null;
+                $hour = $item->filter('.duration-hours')->count() ? trim($item->filter('.duration-hours')->text('')) : null;
+
+                return $day && $hour ? "{$day}: {$hour}" : null;
+            });
+        $schedule = array_values(array_filter($schedule));
+
         return [
             'subtitle' => $subtitle,
             'description' => $description,
             'price' => $price,
+            'schedule' => $schedule,
             'start_date' => $start,
             'end_date' => $end,
             'booking_url' => $bookingUrl,

@@ -72,6 +72,16 @@
                     <dd class="text-ink-800">{{ $event->price }}</dd>
                 </div>
             @endif
+            @if (! empty($event->schedule))
+                <div>
+                    <dt class="text-sm font-medium text-ink-500">Horaires</dt>
+                    <dd class="text-ink-800">
+                        @foreach ($event->schedule as $entry)
+                            <span class="block">{{ $entry }}</span>
+                        @endforeach
+                    </dd>
+                </div>
+            @endif
         </dl>
 
         @if ($event->description)

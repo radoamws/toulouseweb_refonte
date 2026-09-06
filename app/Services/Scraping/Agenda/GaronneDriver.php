@@ -20,10 +20,21 @@ use Symfony\Component\DomCrawler\Crawler;
  * Listing : `https://www.theatregaronne.com/saison`, cartes `article.carte`
  * (les classes CSS du type `carte--xxx` encodent aussi la/les catégorie(s)
  * de l'événement côté legacy — reproduit ici en tentant de faire correspondre
- * ces suffixes à un slug `event_categories`, sinon repli sur "théâtre").
+ * ces suffixes à un slug `event_categories`, sinon repli sur la catégorie
+ * legacy 7/"Spectacles" — EXACTEMENT le repli du legacy
+ * (`if (!$categId || $categId == 0) $categId = 7;`, ligne ~667), pas un
+ * slug deviné : un ancien repli sur "théâtre" ici était une déviation non
+ * documentée, corrigée le 06/09/2026 suite à un audit complet des 12
+ * scrapers agenda (voir TECHNICAL_DOCUMENTATION.md §18).
  * Détail : description `.single--spectacle__desc__droite`, sous-titre
  * `.single--spectacle__header h1`, dates `.delta--dates time` (1 ou 2 nœuds),
  * lien billetterie `.single--spectacle__billetterie a`.
+ *
+ * ⚠️ Prix/horaire (06/09/2026, corrigé suite au même audit) : le legacy fait
+ * un SECOND appel HTTP vers le lien de billetterie lui-même (`$lienBillet`,
+ * ligne ~639-646) pour en extraire `.mr10` (tarif) et `.padded` (horaire) —
+ * silencieusement jamais reproduit avant ce correctif, alors que le modèle
+ * `Event` a bien des colonnes `price`/`schedule` prévues pour ça.
  *
  * area_slug par défaut résolu via `areas.legacy_id = 6` : "Théâtre Garonne"
  * (slug `theatre-garonne`).
@@ -39,7 +50,6 @@ class GaronneDriver implements ScraperDriver
         $config = $source->config ?? [];
         $listingUrl = $config['listing_url'] ?? 'https://www.theatregaronne.com/saison';
         $areaSlug = $config['area_slug'] ?? 'theatre-garonne';
-        $fallbackCategorySlug = $config['fallback_category_slug'] ?? 'theatre';
 
         $area = Area::where('slug', $areaSlug)->first();
         if (! $area) {
@@ -94,6 +104,11 @@ class GaronneDriver implements ScraperDriver
 
             $existing = Event::where('external_ref', $slug)->exists();
 
+            // Prix/horaire (06/09/2026) : le legacy scrape ces 2 champs sur le
+            // lien de billetterie LUI-MÊME, un 2e appel HTTP distinct de la
+            // page de détail — jamais fait si aucun lien n'a été trouvé.
+            $ticketing = $detail['booking_url'] ? $this->fetchTicketingInfo($detail['booking_url']) : null;
+
             $event = Event::updateOrCreate(
                 ['external_ref' => $slug],
                 array_filter([
@@ -101,6 +116,8 @@ class GaronneDriver implements ScraperDriver
                     'title' => $title,
                     'subtitle' => $detail['subtitle'],
                     'description' => $detail['description'],
+                    'price' => $ticketing['price'] ?? null,
+                    'schedule' => isset($ticketing['schedule']) ? [$ticketing['schedule']] : null,
                     'image' => $image,
                     'start_date' => $detail['start_date'],
                     'end_date' => $detail['end_date'],
@@ -115,7 +132,8 @@ class GaronneDriver implements ScraperDriver
                 : collect();
 
             if ($categoryIds->isEmpty()) {
-                $fallback = EventCategory::where('slug', $fallbackCategorySlug)->first();
+                // Repli EXACT du legacy (id 7 = "Spectacles"), pas un slug deviné — voir docblock de classe.
+                $fallback = $this->categoryByLegacyId(7, 'divers');
                 $categoryIds = $fallback ? collect([$fallback->id]) : collect();
             }
 
@@ -136,6 +154,30 @@ class GaronneDriver implements ScraperDriver
             ->filter(fn ($class) => str_contains($class, '--'))
             ->map(fn ($class) => \Illuminate\Support\Str::slug(explode('--', $class)[1] ?? ''))
             ->filter();
+    }
+
+    /**
+     * Reproduit le 2e appel HTTP legacy vers le lien de billetterie
+     * (`.mr10` → tarif, `.padded` → horaire, lignes ~639-646) — voir
+     * docblock de classe. `null` (pas de sentinelle `"-"` comme le legacy)
+     * si l'un des deux sélecteurs est absent, cohérent avec le reste de la
+     * refonte (`array_filter` sur les valeurs `null`).
+     *
+     * @return array{price: ?string, schedule: ?string}
+     */
+    protected function fetchTicketingInfo(string $bookingUrl): array
+    {
+        $html = $this->fetchHtml($bookingUrl);
+        if ($html === null) {
+            return ['price' => null, 'schedule' => null];
+        }
+
+        $crawler = new Crawler($html);
+
+        return [
+            'price' => $crawler->filter('.mr10')->count() ? trim($crawler->filter('.mr10')->first()->text('')) ?: null : null,
+            'schedule' => $crawler->filter('.padded')->count() ? trim($crawler->filter('.padded')->first()->text('')) ?: null : null,
+        ];
     }
 
     /** @return array{subtitle: ?string, description: ?string, booking_url: ?string, start_date: ?\Carbon\Carbon, end_date: ?\Carbon\Carbon}|null */

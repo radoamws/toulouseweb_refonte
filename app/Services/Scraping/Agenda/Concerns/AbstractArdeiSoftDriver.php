@@ -46,6 +46,20 @@ abstract class AbstractArdeiSoftDriver implements ScraperDriver
     /** @return int[] ids de App\Models\EventCategory à attacher */
     abstract protected function resolveCategoryIds(array $spectacle, array $payload): array;
 
+    /**
+     * Horaire affiché pour ce spectacle (06/09/2026, corrigé suite à l'audit
+     * §18 de TECHNICAL_DOCUMENTATION.md) — chaque salle utilisant cette
+     * plateforme a sa propre formule côté legacy (voir les 2 implémentations
+     * concrètes, `EscaleDriver`/`ArdeiDriver`), pas de valeur par défaut
+     * commune sensée : `null` ici tant qu'une sous-classe ne l'implémente pas.
+     *
+     * @return string[]|null
+     */
+    protected function computeSchedule(array $spectacle): ?array
+    {
+        return null;
+    }
+
     public function run(ScraperSource $source): array
     {
         $config = $source->config ?? [];
@@ -121,6 +135,7 @@ abstract class AbstractArdeiSoftDriver implements ScraperDriver
                     'title' => $title,
                     'description' => $spectacle['txt'] ?? null,
                     'price' => $price,
+                    'schedule' => $this->computeSchedule($spectacle),
                     'image' => "https://www.ardei-soft.com/{$town}/img/{$spectacle['fmm1']}",
                     'start_date' => $start,
                     'end_date' => $end,

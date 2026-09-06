@@ -57,6 +57,9 @@ class ArdeiScraperTest extends TestCase
         $event = Event::where('external_ref', 'une-piece-de-theatre')->first();
         $this->assertNotNull($event);
         $this->assertSame('Une pièce de théâtre', $event->title);
+        // Horaire (06/09/2026, corrigé suite à l'audit §18) : "HH:MM" zéro-complété
+        // depuis dateD (date de DÉBUT, contrairement à EscaleDriver qui utilise dateF).
+        $this->assertSame(['20:00'], $event->schedule);
         $this->assertTrue($event->categories->contains('slug', 'theatre'));
     }
 }

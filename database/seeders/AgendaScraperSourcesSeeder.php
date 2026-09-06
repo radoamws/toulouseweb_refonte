@@ -68,7 +68,6 @@ class AgendaScraperSourcesSeeder extends Seeder
                 'config' => [
                     'listing_url' => 'https://www.theatregaronne.com/saison',
                     'area_slug' => 'theatre-garonne',
-                    'fallback_category_slug' => 'theatre',
                 ],
             ],
             'Le Vent des Signes' => [

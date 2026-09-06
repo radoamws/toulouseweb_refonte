@@ -241,6 +241,31 @@ class PublicContentPagesTest extends TestCase
         $response->assertSee('href="https://billetterie.example.test/concert"', false);
     }
 
+    /**
+     * Horaires (06/09/2026, corrigé suite à l'audit §18 de
+     * TECHNICAL_DOCUMENTATION.md — champ `schedule` capturé mais jamais
+     * affiché nulle part, désormais rendu quand présent).
+     */
+    public function test_agenda_show_renders_schedule_when_present(): void
+    {
+        Event::create([
+            'title' => 'Avec horaires', 'slug' => 'avec-horaires',
+            'status' => 'published', 'start_date' => now()->addDay(),
+            'schedule' => ['Vendredi: 20h30', 'Samedi: 18h00'],
+        ]);
+        Event::create([
+            'title' => 'Sans horaires', 'slug' => 'sans-horaires',
+            'status' => 'published', 'start_date' => now()->addDay(),
+        ]);
+
+        $this->get('/agenda/avec-horaires')->assertOk()
+            ->assertSee('Horaires')
+            ->assertSee('Vendredi: 20h30')
+            ->assertSee('Samedi: 18h00');
+
+        $this->get('/agenda/sans-horaires')->assertOk()->assertDontSee('Horaires');
+    }
+
     public function test_cinema_index_and_movie_and_salle_pages_render(): void
     {
         $cinema = Cinema::create(['name' => 'Gaumont Wilson', 'slug' => 'gaumont-wilson', 'is_active' => true]);

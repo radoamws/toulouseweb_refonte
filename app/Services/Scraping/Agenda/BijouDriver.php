@@ -97,6 +97,7 @@ class BijouDriver implements ScraperDriver
                     'subtitle' => $subtitle,
                     'description' => $description,
                     'price' => $this->extractPrice($show['sessions'] ?? []),
+                    'schedule' => $this->extractSchedule($show['sessions'] ?? []),
                     'image' => $show['picture']['src'] ?? null,
                     'start_date' => Carbon::createFromTimestamp($startTimestamp),
                     'end_date' => Carbon::createFromTimestamp($endTimestamp),
@@ -144,5 +145,37 @@ class BijouDriver implements ScraperDriver
         }
 
         return $prices ? implode(' / ', array_unique($prices)) : null;
+    }
+
+    /**
+     * Une entrée par séance (06/09/2026, corrigé suite à l'audit §18 de
+     * TECHNICAL_DOCUMENTATION.md) — le legacy concatène chaque horaire de
+     * séance dans une seule chaîne " / "-séparée (ligne ~4655), reproduite
+     * ici en tableau (un horaire par entrée), cohérent avec le cast `array`
+     * d'`Event.schedule` et plus exploitable côté front qu'une chaîne plate
+     * — silencieusement jamais reporté avant ce correctif, alors que Le
+     * Bijou (un club, plusieurs séances/soir courantes) est la salle où
+     * cette perte était la plus impactante des 5 concernées par l'audit.
+     *
+     * @return string[]|null
+     */
+    protected function extractSchedule(array $sessions): ?array
+    {
+        $schedule = [];
+
+        foreach ($sessions as $session) {
+            if (empty($session['start_date'])) {
+                continue;
+            }
+
+            $date = Carbon::createFromTimestamp($session['start_date']);
+            if (! empty($session['time_zone'])) {
+                $date = $date->setTimezone($session['time_zone']);
+            }
+
+            $schedule[] = $date->format('Y-m-d H:i:s');
+        }
+
+        return $schedule ?: null;
     }
 }
