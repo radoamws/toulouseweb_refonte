@@ -16,6 +16,10 @@
 /public/build
 /public/hot
 /public/storage
+# Régénéré automatiquement (cron quotidien + job en file d'attente à chaque
+# CRUD admin, voir TECHNICAL_DOCUMENTATION.md §24) — jamais figé dans un
+# commit, même logique que /public/storage ci-dessus.
+/public/sitemap.xml
 /storage/*.key
 /storage/pail
 /vendor

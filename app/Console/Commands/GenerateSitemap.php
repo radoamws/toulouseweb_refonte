@@ -26,6 +26,17 @@ use Spatie\Sitemap\Tags\Url;
  * séances courantes (évite un sitemap disproportionné par rapport au
  * contenu réellement pertinent pour les moteurs de recherche — à revoir
  * si le volume de contenu réel augmente significativement).
+ *
+ * ⚠️ Bug réel trouvé et corrigé (07/09/2026, audit SEO/perf final) : le
+ * filtre "film actuellement à l'affiche" dupliquait la logique de
+ * `CinemaController::currentlyValid()` mais SANS son correctif (comparait
+ * `end_date >= now()`, un objet Carbon complet, à une colonne `DATE` pure
+ * — même bug DATE-vs-DATETIME déjà trouvé et corrigé ailleurs, voir
+ * `Screening::scopeCurrentlyValid()`). Le sitemap pouvait donc omettre des
+ * films ayant pourtant des séances réellement en cours, quasi
+ * instantanément après minuit. Centralisé dans
+ * `Screening::scopeCurrentlyValid()`, réutilisé ici et par
+ * `CinemaController`, pour qu'un seul endroit porte ce correctif.
  */
 class GenerateSitemap extends Command
 {
@@ -62,10 +73,7 @@ class GenerateSitemap extends Command
             fn (Cinema $c) => $sitemap->add(Url::create("/cinema/salles/{$c->slug}")->setLastModificationDate($c->updated_at)->setPriority(0.6))
         );
 
-        Movie::whereHas('screenings', function ($q) {
-            $q->where(fn ($q2) => $q2->whereNull('start_date')->orWhere('start_date', '<=', now()))
-                ->where(fn ($q2) => $q2->whereNull('end_date')->orWhere('end_date', '>=', now()));
-        })->each(
+        Movie::whereHas('screenings', fn ($q) => $q->currentlyValid())->each(
             fn (Movie $m) => $sitemap->add(Url::create("/cinema/films/{$m->slug}")->setLastModificationDate($m->updated_at)->setPriority(0.6))
         );
 

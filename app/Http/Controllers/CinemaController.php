@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Cinema;
 use App\Models\Movie;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -20,7 +19,7 @@ class CinemaController extends Controller
     public function index(Request $request): View
     {
         $movies = Movie::query()
-            ->whereHas('screenings', fn (Builder $q) => $this->currentlyValid($q))
+            ->whereHas('screenings', fn (Builder $q) => $q->currentlyValid())
             ->when($request->filled('q'), fn ($q) => $q->where('title', 'like', '%'.$request->string('q').'%'))
             ->orderBy('title')
             ->paginate(24)
@@ -43,7 +42,7 @@ class CinemaController extends Controller
         }
 
         $movie->load([
-            'screenings' => fn ($q) => $this->currentlyValid($q)->with(['cinema', 'language', 'types', 'times']),
+            'screenings' => fn ($q) => $q->currentlyValid()->with(['cinema', 'language', 'types', 'times']),
             'comments' => fn ($q) => $q->where('status', 'published')->latest(),
         ]);
 
@@ -52,7 +51,7 @@ class CinemaController extends Controller
         // Maillage interne (brief §13, SEO/GEO) — autres films actuellement
         // à l'affiche, hors film courant.
         $related = Movie::query()
-            ->whereHas('screenings', fn (Builder $q) => $this->currentlyValid($q))
+            ->whereHas('screenings', fn (Builder $q) => $q->currentlyValid())
             ->where('id', '!=', $movie->id)
             ->latest('release_date')
             ->limit(4)
@@ -74,7 +73,7 @@ class CinemaController extends Controller
         }
 
         $cinema->load([
-            'screenings' => fn ($q) => $this->currentlyValid($q)->with(['movie', 'language', 'times']),
+            'screenings' => fn ($q) => $q->currentlyValid()->with(['movie', 'language', 'times']),
         ]);
 
         // Maillage interne (brief §13, SEO/GEO) — autres salles actives,
@@ -92,43 +91,12 @@ class CinemaController extends Controller
         ]);
     }
 
-    /**
-     * @param  Builder|Relation  $query  Un `Relation` (ex: HasMany) quand
-     *                                   appelé depuis une closure de eager
-     *                                   loading (`->load(['screenings' => ...])`),
-     *                                   un `Builder` classique sinon
-     *                                   (`whereHas`). Les deux exposent les
-     *                                   mêmes méthodes `where`/`with` utilisées ici.
-     */
-    /**
-     * ⚠️ Bug réel trouvé et corrigé (01/09/2026, signalé par le client :
-     * scraping réussi — 25 films, milliers d'horaires — mais aucune séance
-     * affichée en front). `screenings.start_date`/`end_date` sont des
-     * colonnes `DATE` pures (pas `DATETIME`, voir migration
-     * `adjust_cinema_schedule_columns`, et le commentaire de cast sur
-     * `App\Models\Screening` — un bug voisin y avait déjà été documenté).
-     * Comparer `end_date >= now()` compare donc une date normalisée à
-     * minuit (ex. "2026-09-01 00:00:00") à l'heure COMPLÈTE actuelle
-     * ("2026-09-01 19:13:54") : dès la première seconde après minuit, le
-     * dernier jour de la fenêtre de programmation
-     * (`AllocineDriver::currentProgrammingWeek()`) était donc déjà exclu —
-     * en pratique, quasi INSTANTANÉMENT après chaque scraping.
-     *
-     * Fix : comparer à une chaîne `'Y-m-d'` nue (`now()->toDateString()`),
-     * PAS un objet `Carbon`/une chaîne datetime complète — un objet Carbon
-     * lié en paramètre de requête se sérialise en `'Y-m-d H:i:s'`, ce que
-     * MySQL coerce silencieusement au bon résultat pour une colonne `DATE`
-     * (d'où le bug resté invisible en test manuel superficiel), mais que
-     * SQLite (moteur de test) compare en texte BRUT — `'2026-09-01'` est
-     * lexicographiquement INFÉRIEUR à `'2026-09-01 00:00:00'` (chaîne plus
-     * courte). Une chaîne date nue élimine l'ambiguïté sur les deux moteurs.
-     */
-    protected function currentlyValid(Builder|Relation $query): Builder|Relation
-    {
-        $today = now()->toDateString();
-
-        return $query
-            ->where(fn ($q) => $q->whereNull('start_date')->orWhere('start_date', '<=', $today))
-            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $today));
-    }
+    // Le filtre "séance actuellement valide" (bug DATE-vs-DATETIME trouvé et
+    // corrigé ici le 01/09/2026, voir TECHNICAL_DOCUMENTATION.md §13) vit
+    // maintenant sur `Screening::scopeCurrentlyValid()` — extrait le
+    // 07/09/2026 (audit SEO/perf final) après avoir trouvé que
+    // `GenerateSitemap` dupliquait cette même logique SANS le correctif
+    // (comparait à `now()`, pas `now()->toDateString()`), un bug réel qui
+    // pouvait faire manquer des films au sitemap dès la première seconde
+    // après minuit — voir docblock de `Screening::scopeCurrentlyValid()`.
 }

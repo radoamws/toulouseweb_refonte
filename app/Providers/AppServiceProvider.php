@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\Category;
 use App\Models\Cinema;
 use App\Models\Classified;
 use App\Models\Event;
+use App\Models\EventCategory;
 use App\Models\Listing;
 use App\Models\Movie;
 use App\Models\News;
@@ -12,6 +14,7 @@ use App\Models\Page;
 use App\Models\Slider;
 use App\Observers\CloudflarePurgeObserver;
 use App\Observers\GoogleIndexingObserver;
+use App\Observers\RegeneratesSitemapObserver;
 use App\Services\Cache\CloudflareCachePurger;
 use App\Services\Seo\GoogleIndexingService;
 use Illuminate\Support\ServiceProvider;
@@ -44,6 +47,20 @@ class AppServiceProvider extends ServiceProvider
     ];
 
     /**
+     * Modèles réellement présents dans `public/sitemap.xml` (demande client,
+     * TECHNICAL_DOCUMENTATION.md §24 — "sitemap automatique après CRUD dans
+     * l'admin") — voir `GenerateSitemap` pour la liste exacte des entités
+     * qu'il parcourt. `Movie`/`Cinema` INCLUS ici (contrairement à
+     * GOOGLE_INDEXING_MODELS) : `App\Jobs\RegenerateSitemap` est
+     * auto-dédupliqué (`ShouldBeUnique`), le volume de `scrape:cinema` ne
+     * pose donc pas le même problème de quota que l'API Google Indexing.
+     */
+    protected const SITEMAP_MODELS = [
+        Category::class, Listing::class, EventCategory::class, Event::class,
+        Cinema::class, Movie::class, News::class, Classified::class,
+    ];
+
+    /**
      * Register any application services.
      */
     public function register(): void
@@ -67,6 +84,10 @@ class AppServiceProvider extends ServiceProvider
 
         foreach (self::GOOGLE_INDEXING_MODELS as $model) {
             $model::observe(GoogleIndexingObserver::class);
+        }
+
+        foreach (self::SITEMAP_MODELS as $model) {
+            $model::observe(RegeneratesSitemapObserver::class);
         }
 
         // Un seul lot d'appels HTTP à la toute fin du processus (requête HTTP

@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\Relation;
 
 /** Association salle/film/langue (remplace t_cine_projection). */
 class Screening extends Model
@@ -45,5 +47,33 @@ class Screening extends Model
     public function types(): BelongsToMany
     {
         return $this->belongsToMany(ScreeningType::class, 'screening_screening_type');
+    }
+
+    /**
+     * Extrait de `CinemaController::currentlyValid()` (07/09/2026, audit
+     * SEO/perf final) — cette logique était DUPLIQUÉE (avec régression :
+     * voir ci-dessous) dans `GenerateSitemap` pour filtrer les films ayant
+     * une séance en cours. Centralisée ici pour qu'un seul endroit porte le
+     * correctif du bug déjà trouvé et documenté sur `CinemaController` :
+     * `start_date`/`end_date` sont des colonnes `DATE` pures — comparer à
+     * une chaîne `Y-m-d` nue (`now()->toDateString()`), JAMAIS à `now()`/un
+     * objet Carbon complet (MySQL coerce silencieusement, SQLite compare en
+     * texte brut et échoue — voir TECHNICAL_DOCUMENTATION.md §13).
+     *
+     * ⚠️ Bug réel trouvé et corrigé ici : `GenerateSitemap::handle()`
+     * dupliquait cette même logique mais comparait à `now()` (objet Carbon
+     * complet), pas encore corrigé lors du fix initial sur
+     * `CinemaController` (fait ailleurs, jamais reporté ici) — le sitemap
+     * pouvait donc omettre des films ayant pourtant des séances réellement
+     * en cours, dès la première seconde après minuit, exactement le même
+     * bug que celui déjà corrigé sur le front.
+     */
+    public function scopeCurrentlyValid(Builder|Relation $query): Builder|Relation
+    {
+        $today = now()->toDateString();
+
+        return $query
+            ->where(fn ($q) => $q->whereNull('start_date')->orWhere('start_date', '<=', $today))
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $today));
     }
 }
