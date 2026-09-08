@@ -81,11 +81,16 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
 
-      - name: Empreinte du serveur (known_hosts)
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -p "${{ secrets.DEPLOY_SSH_PORT }}" -H "${{ secrets.DEPLOY_SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
-
+      # ⚠️ Bug réel trouvé et corrigé (09/09/2026, premier run réel) : l'étape
+      # séparée `ssh-keyscan >> known_hosts` faisait échouer tout le job
+      # (exit code 1, message caché par le `2>/dev/null` d'origine) — le
+      # shell des jobs GitHub Actions tourne en `bash -e`, et `ssh-keyscan`
+      # peut retourner un code non-nul même quand il a bien récupéré une clé
+      # (comportement connu, pas spécifique à ce serveur). Remplacé par
+      # `-o StrictHostKeyChecking=accept-new` directement sur la connexion
+      # SSH du rsync ci-dessous : la clé du serveur est acceptée et mise en
+      # cache au premier contact (confiance-au-premier-usage), sans dépendre
+      # d'une étape séparée fragile.
       # Exclusions volontaires :
       #  - .env                : créé une seule fois à la main sur le serveur, jamais écrasé
       #  - storage/app          : contient les médias uploadés (MediaLibrary) + le lien
@@ -110,7 +115,7 @@ jobs:
             --exclude='storage/logs' \
             --exclude='public/storage' \
             --exclude='public/hot' \
-            -e "ssh -p ${{ secrets.DEPLOY_SSH_PORT }}" \
+            -e "ssh -p ${{ secrets.DEPLOY_SSH_PORT }} -o StrictHostKeyChecking=accept-new" \
             ./ "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
 
       - name: Migrations + optimisation + purge des caches (via SSH)
