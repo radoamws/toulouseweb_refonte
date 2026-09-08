@@ -1,0 +1,124 @@
+name: Déploiement production (Infomaniak)
+
+# Déploiement simple "en place" (pas de releases/current) — voir
+# TECHNICAL_DOCUMENTATION.md §26. Adapté à un hébergement mutualisé
+# non-root : tout le déploiement passe par rsync + SSH, aucun accès root
+# requis, aucun worker de queue permanent (le cron unique du serveur fait
+# tourner `queue:work --stop-when-empty` chaque minute, voir routes/console.php).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v4
+
+      - name: PHP (identique à la version choisie côté serveur)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, bcmath, pdo_mysql, gd, zip, intl, exif, opcache, curl, fileinfo
+          coverage: none
+          tools: composer:v2
+
+      - name: Dépendances PHP (production, sans les paquets de dev)
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Dépendances front
+        run: npm ci
+
+      - name: Build des assets (Vite)
+        run: npm run build
+
+      - name: Clé SSH (agent)
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Empreinte du serveur (known_hosts)
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${{ secrets.DEPLOY_SSH_PORT }}" -H "${{ secrets.DEPLOY_SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Exclusions volontaires :
+      #  - .env                : créé une seule fois à la main sur le serveur, jamais écrasé
+      #  - storage/app          : contient les médias uploadés (MediaLibrary) + le lien
+      #                           symbolique public/storage — persistant
+      #  - storage/logs         : logs applicatifs — persistant
+      #  - public/storage       : lien symbolique créé par `storage:link`, jamais recréé
+      #                           par rsync (sinon --delete le supprimerait à chaque déploi)
+      #  - public/hot           : marqueur du serveur de dev Vite, ne doit jamais exister en prod
+      # storage/framework/* N'EST PAS exclu : ce sont des caches éphémères
+      # (vues compilées, sessions fichiers, cache de framework) que Laravel
+      # régénère à la demande — les resynchroniser depuis le squelette du
+      # dépôt à chaque déploiement est normal et sans risque.
+      - name: Synchronisation des fichiers (rsync)
+        run: |
+          rsync -az --delete \
+            --exclude='.env' \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='tests' \
+            --exclude='storage/app' \
+            --exclude='storage/logs' \
+            --exclude='public/storage' \
+            --exclude='public/hot' \
+            -e "ssh -p ${{ secrets.DEPLOY_SSH_PORT }}" \
+            ./ "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
+
+      - name: Migrations + optimisation + purge des caches (via SSH)
+        uses: appleboy/ssh-action@v1
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          envs: DEPLOY_PATH
+          script: |
+            set -e
+            cd "$DEPLOY_PATH"
+            PHP_BIN="${{ secrets.DEPLOY_PHP_BIN }}"
+            if [ -z "$PHP_BIN" ]; then PHP_BIN="php"; fi
+
+            # Toujours ressortir du mode maintenance en fin de script, même si
+            # une étape échoue en cours de route (`set -e` arrêterait sinon le
+            # script AVANT le `artisan up` final — le site resterait "down"
+            # indéfiniment après un `migrate --force` en échec, par exemple).
+            trap '$PHP_BIN artisan up || true' EXIT
+
+            # Mode maintenance le temps des migrations uniquement (brièvement
+            # visible, acceptable pour un déploiement "en place" — voir choix
+            # client dans TECHNICAL_DOCUMENTATION.md §26).
+            $PHP_BIN artisan down --render="errors::503" --retry=15 || true
+
+            $PHP_BIN artisan migrate --force
+            $PHP_BIN artisan storage:link || true
+
+            $PHP_BIN artisan config:clear
+            $PHP_BIN artisan config:cache
+            $PHP_BIN artisan route:cache
+            $PHP_BIN artisan view:cache
+            $PHP_BIN artisan event:cache
+
+            # Pas de worker permanent (mutualisé) : queue:work --stop-when-empty
+            # tourne via le cron chaque minute (routes/console.php). queue:restart
+            # reste une sécurité en cas de job en cours pendant le déploiement.
+            $PHP_BIN artisan queue:restart

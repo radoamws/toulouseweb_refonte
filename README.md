@@ -5,7 +5,7 @@
 
 ## État du projet
 
-**Phase actuelle : 1, 2, 3, 4, 5, 8, 9, 10 terminées ; 6, 7, 11, 12, 13 bien avancées ; 14 (déploiement réel) reste à faire — aucun accès à un serveur de production depuis cet environnement.**
+**Phase actuelle : 1, 2, 3, 4, 5, 8, 9, 10 terminées ; 6, 7, 11, 12, 13 bien avancées ; 14 (déploiement réel) : pipeline CI/CD GitHub Actions prêt (`.github/workflows/deploy.yml`, voir § CI/CD plus bas et `TECHNICAL_DOCUMENTATION.md` §26), premier déploiement réel vers le serveur Infomaniak pas encore effectué depuis cet environnement de développement.**
 
 Le schéma de base cible est appliqué sur `toulouseweb` et **peuplé avec les vraies données de production** (2 978 fiches annuaire, 18 724 événements, 17 304 films, 6 191 actus, 135 sliders...). Toutes les pages publiques (homepage, annuaire, agenda, cinéma, actualités, annonces, contact) et l'administration (21 ressources Filament) sont en ligne et vérifiées. Points marquants récents :
 
@@ -215,6 +215,51 @@ php artisan config:cache && php artisan route:cache && php artisan view:cache &&
 php artisan up
 ```
 
-### Rollback
+### CI/CD (GitHub Actions) — déploiement automatique depuis `main`
+
+Depuis le 08/09/2026 (demande client), tout push sur `main` déploie automatiquement vers le serveur de production Infomaniak. Fichier : `.github/workflows/deploy.yml`. Détail/justifications des choix : `TECHNICAL_DOCUMENTATION.md` §26.
+
+**Ce que fait le workflow** (déclenché aussi manuellement : onglet GitHub "Actions" → "Déploiement production (Infomaniak)" → "Run workflow") :
+1. Build côté CI : `composer install --no-dev`, `npm ci && npm run build`.
+2. Synchronisation (`rsync --delete` par SSH) vers le serveur — **sauf** `.env`, `storage/app`, `storage/logs`, `public/storage` (voir commentaires du workflow : ce sont les seuls éléments persistants, jamais écrasés par un déploiement).
+3. Par SSH sur le serveur : `artisan down` (bref, le temps des migrations) → `migrate --force` → `storage:link` → `config:cache`/`route:cache`/`view:cache`/`event:cache` → `queue:restart` → `artisan up`.
+
+**Secrets GitHub à créer une fois** (Settings du dépôt → Secrets and variables → Actions → New repository secret) :
+
+| Secret | Contenu |
+|---|---|
+| `DEPLOY_SSH_HOST` | Hôte SSH du serveur Infomaniak |
+| `DEPLOY_SSH_PORT` | Port SSH (souvent différent de 22 en mutualisé — à vérifier dans le manager Infomaniak) |
+| `DEPLOY_SSH_USER` | Utilisateur SSH (non-root) |
+| `DEPLOY_SSH_PRIVATE_KEY` | Clé privée SSH **dédiée au déploiement** (voir génération ci-dessous) — jamais la clé personnelle |
+| `DEPLOY_PATH` | Chemin absolu du site, ex. `/sites/toulouseweb.com` |
+| `DEPLOY_PHP_BIN` *(optionnel)* | Chemin du binaire PHP si `php` seul ne résout pas vers PHP 8.2+ dans une session SSH non-interactive (`ssh user@host 'which php; php -v'` pour vérifier) |
+
+Génération de la clé dédiée (en local, jamais partagée) :
+```bash
+ssh-keygen -t ed25519 -C "deploy-toulouseweb" -f deploy_key -N ""
+# deploy_key.pub  -> à ajouter dans ~/.ssh/authorized_keys de l'utilisateur SSH sur le serveur
+# deploy_key      -> contenu intégral collé dans le secret GitHub DEPLOY_SSH_PRIVATE_KEY
+```
+
+**Checklist unique avant le tout premier déploiement automatique** (le workflow ne gère QUE le code — pas les données ni la configuration serveur) :
+
+- [ ] Racine du document du site réglée, dans le manager Infomaniak, sur `<DEPLOY_PATH>/public` (pas `<DEPLOY_PATH>` lui-même).
+- [ ] `.env` créé À LA MAIN sur le serveur (copié depuis `.env.example`, jamais généré/écrasé par le CI) : `APP_KEY` généré une fois (`php artisan key:generate --show`), `APP_URL=https://043e6cgnrn.preview.infomaniak.website` (puis `https://toulouseweb.com` après bascule DNS), `DB_*` avec les identifiants de la base déjà créée, `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SECURE_COOKIE=true` — voir checklist complète plus haut.
+- [ ] Squelette `storage/` créé une fois à la main (exclu du rsync, donc jamais recréé automatiquement) :
+  ```bash
+  mkdir -p <DEPLOY_PATH>/storage/app/public <DEPLOY_PATH>/storage/logs
+  ```
+- [ ] Données de production transférées une fois vers la base vide déjà créée (le CI/CD ne déploie que du CODE, jamais de données) : export de la base locale déjà migrée/vérifiée (`mysqldump toulouseweb > dump.sql`) puis import dans la base Infomaniak (`mysql` en SSH, ou l'outil d'import du manager Infomaniak).
+- [ ] Médias déjà résolus (`storage/app/public/...`, voir §22/§23) transférés une fois par `rsync`/`scp` séparé vers `<DEPLOY_PATH>/storage/app/public/` sur le serveur (le rsync du CI exclut délibérément `storage/app`, voir ci-dessus).
+- [ ] Cron unique enregistré côté Infomaniak (souvent via l'interface du manager plutôt qu'un `crontab -e` brut sur ce type d'hébergement — vérifier) :
+  ```
+  * * * * * cd <DEPLOY_PATH> && php artisan schedule:run >> /dev/null 2>&1
+  ```
+- [ ] Premier push sur `main` (ou déclenchement manuel) : suivre l'exécution dans l'onglet "Actions" du dépôt.
+
+**Rollback** : `git revert <commit>` + push sur `main` (redéploie automatiquement l'état précédent), ou ré-exécuter manuellement le workflow sur un commit/tag antérieur (bouton "Run workflow", champ "Use workflow from"). Les migrations de ce projet sont additives — un rollback de code reste presque toujours compatible avec le schéma déjà en place, voir `TECHNICAL_DOCUMENTATION.md` §14.
+
+### Rollback (déploiement manuel, sans CI/CD)
 
 `git checkout <tag/commit précédent>` + rejouer `composer install`/`npm run build`/caches. Les migrations de ce projet sont additives (nouvelles colonnes/tables/index, jamais de suppression destructive sans migration `down()` correspondante) — un rollback de code sans rollback de schéma reste presque toujours compatible ; vérifier au cas par cas avant un rollback qui traverserait une migration non additive.

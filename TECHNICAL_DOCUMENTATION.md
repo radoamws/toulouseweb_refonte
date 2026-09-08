@@ -1096,3 +1096,51 @@ Demande client : *"fait une dernière vérification complète SEO/GEO, bonne pra
 **Non traité, signalé sans agir** : `SeoMeta::structured_data` (champ JSON-LD personnalisable) n'est exposé dans aucun formulaire Filament — dead code sans risque réel puisqu'aucun éditeur ne peut actuellement le renseigner ; GEO annuaire à 0 % (aucune fiche `listings` n'a de lat/lng, limitation déjà documentée, nécessiterait un projet de géocodage externe) ; `PartnerSiteResource`/`MovieResource` n'ont pas de widget d'upload fichier en admin pour `logo`/`poster` (imports legacy fonctionnent, juste pas d'UI pour un ajout manuel futur).
 
 Tests : `tests/Feature/SeoAuditFixesTest.php` (14 tests, un par bug/gap ci-dessus), `tests/Unit/ListingCleanPhoneTest.php` (11 tests, variantes réelles de données corrompues trouvées en base + non-mutation de la colonne brute). Suite complète : 247 passed (698 assertions), aucune régression.
+
+## 26. CI/CD GitHub Actions — déploiement automatique vers Infomaniak (08/09/2026, demande client)
+
+Demande client : *"J'ai un github (+ github action disponible) connecté sur ce projet. Sur le nouveau serveur de prod, on a `043e6cgnrn.preview.infomaniak.website` comme domaine temporaire avant que je bascule le DNS final toulouseweb.com vers ce nouveau serveur. On a aussi un accès ssh (non root car serveur mutualisé). Le répertoire de base du domaine est `/sites/toulouseweb.com/`. J'ai déjà créé la base de données vide."*
+
+Contraintes qui déterminent l'architecture : hébergement **mutualisé** (pas de root, pas de Docker, pas de systemd/Supervisor pour un worker permanent), accès **SSH non-root**, GitHub Actions déjà disponible sur le dépôt. Le projet était déjà conçu pour ce type d'hébergement AVANT cette demande (§14 : un seul cron, `queue:work --stop-when-empty` plutôt qu'un worker permanent, tout piloté par `Schedule::` dans `routes/console.php`) — le CI/CD n'a donc rien eu à changer côté application, seulement à automatiser le TRANSPORT du code vers le serveur.
+
+### Décisions prises avec le client (3 questions posées, réponses ci-dessous)
+
+1. **Racine du document** : le client peut régler, dans le manager Infomaniak, la racine du site sur un sous-dossier au choix → réglée sur `<DEPLOY_PATH>/public`. Conséquence directe : le code Laravel (dont `.env`, `app/`, `vendor/`...) peut vivre tel quel dans `/sites/toulouseweb.com/`, SANS bricolage (pas besoin de sortir `public/` du reste de l'arborescence ou d'un `index.php` shim à la racine — solution qui aurait été nécessaire si la racine avait été figée sur `/sites/toulouseweb.com/` lui-même).
+2. **Stratégie de déploiement** : déploiement simple "en place" (écrase les fichiers à chaque déploiement) plutôt qu'un schéma `releases/<horodatage>/` + lien symbolique `current` (zero-downtime, rollback instantané). Choix du client, cohérent avec le stade actuel (domaine de PRÉVISUALISATION, pas encore le trafic réel — la bascule DNS est un événement séparé, ultérieur). Le schéma `releases/current` reste documenté ici comme évolution possible si le déploiement en place devient gênant une fois en trafic réel : il ne demanderait qu'un changement du script rsync (cibler `releases/$(date +%s)/` au lieu de `<DEPLOY_PATH>/` directement, puis basculer un lien symbolique `current` après un déploiement réussi) — aucun changement côté application.
+3. **Branche de déploiement** : `main`. La branche de travail courante (`phase-3-4-10-scaffold-design-homepage`) devra être fusionnée dans `main` avant le premier déploiement automatique.
+
+### Pourquoi construire les assets en CI plutôt que sur le serveur
+
+`composer install`/`npm run build` tournent sur le runner GitHub (`ubuntu-latest`), PAS sur le serveur Infomaniak via SSH. Trois raisons : (a) éviter toute incertitude sur la présence/version de Node sur un hébergement mutualisé (souvent absent ou très ancien, alors que Composer/PHP y sont presque toujours disponibles) ; (b) éviter d'épuiser une éventuelle limite mémoire PHP CLI stricte du mutualisé sur un `composer install` avec résolution de dépendances ; (c) garantir que ce qui est testé par la suite de tests (qui tourne avec les MêMES `composer.lock`/dépendances) est EXACTEMENT ce qui est déployé. Conséquence : `vendor/` et `public/build/` sont transférés par `rsync` comme n'importe quel autre fichier — pas de `composer install` ni de `npm run build` exécuté côté serveur.
+
+### Exclusions rsync — ce qui ne doit JAMAIS être écrasé par un déploiement
+
+`rsync -az --delete` resynchronise l'arborescence à l'identique du dépôt, y compris en SUPPRIMANT côté serveur tout fichier absent du dépôt — nécessaire pour nettoyer les anciens fichiers d'assets Vite hashés (`public/build/assets/*.js` d'une build précédente) à chaque déploiement, mais dangereux pour tout ce qui doit persister entre deux déploiements. D'où la liste d'exclusions dans `.github/workflows/deploy.yml` :
+- `.env` — configuration serveur, créée une seule fois à la main, jamais versionnée ni régénérée par le CI.
+- `storage/app` — contient les médias uploadés (Spatie MediaLibrary : logos, photos annuaire, sliders...) ET le lien symbolique cible de `public/storage`. Un `--delete` sans cette exclusion effacerait tous les médias en production à chaque déploiement de CODE.
+- `storage/logs` — logs applicatifs, valeur purement opérationnelle, sans rapport avec le code déployé.
+- `public/storage` — le lien symbolique lui-même (créé par `artisan storage:link`, généralement idempotent mais pas destiné à être recréé par rsync à chaque fois).
+- `public/hot` — marqueur du serveur de dev Vite (`npm run dev`) ; ne doit jamais exister en production, exclu par précaution même s'il ne devrait normalement jamais être présent dans le dépôt.
+
+`storage/framework/*` (vues compilées, sessions fichiers, cache de framework) n'est volontairement **pas** exclu : ce sont des caches éphémères que Laravel régénère à la demande — les resynchroniser depuis le squelette du dépôt à chaque déploiement (`--delete` compris) est sans risque, et permet même de recréer automatiquement l'arborescence `storage/framework/{cache,sessions,views}/` au tout premier déploiement (seuls `storage/app` et `storage/logs` doivent être créés à la main une seule fois avant le premier déploiement, voir checklist README).
+
+### Robustesse : ne jamais rester bloqué en mode maintenance
+
+Le script SSH post-déploiement passe le site en maintenance (`artisan down`) le temps des migrations, puis le remet en ligne (`artisan up`) à la fin. Avec `set -e` (le script s'arrête à la première commande en échec), un `artisan migrate --force` qui échouerait aurait arrêté le script AVANT d'atteindre le `artisan up` final — laissant le site en mode maintenance indéfiniment jusqu'à une intervention manuelle, pour une panne qui aurait dû être limitée à "le déploiement n'a pas mis à jour le code/schéma". Évité par un `trap '... artisan up || true' EXIT` posé juste avant le `artisan down` : `artisan up` s'exécute donc TOUJOURS en sortie de script, succès ou échec.
+
+### Pourquoi `.env` et les identifiants de base ne transitent jamais par GitHub Actions
+
+Choix délibéré : le pipeline CI/CD ne reçoit et ne manipule QUE des secrets de connexion SSH (hôte/port/utilisateur/clé) — jamais les identifiants de base de données de production, jamais le contenu de `.env`. `.env` est créé une seule fois à la main sur le serveur (checklist README), en dehors de toute automatisation. Réduit la surface d'exposition : une fuite des secrets GitHub Actions du dépôt ne donnerait accès qu'au transport de code (déjà public via le dépôt lui-même), jamais directement à la base de données de production.
+
+### Transfert des données et médias existants — hors du périmètre du CI/CD
+
+Le CI/CD déploie du CODE, jamais de données. La base de données de production (vide, déjà créée par le client) et les médias déjà résolus lors du cutover local (§22/§23 — migration complète depuis `toulouseweb_old`, imports d'images) doivent être transférés une seule fois, manuellement, avant le premier déploiement automatique : export/import SQL (`mysqldump`/import Infomaniak) pour la base, `rsync`/`scp` séparé vers `storage/app/public/` pour les médias (checklist complète : `README.md` § CI/CD).
+
+### Ce qui reste à faire par le client, hors de portée de ce dépôt
+
+- Créer la clé SSH dédiée au déploiement et l'ajouter à `~/.ssh/authorized_keys` sur le serveur (ne jamais réutiliser une clé personnelle).
+- Renseigner les 5-6 secrets GitHub (`DEPLOY_SSH_HOST`/`PORT`/`USER`/`PRIVATE_KEY`/`DEPLOY_PATH`, `DEPLOY_PHP_BIN` si besoin).
+- Vérifier la version de PHP réellement résolue par une session SSH non-interactive (`ssh user@host 'php -v'`) — doit être ≥ 8.2, cohérente avec `composer.json` et avec la version choisie dans `setup-php` du workflow.
+- Enregistrer le cron unique côté manager Infomaniak (mécanisme propre à l'hébergeur, pas nécessairement un `crontab -e` brut).
+- Fusionner la branche de travail courante dans `main` avant le premier déploiement automatique.
+- Une fois la bascule DNS `toulouseweb.com` effectuée : mettre à jour `APP_URL` dans le `.env` de production et relancer `config:cache` (le workflow ne touche jamais `.env`, ce changement reste manuel).
