@@ -22,14 +22,37 @@ jobs:
       - name: Récupération du code
         uses: actions/checkout@v4
 
-      - name: PHP (identique à la version choisie côté serveur)
+      # 8.4 = version réellement disponible sur le serveur Infomaniak
+      # (confirmé par SSH le 08/09/2026 : /opt/php8.4/bin/php, aucune autre
+      # version installée) — composer.json exige seulement "^8.2" mais on
+      # construit avec la version EXACTE de la cible pour que vendor/ et
+      # l'autoloader optimisé soient strictement ceux qui vont s'exécuter.
+      - name: PHP (identique à la version installée côté serveur)
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.4'
           extensions: mbstring, bcmath, pdo_mysql, gd, zip, intl, exif, opcache, curl, fileinfo
           coverage: none
           tools: composer:v2
 
+      - name: Dépendances PHP (complètes, avec PHPUnit, pour la suite de tests)
+        run: composer install --no-interaction --prefer-dist
+
+      # .env minimal pour ce job seulement (jamais celui déployé — voir plus
+      # bas, exclu du rsync) : APP_KEY requis par Laravel même en test,
+      # DB_CONNECTION etc. sont de toute façon écrasés par phpunit.xml
+      # (sqlite en mémoire), qui a priorité sur .env au démarrage.
+      - name: Clé d'application (pour la suite de tests uniquement)
+        run: cp .env.example .env && php artisan key:generate
+
+      # Garde-fou : ne JAMAIS déployer un commit dont la suite de tests ne
+      # passe pas — sqlite en mémoire (phpunit.xml), aucune base externe
+      # requise. Un échec ici arrête le job avant tout rsync/déploiement.
+      - name: Suite de tests
+        run: php artisan test
+
+      # Deuxième install, cette fois sans les paquets de dev (PHPUnit etc.)
+      # — c'est CE vendor/ qui est effectivement déployé, pas celui du test.
       - name: Dépendances PHP (production, sans les paquets de dev)
         run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
