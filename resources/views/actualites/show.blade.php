@@ -1,14 +1,33 @@
 @php
+    $siteSettings = \App\Models\SiteSetting::current();
+
     // Schema.org NewsArticle (brief §13).
     $jsonLd = array_filter([
         '@context' => 'https://schema.org',
         '@type' => 'NewsArticle',
         'headline' => $news->title,
-        'description' => $news->excerpt,
+        // ⚠️ Bug réel trouvé et corrigé (08/09/2026, audit SEO final,
+        // TECHNICAL_DOCUMENTATION.md §24) : `excerpt` est un simple
+        // TextInput admin (pas un éditeur riche), mais rien n'empêche un
+        // éditeur d'y coller du HTML (constaté en direct : du "<p>...</p>"
+        // brut dans le JSON-LD) — `strip_tags()` en défense, cohérent avec
+        // `SeoResolverService::generateDescription()` qui le fait déjà pour
+        // la balise <meta name="description"> de cette même page.
+        'description' => $news->excerpt ? strip_tags($news->excerpt) : null,
         'image' => $news->image_url,
         'datePublished' => $news->published_at?->toIso8601String(),
         'dateModified' => $news->updated_at->toIso8601String(),
         'author' => $news->author ? ['@type' => 'Person', 'name' => $news->author->name] : ['@type' => 'Organization', 'name' => 'ToulouseWeb'],
+        // `publisher` manquant avant ce correctif — propriété recommandée
+        // par Google pour l'éligibilité complète aux résultats enrichis Article.
+        'publisher' => array_filter([
+            '@type' => 'Organization',
+            'name' => $siteSettings->site_name,
+            'logo' => $siteSettings->logo_url ? array_filter([
+                '@type' => 'ImageObject',
+                'url' => $siteSettings->logo_url,
+            ]) : null,
+        ]),
     ]);
 
     // Événement décrit par l'article (demande client, 03/09/2026) — schema.org

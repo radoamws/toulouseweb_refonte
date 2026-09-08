@@ -111,20 +111,49 @@ class MigrateSeo extends Command
         return $class::find($map[$legacyId]);
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (08/09/2026, audit SEO final,
+     * TECHNICAL_DOCUMENTATION.md §24) : ces 2 clés sont celles que
+     * `HomeController`/`ContactController` interrogent DIRECTEMENT
+     * (`Page::where('key', 'home'|'contact')`) — le commentaire historique
+     * de `findOrCreatePage()` supposait qu'une Page 'accueil'/clé 'home'
+     * existerait déjà (créée "par ailleurs"), en pratique par
+     * `DemoContentSeeder` (qui ne tourne jamais en production, voir son
+     * propre docblock). Sur une base fraîchement migrée (le cas réel en
+     * production), aucune de ces 2 Pages n'existe encore au moment où
+     * `migrate:seo` tourne : sans ce repli explicite, la ligne legacy
+     * "Accueil"/"Contact" recevait la clé générique `seo-menu-{slug}` —
+     * jamais lue par aucun contrôleur, donc silencieusement invisible.
+     * Confirmé en direct : la vraie home migrée ("ToulouseWeb.com |
+     * Sorties, Agenda, Restaurants & Commerces à Toulouse...") n'était
+     * jamais servie, `/` affichait le titre générique du layout à la place.
+     */
+    protected const KEY_OVERRIDES = [
+        'accueil' => 'home',
+        'contact' => 'contact',
+    ];
+
     protected function findOrCreatePage(object $row): Page
     {
         $name = LegacyCleaner::text($row->se_name) ?? "page-{$row->id}";
         $slugCandidate = LegacyCleaner::text($row->se_slug) ?? \Illuminate\Support\Str::slug($name);
         $normalizedSlug = \Illuminate\Support\Str::slug($slugCandidate);
+        $overrideKey = self::KEY_OVERRIDES[$normalizedSlug] ?? null;
 
         // Réutilise une page déjà existante (ex: 'accueil' -> la Page 'home'
         // créée par ailleurs) plutôt que de créer un doublon en collision de
-        // slug unique.
+        // slug unique — et corrige au passage sa clé si un run précédent de
+        // cette commande (avant ce correctif) l'avait créée avec l'ancienne
+        // clé générique `seo-menu-{slug}` (idempotent, auto-réparant).
         if ($existing = Page::where('slug', $normalizedSlug)->first()) {
+            if ($overrideKey && $existing->key !== $overrideKey) {
+                $existing->update(['key' => $overrideKey]);
+            }
+
             return $existing;
         }
 
-        $key = 'seo-menu-'.$normalizedSlug;
+        $key = $overrideKey ?? 'seo-menu-'.$normalizedSlug;
 
         return Page::firstOrCreate(
             ['key' => $key],

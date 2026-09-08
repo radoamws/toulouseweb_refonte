@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Area;
 use App\Models\Event;
 use App\Models\EventCategory;
+use App\Models\Page;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -60,7 +61,12 @@ class EventController extends Controller
 
         $categories = EventCategory::orderBy('order')->orderBy('name')->get();
 
-        $seo = $category?->resolveSeo() ?? [];
+        // Fiche "menu" migrée (t_seo_entity) en repli quand aucune catégorie
+        // n'est sélectionnée (bug réel trouvé le 08/09/2026, audit SEO final,
+        // TECHNICAL_DOCUMENTATION.md §24 : /agenda servait le titre/description
+        // générique du layout au lieu de ce contenu migré et réellement écrit
+        // — même correctif que ListingController::index()).
+        $seo = $category ? $category->resolveSeo() : (Page::where('key', 'seo-menu-agenda')->first()?->resolveSeo() ?? []);
 
         $view = $request->string('view')->value() === 'calendar' ? 'calendar' : 'list';
         $calendarMonth = null;

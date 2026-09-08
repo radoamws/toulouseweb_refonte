@@ -23,6 +23,16 @@ class SecurityHeaders
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'geolocation=(), camera=(), microphone=()');
 
+        // Défense en profondeur pour /admin (08/09/2026, audit SEO final,
+        // TECHNICAL_DOCUMENTATION.md §24) : robots.txt bloque déjà /admin,
+        // mais un `Disallow` n'empêche pas Google d'indexer une URL nue (sans
+        // contenu) si un lien externe y pointe un jour — un en-tête
+        // `X-Robots-Tag: noindex` l'empêche réellement, contrairement au
+        // simple blocage d'exploration.
+        if ($request->is('admin', 'admin/*')) {
+            $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
+        }
+
         // HSTS uniquement en production : un en-tête envoyé par erreur en
         // dev/staging HTTP est inoffensif (ignoré par les navigateurs sur
         // une réponse non-HTTPS) mais autant rester explicite — voir

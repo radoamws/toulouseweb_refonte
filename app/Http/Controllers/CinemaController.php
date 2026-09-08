@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Cinema;
 use App\Models\Movie;
+use App\Models\Page;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -30,7 +31,10 @@ class CinemaController extends Controller
         return view('cinema.index', [
             'movies' => $movies,
             'cinemas' => $cinemas,
-            'seo' => [],
+            // Fiche "menu" migrée (bug réel corrigé le 08/09/2026, voir
+            // docblock équivalent sur EventController::renderIndex()) —
+            // '/cinema' n'avait ici aucun repli du tout (toujours []).
+            'seo' => Page::where('key', 'seo-menu-cinema')->first()?->resolveSeo() ?? [],
         ]);
     }
 

@@ -76,7 +76,8 @@
                                 :image="$listing->getFirstMediaUrl('logo')"
                                 :eyebrow="$listing->categories->first()?->name"
                                 :title="$listing->title"
-                                :meta="collect([$listing->city, $listing->phone])->filter()->implode(' · ')"
+                                {{-- clean_phone, pas phone (bug réel corrigé le 08/09/2026, audit SEO final) — voir Listing::cleanPhone(). --}}
+                                :meta="collect([$listing->city, $listing->clean_phone])->filter()->implode(' · ')"
                                 :track="'listing:'.$listing->id.':annuaire_listing'"
                             >
                                 @if ($listing->isPaid())

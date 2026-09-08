@@ -7,6 +7,7 @@ use App\Contracts\HasGoogleIndexingUrl;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\Trackable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -42,6 +43,42 @@ class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoog
     public function getSlugOptions(): SlugOptions
     {
         return SlugOptions::create()->generateSlugsFrom('title')->saveSlugsTo('slug');
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (08/09/2026, audit SEO final,
+     * TECHNICAL_DOCUMENTATION.md §24) : `t_article` (legacy) ne distinguait
+     * pas toujours proprement téléphone/email/horaires dans un seul champ
+     * texte libre — confirmé en base : 163/2978 fiches (5,5 %) ont un
+     * `phone` du type `"Tel: 06 07 50 52 98<br>Mail: info@..."`, rendu tel
+     * quel dans le lien `tel:`, le texte visible ET le JSON-LD
+     * `LocalBusiness.telephone` (fait échouer la validation Google pour ces
+     * fiches). `phone` reste INCHANGÉ en base (l'admin doit pouvoir voir/
+     * corriger la vraie valeur legacy) — cet accesseur calcule une version
+     * nettoyée pour tout affichage public, sans jamais modifier la colonne.
+     *
+     * Best-effort, pas une garantie à 100% sur des données aussi
+     * hétérogènes : coupe à la première balise `<br>` ou au premier
+     * marqueur "email/mail/courriel" rencontré (le plus souvent LA source
+     * du mélange), puis retire tout préfixe non numérique en tête (labels
+     * du type "Tel:"/"Journée:"/"Tél. :"). Retourne `null` plutôt qu'une
+     * valeur fausse quand rien d'exploitable ne subsiste (ex. un champ qui
+     * ne contenait qu'un email, jamais un numéro).
+     */
+    protected function cleanPhone(): Attribute
+    {
+        return Attribute::get(function () {
+            if (! $this->phone) {
+                return null;
+            }
+
+            $value = preg_split('/<br\s*\/?>/i', $this->phone)[0];
+            $value = preg_split('/\b(e-?mail|courriel|mail)\s*:?/i', $value)[0];
+            $value = preg_replace('/^[^\d+]*/u', '', trim($value));
+            $value = trim($value, " \t\n\r\0\x0B-:");
+
+            return $value !== '' ? $value : null;
+        });
     }
 
     public function registerMediaCollections(): void

@@ -7,7 +7,10 @@
         'name' => $listing->title,
         'image' => $listing->getFirstMediaUrl('logo') ?: null,
         'description' => $listing->short_description,
-        'telephone' => $listing->phone,
+        // `clean_phone`, pas `phone` : voir docblock de Listing::cleanPhone()
+        // (bug réel corrigé le 08/09/2026, audit SEO final) — 5,5% des
+        // fiches ont un `phone` legacy mélangeant téléphone/email/HTML brut.
+        'telephone' => $listing->clean_phone,
         'email' => $listing->email,
         'url' => $listing->website,
         'address' => array_filter([
@@ -183,10 +186,14 @@
                             <dd class="text-ink-800">{{ $listing->address }}@if($listing->city), {{ $listing->city }}@endif</dd>
                         </div>
                     @endif
-                    @if ($listing->phone)
+                    {{-- `clean_phone`, pas `phone` : voir docblock de Listing::cleanPhone()
+                    (bug réel corrigé le 08/09/2026, audit SEO final) — le `phone` legacy brut
+                    mélangeait parfois téléphone/email/HTML ("Tel: ...<br>Mail: ..."), rendu
+                    tel quel affichait littéralement "<br>" sur la page et cassait le lien tel:. --}}
+                    @if ($listing->clean_phone)
                         <div>
                             <dt class="font-medium text-ink-500">Téléphone</dt>
-                            <dd><a href="tel:{{ $listing->phone }}" class="text-brand-700 hover:underline" data-track="listing:{{ $listing->id }}:phone_click">{{ $listing->phone }}</a></dd>
+                            <dd><a href="tel:{{ $listing->clean_phone }}" class="text-brand-700 hover:underline" data-track="listing:{{ $listing->id }}:phone_click">{{ $listing->clean_phone }}</a></dd>
                         </div>
                     @endif
                     @if ($listing->isPaid())

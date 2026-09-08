@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Classified;
 use App\Models\ClassifiedCategory;
+use App\Models\Page;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -56,7 +57,9 @@ class ClassifiedController extends Controller
             'classifieds' => $classifieds,
             'categories' => $categories,
             'category' => $category,
-            'seo' => $category?->resolveSeo() ?? [],
+            // Fiche "menu" migrée en repli (bug réel corrigé le 08/09/2026,
+            // voir docblock équivalent sur EventController::renderIndex()).
+            'seo' => $category ? $category->resolveSeo() : (Page::where('key', 'seo-menu-annonces')->first()?->resolveSeo() ?? []),
         ]);
     }
 

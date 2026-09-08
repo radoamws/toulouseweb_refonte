@@ -9,7 +9,17 @@
         'description' => $siteSettings->description ?: "Actualités, agenda, cinéma, annuaire, annonces et sorties à Toulouse et dans sa région.",
         'canonical_url' => url()->current(),
         'robots' => 'index,follow',
-        'og_image' => $siteSettings->default_og_image_url ?: asset('images/og-default.jpg'),
+        // ⚠️ Bug réel trouvé et corrigé (08/09/2026, audit SEO final,
+        // TECHNICAL_DOCUMENTATION.md §24) : ce repli pointait vers
+        // `public/images/og-default.jpg`, un fichier qui n'a jamais existé
+        // (404 confirmé en direct) — chaque page sans image dédiée
+        // (dont la home) partageait donc un aperçu de lien cassé sur les
+        // réseaux sociaux. Repli sur l'icône de marque déjà présente en
+        // dépôt (voir favicon plus haut) : un vrai visuel, pas un 404 — mais
+        // 180×180 (favicon) est loin du format bannière 1200×630 attendu
+        // pour un partage social optimal. Reste à fournir par le client : un
+        // vrai visuel OG dédié (bannière, pas un simple logo/favicon).
+        'og_image' => $siteSettings->default_og_image_url ?: asset('branding/toulouseweb-icon.png'),
     ], array_filter($seo));
 @endphp
 <!DOCTYPE html>
@@ -43,6 +53,12 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ $seo['title'] }}">
     <meta name="twitter:description" content="{{ $seo['description'] }}">
+    {{-- Manquant avant ce correctif (08/09/2026, audit SEO final) : carte
+    "summary_large_image" déclarée sans image dédiée — X/Twitter retombe en
+    général sur og:image, mais ce n'est pas garanti. --}}
+    @if ($seo['og_image'])
+        <meta name="twitter:image" content="{{ $seo['og_image'] }}">
+    @endif
 
     {{-- Organisation Schema.org — administrable via le module "Paramètres du site" (Filament\Pages\SiteSettings, brief §13).
          La clé JSON-LD doit être échappée en "@@context" (bug préexistant découvert en vérifiant le rendu réel :
@@ -59,6 +75,28 @@
         'telephone' => $siteSettings->phone,
         'sameAs' => $siteSettings->socialLinks() ?: null,
     ])) !!}
+    </script>
+
+    {{-- WebSite + SearchAction (08/09/2026, audit SEO final) — manquant avant
+    ce correctif, condition pour l'éligibilité à la "sitelinks search box"
+    dans les résultats Google. Aucune recherche unifiée sur tout le site
+    n'existe (chaque section a son propre `?q=`) : l'annuaire est pris comme
+    cible représentative (plus gros volume de contenu, ~3000 fiches). --}}
+    <script type="application/ld+json">
+    {!! json_encode([
+        '@@context' => 'https://schema.org',
+        '@type' => 'WebSite',
+        'name' => $siteSettings->site_name,
+        'url' => url('/'),
+        'potentialAction' => [
+            '@type' => 'SearchAction',
+            'target' => [
+                '@type' => 'EntryPoint',
+                'urlTemplate' => url('/annuaire').'?q={search_term_string}',
+            ],
+            'query-input' => 'required name=search_term_string',
+        ],
+    ]) !!}
     </script>
 
     {{-- SEO/Analytics globaux (Filament\Pages\SiteSettings) — chargés seulement si renseignés. --}}

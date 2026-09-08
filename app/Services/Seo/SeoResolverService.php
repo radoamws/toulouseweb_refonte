@@ -24,9 +24,17 @@ class SeoResolverService
         $title = $seo?->title ?: $this->generateTitle($model);
         $description = $seo?->description ?: $this->generateDescription($model);
 
+        // ⚠️ Bug réel trouvé et corrigé (08/09/2026, audit SEO final,
+        // TECHNICAL_DOCUMENTATION.md §24) : troncature SANS `preserveWords`
+        // ET sans marqueur de coupure (`$end` forcé à '') — coupait en plein
+        // milieu d'un mot, sans aucune indication visuelle qu'il manque du
+        // texte (constaté en direct sur la home : "...Commerces à" au lieu
+        // de "...Commerces à Toulouse", "...la Vill" au lieu de "...la
+        // Ville"). `preserveWords: true` recule la coupure au dernier mot
+        // entier, `'…'` signale clairement une troncature.
         return [
-            'title' => Str::limit($title, 60, ''),
-            'description' => Str::limit($description ?? '', 160, ''),
+            'title' => Str::limit($title, 60, '…', preserveWords: true),
+            'description' => Str::limit($description ?? '', 160, '…', preserveWords: true),
             'canonical_url' => $seo?->canonical_url ?: $this->generateCanonical($model),
             'robots' => $seo?->robots ?: 'index,follow',
             'og_image' => $seo?->og_image ?: $this->generateImage($model),

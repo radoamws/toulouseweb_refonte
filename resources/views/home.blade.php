@@ -1,4 +1,13 @@
 <x-layouts.app :seo="$seo">
+    {{-- Bug réel trouvé et corrigé (08/09/2026, audit SEO final,
+    TECHNICAL_DOCUMENTATION.md §24) : la home n'avait AUCUN <h1> (confirmé en
+    direct, 0 occurrence) — chaque section utilise un <h2> (x-ui.section-heading),
+    le slide du hero un simple <p>. `sr-only` (même pattern déjà utilisé pour
+    le lien d'évitement plus bas dans le layout) : signal SEO/accessibilité
+    sans dicter de choix visuel qui n'est pas prévu ici (le logo du header
+    porte déjà la marque visuellement). --}}
+    <h1 class="sr-only">{{ \App\Models\SiteSetting::current()->site_name }} — Toulouse et sa région</h1>
+
     <x-site.hero-slider :slides="$slides" />
 
     <div class="mx-auto max-w-7xl space-y-16 px-4 py-12 sm:px-6 lg:px-8 lg:py-16">

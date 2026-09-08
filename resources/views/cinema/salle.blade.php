@@ -6,12 +6,19 @@
     // resources/views/cinema/movie.blade.php et TECHNICAL_DOCUMENTATION.md.
     $weekdays = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
+    // ⚠️ Bug réel trouvé et corrigé (08/09/2026, audit SEO final,
+    // TECHNICAL_DOCUMENTATION.md §24) : `external_url` n'est pas une URL
+    // exploitable pour la quasi-totalité des salles (26/28 en base réelle) —
+    // un fragment de requête AlloCiné legacy brut du type
+    // "salle_gen_csalle=P0071.html", pas une URI absolue. Fait échouer la
+    // validation Rich Results de Google (`url` doit être une URI absolue).
+    // Utilise la page canonique de la salle elle-même, toujours valide.
     $jsonLd = array_filter([
         '@context' => 'https://schema.org',
         '@type' => 'MovieTheater',
         'name' => $cinema->name,
         'address' => $cinema->address,
-        'url' => $cinema->external_url,
+        'url' => route('cinema.salle', $cinema->slug),
         'geo' => $cinema->lat && $cinema->lng ? [
             '@type' => 'GeoCoordinates',
             'latitude' => $cinema->lat,

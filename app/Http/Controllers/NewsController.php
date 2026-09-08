@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\News;
 use App\Models\NewsCategory;
+use App\Models\Page;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -49,7 +50,20 @@ class NewsController extends Controller
             'news' => $news,
             'categories' => $categories,
             'category' => $category,
-            'seo' => $category?->resolveSeo() ?? [],
+            // Fiche "menu" migrée en repli (bug réel corrigé le 08/09/2026,
+            // voir docblock équivalent sur EventController::renderIndex()) —
+            // contrairement à agenda/annonces/cinema, aucun `t_seo_entity`
+            // legacy "actualités" n'a jamais existé (vérifié) : repli final
+            // sur un titre/description écrits ici, pour ne jamais laisser
+            // /actualites sur le générique du layout. Un admin peut à tout
+            // moment créer une Page `seo-menu-actualites` (PageResource) pour
+            // reprendre la main sans toucher au code.
+            'seo' => $category
+                ? $category->resolveSeo()
+                : (Page::where('key', 'seo-menu-actualites')->first()?->resolveSeo() ?? [
+                    'title' => 'Actualités de Toulouse et sa région | ToulouseWeb',
+                    'description' => "Toute l'actualité locale de Toulouse et sa région : événements, vie associative, culture, bons plans et informations pratiques.",
+                ]),
         ]);
     }
 
