@@ -45,17 +45,6 @@ jobs:
       - name: Clé d'application (pour la suite de tests uniquement)
         run: cp .env.example .env && php artisan key:generate
 
-      # Garde-fou : ne JAMAIS déployer un commit dont la suite de tests ne
-      # passe pas — sqlite en mémoire (phpunit.xml), aucune base externe
-      # requise. Un échec ici arrête le job avant tout rsync/déploiement.
-      - name: Suite de tests
-        run: php artisan test
-
-      # Deuxième install, cette fois sans les paquets de dev (PHPUnit etc.)
-      # — c'est CE vendor/ qui est effectivement déployé, pas celui du test.
-      - name: Dépendances PHP (production, sans les paquets de dev)
-        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
-
       - name: Node.js
         uses: actions/setup-node@v4
         with:
@@ -67,6 +56,25 @@ jobs:
 
       - name: Build des assets (Vite)
         run: npm run build
+
+      # ⚠️ Bug réel trouvé et corrigé (09/09/2026) : la suite de tests DOIT
+      # tourner APRÈS le build Vite, pas avant — le layout appelle @vite(...)
+      # dans les vues, qui lève ViteManifestNotFoundException dès que public/
+      # build/manifest.json n'existe pas encore (premier run du workflow :
+      # "Vite manifest not found", 500 sur toute page rendue). L'ordre initial
+      # (tests avant npm run build) faisait donc échouer TOUTE la suite, pas
+      # seulement les tests qui rendent une vue.
+      #
+      # Garde-fou : ne JAMAIS déployer un commit dont la suite de tests ne
+      # passe pas — sqlite en mémoire (phpunit.xml), aucune base externe
+      # requise. Un échec ici arrête le job avant tout rsync/déploiement.
+      - name: Suite de tests
+        run: php artisan test
+
+      # Deuxième install, cette fois sans les paquets de dev (PHPUnit etc.)
+      # — c'est CE vendor/ qui est effectivement déployé, pas celui du test.
+      - name: Dépendances PHP (production, sans les paquets de dev)
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
       - name: Clé SSH (agent)
         uses: webfactory/ssh-agent@v0.9.0
