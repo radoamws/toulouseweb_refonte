@@ -1141,6 +1141,47 @@ Le CI/CD déploie du CODE, jamais de données. La base de données de production
 - Créer la clé SSH dédiée au déploiement et l'ajouter à `~/.ssh/authorized_keys` sur le serveur (ne jamais réutiliser une clé personnelle).
 - Renseigner les 5-6 secrets GitHub (`DEPLOY_SSH_HOST`/`PORT`/`USER`/`PRIVATE_KEY`/`DEPLOY_PATH`, `DEPLOY_PHP_BIN` si besoin).
 - Vérifier la version de PHP réellement résolue par une session SSH non-interactive (`ssh user@host 'php -v'`) — doit être ≥ 8.2, cohérente avec `composer.json` et avec la version choisie dans `setup-php` du workflow.
-- Enregistrer le cron unique côté manager Infomaniak (mécanisme propre à l'hébergeur, pas nécessairement un `crontab -e` brut).
+- Enregistrer la tâche planifiée côté manager Infomaniak — en pratique un **WebCron** (URL), pas un crontab serveur (confirmé impossible sur ce compte, voir §27).
 - Fusionner la branche de travail courante dans `main` avant le premier déploiement automatique.
 - Une fois la bascule DNS `toulouseweb.com` effectuée : mettre à jour `APP_URL` dans le `.env` de production et relancer `config:cache` (le workflow ne touche jamais `.env`, ce changement reste manuel).
+
+## 27. Tâche planifiée en production — WebCron Infomaniak, pas de crontab serveur (09/09/2026, demande client)
+
+Après le premier déploiement CI/CD réel (§26), le client a tenté d'enregistrer le cron unique documenté (`* * * * * php artisan schedule:run`) et a trouvé, dans le manager Infomaniak, un "Planificateur de tâches" qui ne propose de configurer qu'une **URL à exécuter** (capture d'écran fournie) — confirmé par ailleurs en SSH : `crontab -l` retourne *"You (uid394217) are not allowed to use this program"* pour ce compte. Aucun crontab serveur brut n'est possible sur ce plan mutualisé — seul un WebCron (appel HTTP périodique) l'est.
+
+### Pourquoi ça casse le mécanisme existant
+
+`routes/console.php` s'appuie entièrement sur `Schedule::` (`Illuminate\Console\Scheduling`), qui suppose que `php artisan schedule:run` est invoqué **au moins chaque minute** : à CHAQUE invocation, le scheduler compare l'heure courante à l'expression cron de chaque tâche (`dailyAt('05:00')` = `0 5 * * *`, `weekly()` = `0 0 * * 0`...) et ne lance la tâche que si ça matche **exactement**, à la minute près. Avec un WebCron qui n'appelle une URL qu'une fois par jour à une heure fixe (ex. 8h) :
+- Une tâche `dailyAt('05:00')`/`dailyAt('05:30')`/`dailyAt('04:30')` ne matcherait **jamais** (l'invocation n'a jamais lieu à ces heures précises).
+- `Schedule::command('sitemap:generate')->daily()` (minuit) ne matcherait jamais non plus pour la même raison.
+- `Schedule::command('redirects:audit')->weekly()` (dimanche minuit) : jamais.
+- Seul `queue:work --stop-when-empty` (`everyMinute()`) aurait une chance de tourner, mais seulement une fois par jour au lieu de chaque minute — latence de traitement de la file (régénération de sitemap après CRUD, §14) qui passerait de la minute à 24h.
+
+Bref : brancher le WebCron directement sur `php artisan schedule:run` aurait pour effet que **rien de ce qui dépend d'un horaire précis ne se déclencherait jamais**, silencieusement (aucune erreur visible — juste des tâches qui ne tournent pas).
+
+### Solution retenue : contourner `Schedule::` en production, pas l'adapter
+
+Plutôt que de réécrire tous les horaires en `dailyAt('08:00')` (ce qui resterait fragile : un WebCron n'a généralement pas de garantie de précision à la minute près, et un imprévu de propagation/lag côté hébergeur suffirait à faire à nouveau tout rater), la nouvelle commande `App\Console\Commands\RunWebCron` (`php artisan webcron:run`) appelle directement, en séquence, les commandes qui doivent tourner au moins une fois par jour — sans passer par `Schedule::` ni dépendre du timing exact de l'invocation :
+
+```
+queue:work --stop-when-empty
+sitemap:generate
+scrape:cinema
+scrape:events
+content:mark-expired
+redirects:audit   (seulement si now()->isSunday())
+```
+
+`routes/console.php` (`Schedule::`) reste inchangé et n'est pas mort : utile en local (`php artisan schedule:work`), et repris tel quel si l'hébergement change un jour pour un vrai crontab serveur — les deux mécanismes ne se recoupent pas en production puisque rien n'y invoque `schedule:run`.
+
+Toutes les commandes appelées par `webcron:run` sont déjà idempotentes/sûres à rejouer plusieurs fois par jour (scrapers en upsert, `sitemap:generate` régénère un fichier, `queue:work --stop-when-empty` s'arrête proprement s'il n'y a rien à traiter) — donc si le client configure le WebCron plus souvent qu'une fois par jour (ex. toutes les 15 minutes, si l'interface Infomaniak le permet à l'étape suivante du formulaire), rien ne casse, et la latence de traitement de la file d'attente/des indexations s'améliore d'autant. Le filtrage `redirects:audit` par `now()->isSunday()` reste correct dans ce cas (la sous-commande est simplement rappelée plusieurs fois le même dimanche, sans effet indésirable — elle ne fait qu'afficher un tableau, aucune écriture en base).
+
+### Exposition HTTP : `App\Http\Controllers\WebCronController`
+
+Le WebCron Infomaniak n'appelle qu'une URL — `webcron:run` est donc exposée via `GET /webcron/{token}`. Protection : un jeton long et aléatoire (`WEBCRON_SECRET`, généré par le client, jamais celui d'exemple du `.env.example`) comparé en temps constant (`hash_equals`) pour ne pas laisser fuiter d'information par le temps de réponse ; un jeton invalide répond 404 (pas 403), pour ne rien révéler de l'existence de la route à un client qui devinerait au hasard. La route est aussi listée dans `robots.txt` (`Disallow: /webcron`) par précaution supplémentaire, bien qu'un jeton aléatoire de 40 caractères rende un accès par force brute non réaliste.
+
+### Ce que le client doit configurer dans le manager Infomaniak
+
+Un seul WebCron, "URL à exécuter" = domaine du site + `/webcron/<WEBCRON_SECRET>`, fréquence une fois par jour à 08:00 (heure française) — voir `README.md` § "Tâche planifiée (WebCron Infomaniak)" pour la procédure pas à pas correspondant exactement au formulaire du manager (capture d'écran fournie par le client : "Planifier une tâche" → Configuration → URL à exécuter → étape fréquence).
+
+Tests : `tests/Feature/WebCronTest.php` (jeton correct/incorrect, `robots.txt`, filtrage `redirects:audit` par jour de la semaine via `travelTo()`).

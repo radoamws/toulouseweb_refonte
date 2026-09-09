@@ -181,13 +181,30 @@ php artisan event:cache
 php artisan sitemap:generate
 ```
 
-Crontab (une seule ligne, le scheduler Laravel gère toutes les tâches planifiées — voir `routes/console.php`) :
+**Si le serveur permet un vrai crontab** (une seule ligne, le scheduler Laravel gère toutes les tâches planifiées — voir `routes/console.php`) :
 
 ```
 * * * * * cd /chemin/vers/toulouseweb_refonte && php artisan schedule:run >> /dev/null 2>&1
 ```
 
 Le worker de file d'attente (`queue:work --stop-when-empty`) tourne DANS ce même cron, minute par minute — pas de processus permanent à superviser (choix adapté à un hébergement mutualisé, voir `routes/console.php`).
+
+**Si le serveur n'offre qu'un WebCron (cas d'Infomaniak mutualisé — pas de crontab possible)** : voir section suivante.
+
+### Tâche planifiée (WebCron Infomaniak — pas de crontab serveur possible)
+
+Confirmé en pratique sur le serveur Infomaniak de ce projet : `crontab -l` est refusé pour le compte SSH (mutualisé, non-root). Le "Planificateur de tâches" (Hébergement → *nom du site* → Web → Planificateur de tâches → Planifier une tâche) n'appelle qu'une **URL** à une fréquence choisie — jamais une commande shell. Détail/justification complète : `TECHNICAL_DOCUMENTATION.md` §27.
+
+Solution retenue : `App\Console\Commands\RunWebCron` (`php artisan webcron:run`) exécute directement, en une fois, tout ce qui doit tourner au moins une fois par jour (traitement de la file, scrapers agenda/cinéma, sitemap, contenus expirés — plus `redirects:audit`, mais seulement le dimanche), sans dépendre d'un timing précis d'invocation — contrairement à `Schedule::` (routes/console.php), qui suppose `schedule:run` invoqué au moins chaque minute pour matcher des horaires exacts (`dailyAt('05:00')`, `weekly()`...). Exposée via une route protégée par jeton secret : `App\Http\Controllers\WebCronController`.
+
+**Configuration dans le manager Infomaniak** ("Planificateur de tâches" → "Planifier une tâche") :
+1. **Nom de la tâche** : libre, ex. `Scheduler ToulouseWeb`.
+2. **Activer la tâche** : oui.
+3. **URL à exécuter** : `https://` + le domaine du site (`0043e6cgnrn.preview.infomaniak.website` avant bascule DNS, puis `toulouseweb.com`) + le chemin `/webcron/<WEBCRON_SECRET>` (valeur exacte du `.env` de production, jamais celle d'exemple).
+4. **Cette URL est protégée par un mot de passe** : décoché — la protection est déjà le jeton dans l'URL, pas d'authentification HTTP superposée.
+5. Étape suivante (fréquence) : **une fois par jour à 08:00** (heure française) — ou plus fréquent si l'interface le propose (ex. toutes les 15 min : sans risque, toutes les commandes appelées sont sûres à rejouer plusieurs fois par jour, et le traitement de la file d'attente/les indexations Cloudflare/Google gagneraient en réactivité).
+
+`WEBCRON_SECRET` : générer une vraie valeur en production avec `php artisan tinker --execute="echo Str::random(40);"`, jamais la valeur d'exemple du `.env.example`.
 
 ### Checklist avant bascule DNS / mise en ligne définitive
 
@@ -252,10 +269,7 @@ ssh-keygen -t ed25519 -C "deploy-toulouseweb" -f deploy_key -N ""
   ```
 - [ ] Données de production transférées une fois vers la base vide déjà créée (le CI/CD ne déploie que du CODE, jamais de données) : export de la base locale déjà migrée/vérifiée (`mysqldump toulouseweb > dump.sql`) puis import dans la base Infomaniak (`mysql` en SSH, ou l'outil d'import du manager Infomaniak).
 - [ ] Médias déjà résolus (`storage/app/public/...`, voir §22/§23) transférés une fois par `rsync`/`scp` séparé vers `<DEPLOY_PATH>/storage/app/public/` sur le serveur (le rsync du CI exclut délibérément `storage/app`, voir ci-dessus).
-- [ ] Cron unique enregistré côté Infomaniak (souvent via l'interface du manager plutôt qu'un `crontab -e` brut sur ce type d'hébergement — vérifier) :
-  ```
-  * * * * * cd <DEPLOY_PATH> && php artisan schedule:run >> /dev/null 2>&1
-  ```
+- [ ] `WEBCRON_SECRET` renseigné dans le `.env` de production (`php artisan tinker --execute="echo Str::random(40);"` pour en générer un) — voir section "Tâche planifiée (WebCron Infomaniak)" ci-dessous pour l'enregistrer côté manager.
 - [ ] Premier push sur `main` (ou déclenchement manuel) : suivre l'exécution dans l'onglet "Actions" du dépôt.
 
 **Rollback** : `git revert <commit>` + push sur `main` (redéploie automatiquement l'état précédent), ou ré-exécuter manuellement le workflow sur un commit/tag antérieur (bouton "Run workflow", champ "Use workflow from"). Les migrations de ce projet sont additives — un rollback de code reste presque toujours compatible avec le schéma déjà en place, voir `TECHNICAL_DOCUMENTATION.md` §14.

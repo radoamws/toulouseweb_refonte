@@ -10,6 +10,7 @@ use App\Http\Controllers\ListingController;
 use App\Http\Controllers\LlmsTxtController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\RedirectFallbackController;
+use App\Http\Controllers\WebCronController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class.'@index')->name('home');
@@ -64,6 +65,14 @@ Route::get('/annonces/{slug}', [ClassifiedController::class, 'bySlug'])->name('a
 // Contact (brief §11).
 Route::get('/contact', [ContactController::class, 'show'])->name('contact.show');
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact.store');
+
+// Déclencheur WebCron (hébergement mutualisé Infomaniak, pas de crontab
+// serveur — voir App\Console\Commands\RunWebCron et
+// TECHNICAL_DOCUMENTATION.md §27). Le jeton dans l'URL est la seule
+// protection ; throttle en plus par précaution.
+Route::get('/webcron/{token}', WebCronController::class)
+    ->middleware('throttle:10,1')
+    ->name('webcron.run');
 
 // Redirections 301 administrables (brief §15) — dernier recours, seulement
 // consulté quand aucune route ci-dessus ne correspond.

@@ -8,9 +8,17 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Planification (cron unique côté serveur : `* * * * * php artisan schedule:run`,
-// voir TECHNICAL_DOCUMENTATION.md §11). Traite la file d'attente sur un
-// hébergement mutualisé sans worker permanent (brief §7 décision d'architecture).
+// Planification — utile en LOCAL (`php artisan schedule:work`) et reprise
+// telle quelle si l'hébergement change un jour pour un vrai cron serveur
+// (`* * * * * php artisan schedule:run`, voir TECHNICAL_DOCUMENTATION.md
+// §11). En PRODUCTION actuelle (Infomaniak mutualisé, pas de crontab
+// serveur possible — confirmé), rien n'invoque `schedule:run` : c'est
+// `App\Console\Commands\RunWebCron` (`webcron:run`), déclenché par le
+// WebCron Infomaniak via App\Http\Controllers\WebCronController, qui
+// exécute directement les mêmes commandes sans dépendre de ce mécanisme de
+// planification par horaire — voir TECHNICAL_DOCUMENTATION.md §27. Traite
+// la file d'attente sur un hébergement mutualisé sans worker permanent
+// (brief §7 décision d'architecture).
 Schedule::command('queue:work --stop-when-empty')->everyMinute()->withoutOverlapping();
 Schedule::command('sitemap:generate')->daily();
 

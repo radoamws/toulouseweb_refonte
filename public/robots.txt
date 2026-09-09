@@ -1,5 +1,6 @@
 User-agent: *
 Disallow: /admin
 Disallow: /track-click
+Disallow: /webcron
 
 Sitemap: https://toulouseweb.com/sitemap.xml

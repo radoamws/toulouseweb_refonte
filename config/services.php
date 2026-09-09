@@ -62,4 +62,15 @@ return [
         'daily_quota' => (int) env('GOOGLE_INDEXING_DAILY_QUOTA', 200),
     ],
 
+    /*
+     * Déclenchement HTTP du "scheduler" (WebCron Infomaniak — l'hébergement
+     * mutualisé ne permet pas de crontab serveur, voir
+     * App\Console\Commands\RunWebCron et TECHNICAL_DOCUMENTATION.md §27).
+     * Jeton long et aléatoire, seule protection de la route
+     * `/webcron/{token}` — jamais deviné, jamais réutilisé ailleurs.
+     */
+    'webcron' => [
+        'secret' => env('WEBCRON_SECRET'),
+    ],
+
 ];

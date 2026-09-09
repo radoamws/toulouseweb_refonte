@@ -39,5 +39,8 @@
         même si une future config locale renseignait ces clés par erreur. -->
         <env name="CLOUDFLARE_CACHE_PURGE_ENABLED" value="false"/>
         <env name="GOOGLE_INDEXING_ENABLED" value="false"/>
+        <!-- Valeur fixe connue des tests uniquement (voir WebCronTest) — pas un
+        vrai secret, jamais utilisée hors de cet environnement de test. -->
+        <env name="WEBCRON_SECRET" value="test-webcron-secret-value"/>
     </php>
 </phpunit>
