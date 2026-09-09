@@ -42,5 +42,9 @@
         <!-- Valeur fixe connue des tests uniquement (voir WebCronTest) — pas un
         vrai secret, jamais utilisée hors de cet environnement de test. -->
         <env name="WEBCRON_SECRET" value="test-webcron-secret-value"/>
+        <!-- Adresse fictive pour tester l'envoi des notifications admin
+        (Mail::fake() dans les tests concernés — aucun email réel n'est
+        jamais envoyé pendant la suite de tests). -->
+        <env name="ADMIN_NOTIFICATION_EMAILS" value="admin-test@example.com"/>
     </php>
 </phpunit>

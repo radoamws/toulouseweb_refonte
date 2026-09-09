@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\Listing;
 use App\Models\Page;
+use App\Support\AdminNotifier;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -107,24 +108,36 @@ class ListingController extends Controller
     }
 
     /**
-     * Dépôt public d'une fiche annuaire (brief §5). Workflow de modération
-     * STRICT et non contournable, sur le même modèle que
-     * ClassifiedController::store() : `tier`/`status` sont TOUJOURS forcés
-     * ici, jamais de valeur envoyée par le visiteur — seul l'admin
-     * (ListingResource) fait passer une fiche en payante et/ou publiée.
+     * Dépôt public d'une fiche annuaire (brief §5). Choix gratuit/payant
+     * laissé au visiteur (demande client, 09/09/2026 — inspiré du
+     * formulaire legacy `/referencer-site`, voir TECHNICAL_DOCUMENTATION.md
+     * §28 : gratuite = fiche simplifiée, payante = fiche complète). Mais
+     * `status` reste TOUJOURS forcé à `pending` ici, quel que soit le tier
+     * choisi — jamais de publication automatique, même pour une demande
+     * payante (le legacy publiait par erreur immédiatement, bug documenté
+     * et volontairement NON reproduit ici) : seul l'admin (ListingResource)
+     * fait passer une fiche à `published`.
      */
     public function store(Request $request): \Illuminate\Http\RedirectResponse
     {
         $validated = $request->validate([
             'category_id' => ['required', 'exists:categories,id'],
+            'tier' => ['required', 'in:free,paid'],
             'title' => ['required', 'string', 'max:255'],
-            'short_description' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
             'postal_code' => ['nullable', 'string', 'max:10'],
             'phone' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
+            // Champs de la fiche "complète" (tier payant uniquement côté
+            // vue, voir annuaire/create.blade.php) — toujours validés ici
+            // même si non affichés pour une demande gratuite : un visiteur
+            // qui les enverrait quand même (tier=free) n'a pas de raison
+            // d'être bloqué, ils seront simplement enregistrés.
+            'short_description' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
             'website' => ['nullable', 'url', 'max:255'],
+            'reservation_url' => ['nullable', 'url', 'max:255'],
             // Honeypot anti-spam (brief §18) : champ invisible, un vrai
             // visiteur ne le remplit jamais. Nommé différemment de
             // ClassifiedController/ContactController pour ne pas entrer en
@@ -134,10 +147,24 @@ class ListingController extends Controller
 
         $listing = Listing::create([
             ...collect($validated)->except(['category_id', 'url_verification'])->all(),
-            'tier' => 'free', // jamais autre chose ici — voir docblock de la méthode
-            'status' => 'pending',
+            'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
         ]);
         $listing->categories()->attach($validated['category_id']);
+
+        // Notification admin (demande client, voir App\Support\AdminNotifier
+        // et TECHNICAL_DOCUMENTATION.md §28).
+        AdminNotifier::send(
+            'Nouvelle fiche annuaire à valider',
+            [
+                'Titre' => $listing->title,
+                'Formule' => $listing->tier === 'paid' ? 'Payante' : 'Gratuite',
+                'Ville' => $listing->city ?? '',
+                'Email' => $listing->email ?? '',
+                'Téléphone' => $listing->phone ?? '',
+            ],
+            route('filament.admin.resources.listings.edit', $listing),
+            'Valider ou refuser cette fiche',
+        );
 
         return redirect()
             ->route('annuaire.index')

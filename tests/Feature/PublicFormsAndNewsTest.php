@@ -200,12 +200,16 @@ class PublicFormsAndNewsTest extends TestCase
         $response->assertSee('Autre voiture')->assertDontSee('Un appartement');
     }
 
-    public function test_listing_submission_always_starts_pending_and_free_and_is_not_publicly_visible(): void
+    public function test_listing_submission_always_starts_pending_and_is_not_publicly_visible(): void
     {
         $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);
 
+        // Depuis le 09/09/2026 (demande client), `tier` est un choix explicite
+        // du visiteur (gratuit/payant) — voir TECHNICAL_DOCUMENTATION.md §28 —
+        // donc toujours envoyé désormais, plus de valeur par défaut implicite.
         $response = $this->post('/annuaire/deposer', [
             'category_id' => $category->id,
+            'tier' => 'free',
             'title' => 'Mon Petit Restaurant',
             'city' => 'Toulouse',
             'url_verification' => '', // honeypot vide = humain
@@ -223,21 +227,29 @@ class PublicFormsAndNewsTest extends TestCase
         $this->get('/annuaire')->assertOk()->assertDontSee('Mon Petit Restaurant');
     }
 
-    public function test_listing_submission_cannot_inject_status_or_tier(): void
+    /**
+     * `tier` est désormais un choix légitime du visiteur (voir test
+     * ci-dessus et TECHNICAL_DOCUMENTATION.md §28) — mais `status`, lui,
+     * reste TOUJOURS non-injectable, quelle que soit la formule choisie :
+     * jamais de publication automatique, même pour une demande payante
+     * (contrairement à un bug du formulaire legacy équivalent, documenté
+     * dans TECHNICAL_DOCUMENTATION.md §28).
+     */
+    public function test_listing_submission_cannot_inject_status_even_with_paid_tier(): void
     {
         $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);
 
         $this->post('/annuaire/deposer', [
             'category_id' => $category->id,
+            'tier' => 'paid', // choix légitime, doit être respecté
             'title' => 'Tentative de contournement',
             'status' => 'published', // ne doit jamais être pris en compte
-            'tier' => 'paid', // idem
             'url_verification' => '',
         ]);
 
         $listing = Listing::where('title', 'Tentative de contournement')->firstOrFail();
         $this->assertSame('pending', $listing->status);
-        $this->assertSame('free', $listing->tier);
+        $this->assertSame('paid', $listing->tier);
     }
 
     public function test_listing_submission_rejected_when_honeypot_filled(): void

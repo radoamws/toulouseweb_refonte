@@ -1185,3 +1185,52 @@ Le WebCron Infomaniak n'appelle qu'une URL — `webcron:run` est donc exposée v
 Un seul WebCron, "URL à exécuter" = domaine du site + `/webcron/<WEBCRON_SECRET>`, fréquence une fois par jour à 08:00 (heure française) — voir `README.md` § "Tâche planifiée (WebCron Infomaniak)" pour la procédure pas à pas correspondant exactement au formulaire du manager (capture d'écran fournie par le client : "Planifier une tâche" → Configuration → URL à exécuter → étape fréquence).
 
 Tests : `tests/Feature/WebCronTest.php` (jeton correct/incorrect, `robots.txt`, filtrage `redirects:audit` par jour de la semaine via `travelTo()`).
+
+## 28. Notifications admin par email + upload d'image sécurisé + nouveaux dépôts publics (09/09/2026, demande client)
+
+Quatre demandes liées, traitées ensemble :
+
+1. *"Dans le front pour 'Deposer une annonce' et 'Proposer un événement', est-ce possible d'ajouter un upload de fichier image sécurisé : ne pas uploader que des fichiers images, et vérifier que ce ne sont pas des faux images (hack avec extension d'image)"*
+2. *"Est-ce qu'il y a des envois de mail pour toute demande venant d'un formulaire dans le front ? Si oui, quel mail est le destinataire. Sinon mettre en place dans .env un variable pouvant ajouter un ou plusieurs mail admin."*
+3. *"Ajouter un bouton qui affiche un formulaire pour faire une demande d'ajout dans l'annuaire dont un choix entre gratuit limité ou payant qui est complet mais à valider. Et envoi de mail à l'admin aussi. Analyse car il y un formulaire équivalent dans /old/ pour inspiration."*
+4. *"Ajouter un bouton qui affiche un formulaire pour faire une demande d'ajout d'actualité : mail vers l'admin."*
+
+### Réponse à la question 2 : AUCUN email n'était envoyé nulle part
+
+Audit complet des 4 formulaires publics existants (`ContactController`, `ClassifiedController`, `EventController`, `ListingController`) : aucun n'envoyait le moindre email, ni à l'équipe ni au visiteur — tout se limitait à un enregistrement en base (`status = 'pending'`) que l'équipe ne pouvait découvrir qu'en consultant l'admin manuellement. Confirmé par une recherche exhaustive (`grep -rn "Mail::\|Notification::\|->notify("` sur `app/`) : aucune classe `Mailable`/`Notification`, aucun appel `Mail::` en dehors de Filament (qui ne sert qu'aux notifications *dans* l'interface admin, jamais par email).
+
+**Mis en place** : `ADMIN_NOTIFICATION_EMAILS` dans `.env` (une ou plusieurs adresses séparées par des virgules, voir `config/services.php` clé `admin_notifications.emails`) — vide par défaut, aucune notification tant que le client n'a pas renseigné au moins une adresse.
+
+### Architecture des notifications : `App\Support\AdminNotifier` + `App\Mail\AdminNotification`
+
+Une seule classe `Mailable` générique (`AdminNotification` : titre + paires libellé/valeur + lien optionnel vers l'admin) plutôt que 5 quasi identiques (contact, annonce, événement, fiche annuaire, actualité) — le contenu varie, pas la structure d'envoi. `AdminNotifier::send()` centralise l'appel : no-op silencieux si aucune adresse configurée, échec journalisé (`Log::error`) mais jamais fatal — un problème SMTP ne doit jamais faire échouer la soumission du visiteur, dont la donnée est de toute façon déjà enregistrée en base à ce stade.
+
+**Envoi volontairement SYNCHRONE, jamais `->queue()`** : ce projet n'a pas de worker de file permanent, seulement un déclenchement WebCron pouvant aller jusqu'à une fois par jour (§27) — une notification de modération mise en file arriverait bien trop tard pour être utile. Même philosophie que la purge Cloudflare/l'indexation Google (§17/§20), déjà synchrones pour la même raison.
+
+Câblée sur les 5 formulaires (contact, annonce, événement, fiche annuaire, **et** la nouvelle proposition d'actualité), chacun avec un lien direct vers la fiche à valider dans l'admin (`route('filament.admin.resources.{ressource}.edit', $record)`).
+
+### Réponse à la question 1 : upload d'image sécurisé (`App\Rules\GenuineImage` + `App\Services\Uploads\ImageSanitizer`)
+
+Aucun des deux formulaires (`annonces/deposer`, `agenda/proposer`) n'acceptait la moindre image auparavant — fonctionnalité entièrement nouvelle, pas une sécurisation d'un upload existant.
+
+Défense en profondeur à deux niveaux, tous deux nécessaires :
+1. **Validation** (`'image', 'mimes:jpeg,png,webp'` + `new GenuineImage()`) : la règle Laravel `image` inspecte déjà le contenu réel (pas que l'extension déclarée par le client), `GenuineImage` ajoute un contrôle explicite (`getimagesize()` doit réussir ET détecter un des 3 formats autorisés) qui documente l'intention et protège aussi contre un contournement de la détection MIME. Testé en conditions réelles (`UploadedFile::fake()->create('malware.jpg', 10, 'image/jpeg')` — MIME déclaré "image/jpeg", contenu aléatoire non décodable) : correctement rejeté avec une erreur de validation, la soumission n'est PAS enregistrée en base.
+2. **Ré-encodage** (`ImageSanitizer::sanitizeToTempFile()`, GD natif — `imagecreatefromjpeg/png/webp` puis `imagejpeg/png/webp`) : la validation seule ne suffit pas contre un fichier "polyglotte" (données image valides en tête, charge utile ajoutée après — `getimagesize()`/GD réussissent à décoder, un autre programme qui lirait le fichier brut pourrait lire autre chose). Ré-encoder entièrement à partir des pixels décodés par GD purge par construction tout ce qui n'est pas un pixel réellement décodé, quel que soit ce que contenait l'original. Aucune dépendance externe (Intervention Image...) : GD est déjà une extension PHP embarquée, confirmée présente en local et sur le serveur de production (§26/§27).
+
+Stockage : `Classified` utilise déjà Spatie MediaLibrary (`registerMediaCollections()` → collection `photos`) — le fichier temporaire sanitisé est passé à `addMedia()` (jamais le fichier uploadé brut). `Event` n'a qu'une colonne `image` texte simple (comme `News`, pas de MediaLibrary) — `ImageSanitizer::sanitizeAndStore()` stocke sur le disque `public` et retourne le chemin relatif, même convention que `Forms\Components\FileUpload::make('image')->directory('events')` côté admin (`EventResource`).
+
+### Réponse à la question 3 : choix gratuit/payant sur le dépôt annuaire (déjà existant, enrichi)
+
+Le bouton "+ Ajouter mon établissement" et le formulaire `/annuaire/deposer` existaient déjà, mais forçaient systématiquement `tier = 'free'` côté serveur, sans aucun choix laissé au visiteur.
+
+**Inspiration `/old/`** (analyse demandée par le client) : le formulaire legacy équivalent (`old/client-app/pages/referencer-site/{gratuit,payant}.vue` + `ArticleController::addArticle()` + `Mailer::referencer()`) confirme que la distinction gratuit/payant legacy était déjà une simple valeur binaire (`payant = 0|1`, colonne `t_article.payant`), pas une structure de "formule" plus complexe — cohérent avec l'enum `tier` déjà en place (`free`/`paid`) dans la refonte, aucun nouveau champ nécessaire. **Deux bugs legacy réels identifiés, volontairement NON reproduits** :
+- Le formulaire public ne transmettait jamais de `statut`, donc la ligne tombait sur la valeur par défaut `statut = 1` (publiée immédiatement) au lieu de `2` (en attente) — malgré le texte affiché au visiteur ("doit être validé par l'équipe"). La modération promise n'était donc, en pratique, jamais appliquée pour les dépôts publics.
+- L'email de notification partait vers une adresse webmaster codée en dur (`contact@toulouseweb.com`, avec un override de dev commenté directement dans le code source), pas configurable.
+
+**Implémentation refonte** : un choix `tier` (radio gratuite/payante) ajouté au formulaire, mais `status` reste **toujours** forcé à `pending` côté contrôleur quel que soit le tier — jamais de publication automatique, y compris pour une demande payante (contrairement au bug legacy ci-dessus). Champs "fiche complète" (accroche, description, site web, lien de réservation — mêmes champs que la section "Contenu enrichi" de `ListingResource` côté admin) révélés via Alpine.js (`x-show="tier === 'paid'"`) seulement quand la formule payante est choisie, mais toujours acceptés côté validation même si envoyés avec le tier gratuit (un visiteur qui les enverrait quand même n'a pas de raison d'être bloqué). Logo/galerie photo (upload) volontairement laissés à l'admin après validation — non demandés explicitement, contrairement aux deux formulaires image de la question 1.
+
+### Réponse à la question 4 : nouveau dépôt public d'actualité
+
+Fonctionnalité entièrement nouvelle (aucun équivalent legacy trouvé, aucune route existante) : bouton "Proposer une actualité" sur `/actualites`, formulaire `/actualites/proposer` (titre, catégorie, résumé, texte, email du proposant), `NewsController::create()/store()`. Même modèle de modération stricte que les 3 autres dépôts : `status` toujours forcé à `pending`. Nouvelle colonne `news.submitter_email` (migration `add_submitter_email_to_news_table`) — distincte de `news.email` (email de contact PUBLIC affiché sur une fiche actualité-événement, ajouté le 03/09/2026, brief "informations pratiques") : `submitter_email` n'est jamais affiché publiquement, sert uniquement à l'équipe pour recontacter la personne ayant proposé l'actualité.
+
+Tests : `tests/Feature/PublicSubmissionNotificationsTest.php` (10 tests — notification envoyée/absente selon configuration, image genuine acceptée et sanitisée pour Classified/Event, fichier déguisé en image rejeté pour les deux, formule annuaire respectée avec statut toujours "pending", valeur de tier invalide rejetée, dépôt actualité complet avec notification).

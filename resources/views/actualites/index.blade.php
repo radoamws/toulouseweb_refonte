@@ -8,11 +8,14 @@
             <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">
                 {{ $category?->name ?? 'Actualités de Toulouse' }}
             </h1>
-            <form method="GET" class="flex gap-2">
-                <input type="search" name="q" value="{{ request('q') }}" placeholder="Rechercher…"
-                    class="w-full rounded-full border border-ink-200 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none sm:w-64">
-                <x-ui.button type="submit" variant="outline" size="sm">Rechercher</x-ui.button>
-            </form>
+            <div class="flex gap-2">
+                <form method="GET" class="flex gap-2">
+                    <input type="search" name="q" value="{{ request('q') }}" placeholder="Rechercher…"
+                        class="w-full rounded-full border border-ink-200 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none sm:w-64">
+                    <x-ui.button type="submit" variant="outline" size="sm">Rechercher</x-ui.button>
+                </form>
+                <x-ui.button href="/actualites/proposer" variant="primary" size="sm">Proposer une actualité</x-ui.button>
+            </div>
         </div>
 
         @if ($categories->isNotEmpty())

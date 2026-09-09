@@ -7,7 +7,7 @@
             Votre annonce sera vérifiée par notre équipe avant publication — comptez généralement moins de 24h.
         </p>
 
-        <form method="POST" action="{{ route('annonces.store') }}" class="mt-8 space-y-5">
+        <form method="POST" action="{{ route('annonces.store') }}" enctype="multipart/form-data" class="mt-8 space-y-5">
             @csrf
 
             {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}
@@ -70,6 +70,14 @@
                         class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
                     <x-ui.field-error name="contact_phone" />
                 </div>
+            </div>
+
+            <div>
+                <label for="photo" class="block text-sm font-medium text-ink-700">Photo (facultatif)</label>
+                <input type="file" name="photo" id="photo" accept="image/jpeg,image/png,image/webp"
+                    class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                <p class="mt-1 text-xs text-ink-500">JPEG, PNG ou WEBP, 4 Mo maximum.</p>
+                <x-ui.field-error name="photo" />
             </div>
 
             <x-ui.button type="submit" variant="primary" size="lg">Envoyer mon annonce</x-ui.button>

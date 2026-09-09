@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ContactMessage;
 use App\Models\Page;
+use App\Support\AdminNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -29,7 +30,24 @@ class ContactController extends Controller
             'website' => ['size:0'], // honeypot anti-spam
         ]);
 
-        ContactMessage::create(collect($validated)->except('website')->all());
+        $contactMessage = ContactMessage::create(collect($validated)->except('website')->all());
+
+        // Notification admin (demande client, voir App\Support\AdminNotifier
+        // et TECHNICAL_DOCUMENTATION.md §28) — aucun email n'était envoyé
+        // nulle part avant cette demande, le seul moyen de voir un nouveau
+        // message était de consulter l'admin manuellement.
+        AdminNotifier::send(
+            'Nouveau message de contact',
+            [
+                'Nom' => $validated['name'],
+                'Email' => $validated['email'],
+                'Téléphone' => $validated['phone'] ?? '',
+                'Sujet' => $validated['subject'] ?? '',
+                'Message' => $validated['message'],
+            ],
+            route('filament.admin.resources.contact-messages.edit', $contactMessage),
+            'Voir ce message',
+        );
 
         return redirect()
             ->route('contact.show')

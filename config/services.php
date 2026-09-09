@@ -73,4 +73,19 @@ return [
         'secret' => env('WEBCRON_SECRET'),
     ],
 
+    /*
+     * Destinataires des notifications internes (nouveau contenu à modérer
+     * depuis un formulaire public — contact, annonce, événement, fiche
+     * annuaire, actualité). Demande client, voir App\Support\AdminNotifier
+     * et TECHNICAL_DOCUMENTATION.md §28. Une ou plusieurs adresses séparées
+     * par des virgules dans ADMIN_NOTIFICATION_EMAILS ; vide = aucune
+     * notification envoyée (pas d'erreur, juste un no-op silencieux).
+     */
+    'admin_notifications' => [
+        'emails' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('ADMIN_NOTIFICATION_EMAILS', ''))
+        ))),
+    ],
+
 ];

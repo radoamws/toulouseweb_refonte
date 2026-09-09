@@ -51,8 +51,12 @@ Route::get('/cinema', [CinemaController::class, 'index'])->name('cinema.index');
 Route::get('/cinema/films/{slug}', [CinemaController::class, 'showMovie'])->name('cinema.movie');
 Route::get('/cinema/salles/{slug}', [CinemaController::class, 'showCinema'])->name('cinema.salle');
 
-// Actualités — même pattern catégorie/article que l'agenda.
+// Actualités — même pattern catégorie/article que l'agenda. `proposer`
+// avant `{slug}` (wildcard) pour ne pas être intercepté — même piège que
+// pour /annuaire/deposer, /agenda/proposer et /annonces/deposer.
 Route::get('/actualites', [NewsController::class, 'index'])->name('actualites.index');
+Route::get('/actualites/proposer', [NewsController::class, 'create'])->name('actualites.create');
+Route::post('/actualites/proposer', [NewsController::class, 'store'])->middleware('throttle:5,1')->name('actualites.store');
 Route::get('/actualites/{slug}', [NewsController::class, 'bySlug'])->name('actualites.bySlug');
 
 // Annonces (brief §8). `deposer` avant `{slug}` pour ne pas être intercepté

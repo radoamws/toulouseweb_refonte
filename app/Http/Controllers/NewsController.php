@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\News;
 use App\Models\NewsCategory;
 use App\Models\Page;
+use App\Support\AdminNotifier;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -85,5 +87,57 @@ class NewsController extends Controller
             'related' => $related,
             'seo' => $news->resolveSeo(),
         ]);
+    }
+
+    public function create(): View
+    {
+        $categories = NewsCategory::orderBy('name')->get();
+
+        return view('actualites.create', ['categories' => $categories, 'seo' => []]);
+    }
+
+    /**
+     * Dépôt public d'une proposition d'actualité (demande client,
+     * 09/09/2026 — voir TECHNICAL_DOCUMENTATION.md §28). Même modèle de
+     * modération STRICTE et non contournable que les autres dépôts publics
+     * (Classified/Event/Listing) : `status` est TOUJOURS forcé à `pending`
+     * ici, jamais de valeur envoyée par le visiteur.
+     */
+    public function store(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'category_id' => ['required', 'exists:news_categories,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'excerpt' => ['nullable', 'string', 'max:255'],
+            'body' => ['required', 'string', 'max:5000'],
+            'submitter_email' => ['required', 'email', 'max:255'],
+            // Honeypot anti-spam (brief §18) : champ invisible, un vrai
+            // visiteur ne le remplit jamais.
+            'website' => ['size:0'],
+        ]);
+
+        // Le slug est généré automatiquement depuis `title` par HasSlug
+        // (voir App\Models\News) — pas besoin de le fournir ici.
+        $news = News::create([
+            ...collect($validated)->except(['website'])->all(),
+            'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
+        ]);
+
+        // Notification admin (demande client, voir App\Support\AdminNotifier
+        // et TECHNICAL_DOCUMENTATION.md §28).
+        AdminNotifier::send(
+            'Nouvelle actualité à valider',
+            [
+                'Titre' => $news->title,
+                'Catégorie' => $news->category?->name ?? '',
+                'Proposée par' => $news->submitter_email,
+            ],
+            route('filament.admin.resources.news.edit', $news),
+            'Valider ou refuser cette actualité',
+        );
+
+        return redirect()
+            ->route('actualites.index')
+            ->with('status', 'Votre proposition a bien été reçue et sera publiée après validation par notre équipe.');
     }
 }

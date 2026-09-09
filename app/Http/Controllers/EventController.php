@@ -6,10 +6,15 @@ use App\Models\Area;
 use App\Models\Event;
 use App\Models\EventCategory;
 use App\Models\Page;
+use App\Rules\GenuineImage;
+use App\Services\Uploads\ImageSanitizer;
+use App\Support\AdminNotifier;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * Agenda / événements (brief §6). Le menu THÉÂTRE n'est pas une entité
@@ -175,6 +180,11 @@ class EventController extends Controller
             'booking_url' => ['nullable', 'url', 'max:255'],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            // Upload d'image sécurisé (demande client, voir App\Rules\GenuineImage
+            // et App\Services\Uploads\ImageSanitizer) : `image`/`mimes:...`
+            // inspectent déjà le contenu réel (pas que l'extension déclarée),
+            // GenuineImage ajoute un contrôle explicite supplémentaire.
+            'image' => ['nullable', 'file', 'image', 'mimes:jpeg,png,webp', 'max:4096', new GenuineImage()],
             // Honeypot anti-spam (brief §18) : champ invisible, un vrai
             // visiteur ne le remplit jamais.
             'website' => ['size:0'],
@@ -197,6 +207,30 @@ class EventController extends Controller
             'source' => 'user_submitted',
         ]);
         $event->categories()->attach($validated['event_category_id']);
+
+        if ($request->hasFile('image')) {
+            // Même remarque que ClassifiedController::store() : ne doit
+            // jamais faire échouer la soumission elle-même.
+            try {
+                $event->image = ImageSanitizer::sanitizeAndStore($request->file('image'), 'events');
+                $event->save();
+            } catch (Throwable $e) {
+                Log::warning('Image événement rejetée après validation', ['exception' => $e->getMessage()]);
+            }
+        }
+
+        // Notification admin (demande client, voir App\Support\AdminNotifier
+        // et TECHNICAL_DOCUMENTATION.md §28).
+        AdminNotifier::send(
+            'Nouvel événement à valider',
+            [
+                'Titre' => $event->title,
+                'Lieu' => $area->name,
+                'Date de début' => $event->start_date->format('d/m/Y'),
+            ],
+            route('filament.admin.resources.events.edit', $event),
+            "Valider ou refuser cet événement",
+        );
 
         return redirect()
             ->route('agenda.index')

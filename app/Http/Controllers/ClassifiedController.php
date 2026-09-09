@@ -5,9 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\Classified;
 use App\Models\ClassifiedCategory;
 use App\Models\Page;
+use App\Rules\GenuineImage;
+use App\Services\Uploads\ImageSanitizer;
+use App\Support\AdminNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * Annonces (brief §8). Workflow de modération STRICT et non contournable :
@@ -103,6 +108,11 @@ class ClassifiedController extends Controller
             'location' => ['nullable', 'string', 'max:255'],
             'contact_phone' => ['nullable', 'string', 'max:255'],
             'contact_email' => ['required', 'email', 'max:255'],
+            // Upload d'image sécurisé (demande client, voir App\Rules\GenuineImage
+            // et App\Services\Uploads\ImageSanitizer) : `image`/`mimes:...`
+            // inspectent déjà le contenu réel (pas que l'extension déclarée),
+            // GenuineImage ajoute un contrôle explicite supplémentaire.
+            'photo' => ['nullable', 'file', 'image', 'mimes:jpeg,png,webp', 'max:4096', new GenuineImage()],
             // Honeypot anti-spam (brief §18) : champ invisible, un vrai
             // visiteur ne le remplit jamais.
             'website' => ['size:0'],
@@ -111,9 +121,36 @@ class ClassifiedController extends Controller
         // Le slug est généré automatiquement depuis `title` par HasSlug
         // (voir App\Models\Classified) — pas besoin de le fournir ici.
         $classified = Classified::create([
-            ...collect($validated)->except(['website'])->all(),
+            ...collect($validated)->except(['website', 'photo'])->all(),
             'status' => 'pending', // jamais autre chose ici, voir docblock de la classe
         ]);
+
+        if ($request->hasFile('photo')) {
+            // La photo ne doit jamais faire échouer la soumission elle-même
+            // (la donnée est déjà enregistrée à ce stade) — un échec de
+            // sanitisation est journalisé et l'annonce reste simplement sans
+            // photo, à ajouter par l'admin si besoin lors de la modération.
+            try {
+                $tempPath = ImageSanitizer::sanitizeToTempFile($request->file('photo'));
+                $classified->addMedia($tempPath)->toMediaCollection('photos');
+            } catch (Throwable $e) {
+                Log::warning('Photo annonce rejetée après validation', ['exception' => $e->getMessage()]);
+            }
+        }
+
+        // Notification admin (demande client, voir App\Support\AdminNotifier
+        // et TECHNICAL_DOCUMENTATION.md §28).
+        AdminNotifier::send(
+            'Nouvelle annonce à valider',
+            [
+                'Titre' => $classified->title,
+                'Catégorie' => $classified->category?->name ?? '',
+                'Email de contact' => $classified->contact_email,
+                'Téléphone' => $classified->contact_phone ?? '',
+            ],
+            route('filament.admin.resources.classifieds.edit', $classified),
+            'Valider ou refuser cette annonce',
+        );
 
         return redirect()
             ->route('annonces.index')

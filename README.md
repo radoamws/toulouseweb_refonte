@@ -81,6 +81,13 @@ php artisan serve
 
 21 ressources Filament (`/admin`, une par entité — annuaire, agenda, cinéma, actualités, annonces, sliders, contacts, redirections, 404 fréquentes, sources de scraping, **utilisateurs et rôles**...) + une page "Paramètres du site" (`/admin/site-settings` : identité, coordonnées, réseaux sociaux, **SEO/Analytics globaux** — Google Analytics, vérification Search Console) + un dashboard de statistiques de clics (vue d'ensemble, répartition par type, top des entités les plus cliquées — couvre annuaire, agenda, cinéma, actualités, annonces, catégories, sliders, sites partenaires). Voir `TECHNICAL_DOCUMENTATION.md` §13. Documentation détaillée par ressource à poursuivre au fil de l'implémentation.
 
+## Dépôts publics & notifications admin
+
+Quatre formulaires publics permettent à un visiteur de proposer du contenu, TOUJOURS avec modération stricte non contournable (`status = 'pending'` forcé côté serveur, jamais de publication automatique) : `/annonces/deposer`, `/agenda/proposer`, `/annuaire/deposer` (choix gratuit/payant laissé au visiteur — payant = fiche complète, mais soumise à validation comme la gratuite), et `/actualites/proposer` (nouveau). Le formulaire de contact (`/contact`) suit le même principe de notification.
+
+- **Notifications email** : `ADMIN_NOTIFICATION_EMAILS` dans `.env` (une ou plusieurs adresses séparées par des virgules) — vide par défaut, aucune notification envoyée tant que non configuré. Chaque soumission (contact, annonce, événement, fiche annuaire, actualité) envoie un email à ces adresses avec un lien direct vers la fiche à valider dans l'admin. Voir `App\Support\AdminNotifier` et `TECHNICAL_DOCUMENTATION.md` §28.
+- **Upload d'image sécurisé** (`/annonces/deposer`, `/agenda/proposer`) : au-delà des règles Laravel `image`/`mimes:jpeg,png,webp` (qui inspectent déjà le contenu réel, pas que l'extension), une vérification explicite (`App\Rules\GenuineImage`) rejette un fichier qui ne serait pas réellement décodable comme une image malgré une extension/MIME déclarée trompeuse ; l'image est ensuite entièrement ré-encodée via GD (`App\Services\Uploads\ImageSanitizer`) avant stockage définitif, pour éliminer tout contenu caché au-delà des pixels réellement décodés. Détail complet : `TECHNICAL_DOCUMENTATION.md` §28.
+
 ## Scraping / Cron
 
 Le mécanisme legacy déclenchait les imports via de simples endpoints HTTP GET appelés par un cron externe (pas de scheduler Laravel utilisé) — formalisé ici via le scheduler natif (`routes/console.php`, un seul cron serveur `* * * * * php artisan schedule:run`).

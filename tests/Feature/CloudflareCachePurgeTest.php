@@ -286,6 +286,7 @@ class CloudflareCachePurgeTest extends TestCase
 
         $this->post('/annuaire/deposer', [
             'category_id' => $category->id,
+            'tier' => 'free', // requis depuis le 09/09/2026, voir TECHNICAL_DOCUMENTATION.md §28
             'title' => 'Mon Petit Restaurant',
             'city' => 'Toulouse',
             'url_verification' => '',
