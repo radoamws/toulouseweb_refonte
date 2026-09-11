@@ -53,6 +53,26 @@ class MigrateSliders extends Command
         Slider::withoutEvents(function () use ($log, $pageNameById, $placements) {
             foreach (DB::connection('legacy')->table('t_sliders')->orderBy('id')->get() as $row) {
                 $title = LegacyCleaner::text($row->nom) ?? LegacyCleaner::text($row->titreBillboard) ?? "Slider #{$row->id}";
+                $linkUrl = LegacyCleaner::text($row->urlBillboard);
+                $clientName = LegacyCleaner::text($row->client);
+
+                // ⚠️ Bug réel trouvé et corrigé (11/09/2026, demande client) :
+                // sur la quasi-totalité des lignes réelles, les opérateurs du
+                // back-office legacy ont saisi l'URL cible directement dans
+                // `nom` (le champ "titre" affiché sur le slide) au lieu de
+                // `urlBillboard` (le vrai champ lien) — laissé vide dans ~98%
+                // des cas. Résultat : le slide affichait l'URL en toutes
+                // lettres comme titre, et n'était même pas cliquable
+                // (`link_url` NULL). Si `nom` ressemble à une URL ET que
+                // `urlBillboard` est vide, on la bascule vers `link_url` et
+                // on reprend `client` (le vrai nom lisible, ex. "Escale")
+                // comme titre — voir aussi `content:fix-slider-links`, qui
+                // applique la même correction aux lignes déjà migrées.
+                if ($linkUrl === null && $title !== null && preg_match('/^https?:\/\/\S+\.\S+/i', $title)) {
+                    $linkUrl = $title;
+                    $title = $clientName ?? (parse_url($title, PHP_URL_HOST) ?: "Slider #{$row->id}");
+                }
+
                 $image = LegacyCleaner::text($row->img);
                 if (! $image) {
                     $log->skipped("Slider legacy #{$row->id} ({$title}) sans image — ignoré.");
@@ -65,8 +85,8 @@ class MigrateSliders extends Command
                     [
                         'title' => $title,
                         'image' => $image,
-                        'link_url' => LegacyCleaner::text($row->urlBillboard),
-                        'client_name' => LegacyCleaner::text($row->client),
+                        'link_url' => $linkUrl,
+                        'client_name' => $clientName,
                         'order' => (int) $row->ordre,
                         'delay_ms' => (int) $row->delai ?: 5000,
                         'starts_at' => LegacyCleaner::date($row->date_debut),

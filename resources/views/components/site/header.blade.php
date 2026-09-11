@@ -22,8 +22,21 @@
         ['label' => 'Spectacles', 'href' => '/annuaire/spectacles'],
         ['label' => 'Sorties & Loisirs', 'href' => '/annuaire/sorties'],
     ];
+    // Les 4 dépôts publics (brief §5/§6/§8, demande client) n'étaient
+    // accessibles que depuis leur propre page de section (bouton "+" sur
+    // /annonces, /agenda, /annuaire, /actualites) — invisibles partout
+    // ailleurs sur le site, y compris la homepage. Regroupés ici en un seul
+    // menu "Publier" visible sur TOUTE page (remplace l'unique bouton
+    // "Déposer une annonce" qui laissait les 3 autres formulaires sans
+    // aucun accès global).
+    $publishNav = [
+        ['label' => 'Déposer une annonce', 'href' => '/annonces/deposer'],
+        ['label' => 'Proposer un événement', 'href' => '/agenda/proposer'],
+        ['label' => 'Ajouter mon établissement', 'href' => '/annuaire/deposer'],
+        ['label' => 'Proposer une actualité', 'href' => '/actualites/proposer'],
+    ];
 @endphp
-<header x-data="{ mobileOpen: false, annuaireOpen: false }" class="sticky top-0 z-40 border-b border-ink-100 bg-white/95 backdrop-blur">
+<header x-data="{ mobileOpen: false, annuaireOpen: false, publishOpen: false }" class="sticky top-0 z-40 border-b border-ink-100 bg-white/95 backdrop-blur">
     <div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <a href="{{ url('/') }}" class="flex shrink-0 items-stretch self-stretch gap-2 font-heading text-xl font-bold text-brand-600">
             @if ($siteSettings->logo_url)
@@ -94,10 +107,30 @@
             @endforeach
         </nav>
 
-        <div class="hidden shrink-0 lg:block">
-            <a href="/annonces/deposer" class="inline-flex items-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700">
-                Déposer une annonce
-            </a>
+        <div class="relative hidden shrink-0 lg:block" @mouseleave="publishOpen = false">
+            <button
+                type="button"
+                @click="publishOpen = !publishOpen"
+                @mouseenter="publishOpen = true"
+                class="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+                :aria-expanded="publishOpen.toString()"
+            >
+                Publier une annonce
+                <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180': publishOpen }" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                </svg>
+            </button>
+            {{-- Même pattern pt-1 (pas mt-1) que le sous-menu Annuaire
+            ci-dessus — voir son commentaire pour le pourquoi. --}}
+            <div x-show="publishOpen" x-transition x-cloak class="absolute right-0 top-full w-64 pt-1">
+                <div class="rounded-xl border border-ink-100 bg-white p-2 shadow-lg">
+                    @foreach ($publishNav as $item)
+                        <a href="{{ $item['href'] }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50 hover:text-brand-700">
+                            {{ $item['label'] }}
+                        </a>
+                    @endforeach
+                </div>
+            </div>
         </div>
 
         <button
@@ -125,8 +158,10 @@
         @foreach ($primaryNav as $item)
             <a href="{{ $item['href'] }}" class="block rounded-lg px-3 py-2 text-sm font-medium text-ink-700 hover:bg-brand-50">{{ $item['label'] }}</a>
         @endforeach
-        <a href="/annonces/deposer" class="mt-3 block rounded-full bg-brand-600 px-4 py-2 text-center text-sm font-semibold text-white">
-            Déposer une annonce
-        </a>
+        <div class="my-2 border-t border-ink-100"></div>
+        <p class="px-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Publier</p>
+        @foreach ($publishNav as $item)
+            <a href="{{ $item['href'] }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50">{{ $item['label'] }}</a>
+        @endforeach
     </nav>
 </header>

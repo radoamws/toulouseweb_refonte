@@ -144,4 +144,30 @@ class HomepageTest extends TestCase
         $response->assertSee('Diapositive suivante');
         $response->assertSee('#CC0000', false);
     }
+
+    /**
+     * Demande client (11/09/2026) : chaque slide doit être cliquable vers
+     * son lien, en nouvel onglet — `target="_blank"` manquait jusqu'ici
+     * (voir components/site/hero-slider.blade.php). Un slide SANS
+     * `link_url` ne doit pas non plus recevoir `target="_blank"` (son
+     * `href` retombe sur "#", l'ouvrir en nouvel onglet n'aurait aucun sens).
+     */
+    public function test_slide_with_a_link_opens_in_a_new_tab(): void
+    {
+        $withLink = Slider::create([
+            'title' => 'Escale', 'image' => 'https://example.test/img.jpg', 'is_active' => true,
+            'link_url' => 'https://lescale-tournefeuille.fr/les_spectacles/valseavecw/',
+        ]);
+        $withLink->placements()->create(['page' => 'home']);
+        $withoutLink = Slider::create(['title' => 'Sans lien', 'image' => 'https://example.test/img2.jpg', 'is_active' => true]);
+        $withoutLink->placements()->create(['page' => 'home']);
+
+        $response = $this->get('/')->assertOk();
+        $response->assertSeeInOrder([
+            'href="https://lescale-tournefeuille.fr/les_spectacles/valseavecw/"',
+            'target="_blank"',
+            'rel="noopener"',
+        ], false);
+        $response->assertDontSee('href="#" target="_blank"', false);
+    }
 }

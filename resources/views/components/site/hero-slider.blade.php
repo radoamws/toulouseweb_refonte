@@ -25,6 +25,7 @@
         @foreach ($slides as $i => $slide)
             <a
                 href="{{ $slide->link_url ?? '#' }}"
+                @if ($slide->link_url) target="_blank" rel="noopener" @endif
                 data-track="slider:{{ $slide->id }}:homepage_hero"
                 x-show="active === {{ $i }}"
                 x-transition:enter="transition ease-out duration-500"

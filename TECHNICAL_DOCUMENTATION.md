@@ -1250,3 +1250,40 @@ Signalé par le client avec une capture d'écran d'une fiche annuaire réelle : 
 Tests : `tests/Feature/CleanLegacyHtmlTextTest.php` (6 tests — nettoyage des 4 colonnes ciblées, texte déjà propre laissé inchangé, `--dry-run` n'écrit rien, absence de tout effet de bord observer).
 
 Exécutée une fois sur l'environnement de développement (1 123 + 251 + 4 392 + 6 082 lignes nettoyées) — **à rejouer une fois en production** après déploiement (une seule fois, idempotente : rejouer ne change plus rien pour les lignes déjà nettoyées).
+
+## 30. Sliders non cliquables (URL affichée comme titre) + icônes de catégories génériques (11/09/2026, demande client)
+
+Signalé par le client avec une capture d'écran de la homepage : (1) un slide affichait littéralement l'URL cible en gros titre (`https://lescale-tournefeuille.fr/les_spectacles/valseavecw/`, barré en rouge par le client), sans être réellement cliquable ; (2) les 8 catégories de la section "Catégories populaires" affichaient toutes la même icône générique (cercle vide).
+
+### 1. Sliders : l'URL cible vivait dans `title`, pas dans `link_url`
+
+**Cause** (`app/Console/Commands/Migration/MigrateSliders.php`) : sur la quasi-totalité des lignes réelles (129/134 en développement), les opérateurs du back-office legacy ont saisi l'URL cible directement dans `t_sliders.nom` (mappé vers `title`, affiché en gros sur le slide) au lieu de `t_sliders.urlBillboard` (mappé vers `link_url`, resté vide dans ~98 % des cas) — un problème de SAISIE côté legacy, pas un bug de la commande de migration elle-même (le mapping colonne-à-colonne était déjà correct). Conséquence : le slide affichait l'URL en toutes lettres comme titre, et `href="{{ $slide->link_url ?? '#' }}"` retombait sur `#` — le slide n'était même pas cliquable.
+
+**Corrigé à deux niveaux** :
+- `MigrateSliders::handle()` : heuristique ajoutée pour toute future ré-exécution — si `nom` ressemble à une URL exploitable (`/^https?:\/\/\S+\.\S+/`) ET `urlBillboard` est vide, l'URL est basculée vers `link_url`, et `client` (le vrai nom lisible, déjà présent en base — ex. "Escale") devient le titre.
+- `php artisan content:fix-slider-links` (`--dry-run` disponible) : corrige les sliders déjà migrés en production, même heuristique. Repli sur le nom d'hôte de l'URL (ex. "lescale-tournefeuille.fr") si `client_name` est vide, ou "Slider #id" en tout dernier recours. Les valeurs "URL-like" mais non exploitables (`"https://SLB CONSULTING"`, `"https://"` seul — quelques cas isolés, tous inactifs) sont volontairement laissées telles quelles plutôt que de produire un lien cassé. Écrit via le query builder (même raison qu'au §29 : `Slider` implémente `HasCloudflarePurgeUrls`).
+- `resources/views/components/site/hero-slider.blade.php` : `target="_blank" rel="noopener"` ajouté sur le lien du slide (manquant jusqu'ici), conditionné à la présence d'un `link_url` réel.
+
+Résultat mesuré : 129/134 sliders corrigés en développement, 5 laissés en l'état (déjà corrects ou non exploitables).
+
+### 2. Icônes de catégories : jeu de 39 icônes SVG professionnelles
+
+Aucune catégorie n'avait d'icône renseignée (`categories.icon` NULL partout) — la section "Catégories populaires" de la home (`HomeController` : les 8 premières catégories actives par `order`) retombait systématiquement sur le même cercle générique par défaut (`home.blade.php`).
+
+`php artisan content:seed-category-icons` (`--dry-run` disponible) : génère 39 icônes SVG (style ligne, 24×24, cohérentes avec le style de l'icône générique déjà en place — mêmes conventions `stroke`/`stroke-width`/`stroke-linecap` — couleur `#a63f23`, la couleur `brand-600` du design system), écrites dans `public/images/category-icons/` (asset de design versionné dans le dépôt, comme `public/branding/*` — pas via le disque `storage/app/public` utilisé pour les uploads admin, voir `App\Models\Concerns\ResolvesImageUrl` qui accepte les deux conventions), puis associe chacune des 94 catégories concernées (sur 96) à l'icône la plus pertinente par thème (une icône peut illustrer plusieurs catégories proches — ex. l'icône "food" pour Restaurants/Boucheries/Traiteurs/Gout et saveurs — c'est le fonctionnement normal d'un système d'icônes par thème, pas 96 dessins bespoke). 2 catégories volontairement laissées sans icône (repli sur le cercle générique) : `strip-tease` (aucune icône neutre pertinente) et `jardineries-old` (doublon obsolète de `jardineries`).
+
+Un administrateur reste libre de remplacer l'icône d'une catégorie précise via le champ upload déjà existant (`CategoryResource`) sans toucher au code — cette commande ne fait que poser un jeu de valeurs par défaut cohérent là où il n'y en avait aucun.
+
+Écrit via le query builder (même raison qu'au §29 : `Category` fait partie de `AppServiceProvider::SITEMAP_MODELS`).
+
+Tests : `tests/Feature/FixSliderLinksTest.php` (6 tests), `tests/Feature/SeedCategoryIconsTest.php` (5 tests), `tests/Feature/HomepageTest.php::test_slide_with_a_link_opens_in_a_new_tab`.
+
+## 31. Menu "Publier" global — les 4 dépôts publics n'étaient accessibles que depuis leur propre section (11/09/2026, demande client)
+
+Demande client : *"Où sont accessibles les formulaires que j'avais demandé avant à part 'Déposer une annonce' et 'Proposer un événement'. Les mettre accessible facilement."*
+
+**Constat** : les 4 formulaires de dépôt public (annonce, événement, fiche annuaire §28, actualité §28) avaient chacun un bouton "+" sur leur propre page de section (`/annonces`, `/agenda`, `/annuaire`, `/actualites`) — mais le seul lien présent dans l'en-tête GLOBAL (visible sur toute page du site, y compris la homepage) était le bouton "Déposer une annonce" (`components/site/header.blade.php`), codé en dur pour ce seul formulaire. Les 3 autres n'étaient donc atteignables qu'en naviguant d'abord vers leur section — invisibles depuis la homepage, le cinéma, le contact, etc.
+
+**Fix** : le bouton unique devient un menu déroulant "Publier une annonce" (même mécanisme Alpine.js que le sous-menu "Annuaire" déjà en place — `pt-1` plutôt que `mt-1` pour éviter la zone morte de survol, voir son commentaire) listant les 4 destinations : Déposer une annonce, Proposer un événement, Ajouter mon établissement, Proposer une actualité. Décliné en desktop (menu déroulant au clic/survol) et mobile (section dédiée dans le menu hamburger).
+
+Test : `tests/Feature/PublishMenuTest.php` — vérifie que les 4 liens apparaissent sur `/cinema` (page choisie précisément parce qu'elle n'a aucun rapport avec les 4 formulaires, pour prouver que le menu est bien global et pas seulement présent sur leur propre section).
