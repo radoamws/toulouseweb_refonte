@@ -109,6 +109,28 @@ class HomepageTest extends TestCase
     }
 
     /**
+     * ⚠️ Bug réel trouvé et corrigé (11/09/2026, audit UI/UX) : la home
+     * proposait un film sans AUCUNE séance actuellement valide (vérifié en
+     * direct : la home affichait "The Fabelmans" — 2022 — alors que /cinema
+     * disait déjà "Aucun film à l'affiche") — même scope que
+     * CinemaController::index(), déjà correct.
+     */
+    public function test_homepage_only_shows_movies_with_a_currently_valid_screening(): void
+    {
+        $cinema = \App\Models\Cinema::create(['name' => 'Cinéma Test', 'slug' => 'cinema-test']);
+
+        $stillPlaying = Movie::create(['title' => 'Film à l\'affiche', 'slug' => 'film-a-l-affiche', 'release_date' => now()->subDays(2)]);
+        $stillPlaying->screenings()->create(['cinema_id' => $cinema->id]);
+
+        $expired = Movie::create(['title' => 'Vieux Film Terminé', 'slug' => 'vieux-film-termine', 'release_date' => now()->subYears(3)]);
+        $expired->screenings()->create(['cinema_id' => $cinema->id, 'start_date' => now()->subMonths(2), 'end_date' => now()->subMonths(1)]);
+
+        $response = $this->get('/')->assertOk();
+        $response->assertSee('Film à l\'affiche');
+        $response->assertDontSee('Vieux Film Terminé');
+    }
+
+    /**
      * Miniature actu de la home (demande client, 03/09/2026) : affiche la
      * date de début → fin de l'ÉVÉNEMENT décrit par l'article (pas la date
      * de publication) quand elle est renseignée. Repli sur la date de

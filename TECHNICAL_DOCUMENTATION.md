@@ -1287,3 +1287,53 @@ Demande client : *"Où sont accessibles les formulaires que j'avais demandé ava
 **Fix** : le bouton unique devient un menu déroulant "Publier une annonce" (même mécanisme Alpine.js que le sous-menu "Annuaire" déjà en place — `pt-1` plutôt que `mt-1` pour éviter la zone morte de survol, voir son commentaire) listant les 4 destinations : Déposer une annonce, Proposer un événement, Ajouter mon établissement, Proposer une actualité. Décliné en desktop (menu déroulant au clic/survol) et mobile (section dédiée dans le menu hamburger).
 
 Test : `tests/Feature/PublishMenuTest.php` — vérifie que les 4 liens apparaissent sur `/cinema` (page choisie précisément parce qu'elle n'a aucun rapport avec les 4 formulaires, pour prouver que le menu est bien global et pas seulement présent sur leur propre section).
+
+## 32. Audit UI/UX + SEO/GEO complet — 8 bugs réels corrigés (11/09/2026, demande client)
+
+Demande client : *"Analyse complètement le site et retourne-moi ce qu'il y a à améliorer UI/UX, SEO/GEO et évolution... tu peux y aller pour tout corriger."* Deux audits menés en parallèle (agents dédiés, lecture du code + `curl` en direct sur le site réellement démarré + requêtes SQL réelles), puis chaque bug réel confirmé et corrigé un par un.
+
+### 1. Traductions françaises manquantes (`lang/fr/`)
+
+Laravel 11+ ne fournit plus les fichiers de langue par défaut dans le squelette — sans `lang/fr/`, un visiteur qui se trompait dans un des 5 formulaires publics voyait littéralement `validation.required`/`validation.email` au lieu d'un message en français (constaté en direct sur `/contact`). La pagination Laravel par défaut (jamais publiée/personnalisée) affichait aussi "Go to page 2"/"Showing... of... results" en anglais brut, avec des couleurs `gray-*`/`blue-*`/`dark:*` hors du design system.
+
+**Fix** : `php artisan lang:publish` puis traduction complète de `validation.php`/`pagination.php`/`auth.php`/`passwords.php` (mêmes clés que les fichiers `lang/en/*` de Laravel 12, avec des noms d'attributs français couvrant les 5 formulaires publics) + `lang/fr.json` pour les chaînes "Showing"/"to"/"of"/"results"/"Go to page :page" (recherchées par Laravel hors du système de fichiers `file.key`, via `__()` sans préfixe). Vue de pagination republiée (`resources/views/vendor/pagination/{tailwind,simple-tailwind}.blade.php`) et réécrite avec les tokens `brand-*`/`ink-*` du design system, classes `dark:*` mortes retirées (le site n'a pas de mode sombre).
+
+### 2. Homepage cinéma : films qui ne jouent plus
+
+`HomeController::index()` — `Movie::whereHas('screenings')->latest('release_date')` acceptait n'importe quel film ayant EU une séance un jour, sans jamais vérifier qu'une séance est encore valide aujourd'hui. Vérifié en direct : la home proposait "The Fabelmans" (2022), et cliquer dessus menait à "Aucune séance programmée". `CinemaController::index()` avait déjà le bon filtre (`$q->currentlyValid()`, scope partagé de `Screening`) — jamais réutilisé ici. Fix : une ligne, même scope.
+
+### 3. `og:image`/`twitter:image`/JSON-LD `image` cassés (chemins non résolus/non encodés)
+
+`SeoResolverService::generateImage()` retournait le chemin brut stocké en base (ex. `"news/Laloum & Consuelo.jpg"`, `"movies/as de la jungle.jpg"`) sans jamais le résoudre en URL absolue ni encoder les espaces/caractères spéciaux. Un `<img src>` classique fonctionne quand même (un navigateur ré-encode silencieusement), mais une balise meta contient la valeur BRUTE qu'un crawler externe (réseaux sociaux, Google, moteurs de réponse IA) va chercher telle quelle — vérifié : URL non encodée en échec de connexion, la même encodée en 200. Portée mesurée : **231/233 actualités publiées et la quasi-totalité des films**.
+
+Fix centralisé dans `App\Models\Concerns\ResolvesImageUrl::resolveImageUrlEncoded()` (nouvelle méthode, réutilisée par `SeoResolverService` ET `GenerateSitemap`, point 5 ci-dessous) — résout le chemin comme `resolveImageUrl()` (déjà utilisé partout pour `<img src>`) puis encode chaque segment du chemin, de façon idempotente (décode avant de ré-encoder, ne double-encode jamais une URL déjà propre).
+
+### 4. Titre/description SEO tronqués même quand déjà corrects
+
+`SeoResolverService::resolve()` appliquait `Str::limit()` INCONDITIONNELLEMENT, y compris à un `seo_meta.title`/`description` déjà rédigé à la main et déjà sous les recommandations Google. Vérifié en direct sur la HOME : le titre migré (69 caractères, déjà correct) perdait le mot "Toulouse" une fois retaillé à l'ancienne limite de 60 caractères — la page la plus importante du site affichait un titre amputé de son mot-clé local principal.
+
+Fix : `limitIfNeeded()` ne tronque désormais que ce qui dépasse réellement un plafond raisonnable (70 caractères titre, 165 description — relevé depuis 60/160), personnalisé ou auto-généré. Le test de troncature-en-plein-mot du §25 reste vérifié (juste avec la nouvelle limite), et un nouveau test verrouille qu'un titre déjà sous la limite n'est plus jamais retouché.
+
+### 5. Sitemap sans balises `<image:image>`
+
+Le fichier déclarait le namespace `xmlns:image` mais n'ajoutait jamais aucune image, malgré des milliers de contenus avec photo — opportunité d'indexation Google Images manquée sur tout le catalogue. Fix : `GenerateSitemap` ajoute désormais `->addImage()` (logo pour `Listing`, poster pour `Movie` via `resolveImageUrlEncoded()`, image pour `News`) — 1 146 balises image sur 3 936 URLs après régénération en développement.
+
+### 6. Pagination non auto-canonicalisée
+
+`/annuaire?page=2` (et `/agenda`, `/actualites`, `/annonces`) se déclarait TOUJOURS doublon de la page 1 dans son `<link rel="canonical">` — que ce soit via `url()->current()` (exclut par conception toute query string) ou via un canonical personnalisé résolu pour une page "menu" de catégorie — alors que le contenu de la page 2 est réellement différent (d'autres fiches). Fix, dans `components/layouts/app.blade.php` : si `?page=` est présent SANS `?q=`, le canonical s'auto-référence avec le numéro de page. Volontairement limité à ce cas précis : une recherche paginée (`?q=...&page=2`) continue de canonicaliser vers la page sans filtre — comportement déjà correct (évite d'indexer une infinité de variantes de recherche), non touché.
+
+### 7. Articles d'actualité : copier-coller brut d'email dans `body`
+
+Vérifié en direct sur `/actualites/festival-de-comminges` : le corps de l'article contenait un `<table>` avec styles inline (`max-width: 600px`, `font-family: Lato`), des classes générées par client mail (`x_ydp...`), des attributs `data-ogsc`/`data-olk-copy-source`. Une table figée à 600px dans un conteneur fluide (`max-w-3xl`) provoque un débordement horizontal réel sur mobile. Distinct du nettoyage du §29 (qui porte sur `description`/`short_description`/`excerpt`, explicitement pas `body`, rendu en HTML brut non échappé où de simples entités se décodent déjà correctement — le vrai problème ici est une STRUCTURE de table à retirer, pas des entités).
+
+Fix : `php artisan content:clean-news-email-html` (`--dry-run` disponible) — retire `<table>`/`<style>`/commentaires conditionnels Outlook, reconstruit le contenu en paragraphes `<p>` simples. Portée : 24 articles (16 publiés sur 233, 6,9 %).
+
+### 8. Horaires d'ouverture annuaire : migrés, jamais affichés
+
+`listings.opening_hours` (JSON, clé `legacy_text`) contient une donnée réelle pour 211+ fiches, jamais rendue nulle part (`grep` sur toutes les vues : aucun résultat) — et souffrait du même problème HTML/entités que le §29, non couvert (colonne JSON, pas texte simple). Fix : `content:clean-legacy-html` étendu avec `cleanOpeningHours()` (traitement dédié pour la clé JSON) + affichage ajouté sur `annuaire/show.blade.php` (`whitespace-pre-line`, texte libre — pas de structure jour-par-jour fiable à extraire pour un JSON-LD `openingHoursSpecification`, resterait un projet à part si le client le souhaite).
+
+### Point signalé mais volontairement NON corrigé automatiquement : écarts de date suspects sur l'agenda
+
+L'audit initial soupçonnait un bug du scraper "Le Vent des Signes" sur ~407 événements avec un écart start/end ≥ 300 jours (ex. un "festival" affiché du 14 mai 2026 au 17 mai 2027). **Vérification en base : ce n'est PAS un bug de scraper** — les 407 lignes ont TOUTES `external_ref IS NULL` (jamais issues d'un driver de scraping, qui renseigne toujours ce champ pour la déduplication) ; la plupart sont d'anciens événements migrés (2016-2019). Sur les 10 événements réellement publiés et à venir concernés, tous ont `source = 'manual'` — saisis à la main dans l'admin, très probablement une erreur de sélection d'année sur la date de fin (un vrai mais probable oubli humain, pas un défaut de code). Aucune correction automatique appliquée : sans certitude sur la date réellement voulue par la personne qui a saisi l'événement, réécrire ces dates à l'aveugle risquerait de corrompre une donnée par ailleurs correcte. **À vérifier manuellement par le client/son équipe** — liste des 10 événements concernés fournie séparément.
+
+Tests : `tests/Feature/CleanNewsEmailHtmlTest.php` (4), ajouts dans `SeoAuditFixesTest.php` (titre non tronqué à tort, image encodée, pagination auto-canonicale), `HomepageTest.php` (film sans séance valide exclu de la home), `GenerateSitemapTest.php` (balise image), `CleanLegacyHtmlTextTest.php` (horaires d'ouverture).

@@ -32,14 +32,28 @@ class SeoResolverService
         // de "...Commerces à Toulouse", "...la Vill" au lieu de "...la
         // Ville"). `preserveWords: true` recule la coupure au dernier mot
         // entier, `'…'` signale clairement une troncature.
+        //
+        // ⚠️ Deuxième bug réel trouvé et corrigé (11/09/2026, audit SEO/GEO) :
+        // cette troncature s'appliquait INCONDITIONNELLEMENT, y compris à un
+        // `seo_meta.title`/`description` déjà rédigé à la main et déjà sous
+        // les recommandations Google (~70/~160 caractères) — constaté en
+        // direct sur la home : le titre migré (69 caractères, déjà correct)
+        // perdait "Toulouse" une fois retaillé à 60. `limitIfNeeded()` ne
+        // tronque désormais que ce qui dépasse réellement un plafond
+        // raisonnable, personnalisé ou auto-généré.
         return [
-            'title' => Str::limit($title, 60, '…', preserveWords: true),
-            'description' => Str::limit($description ?? '', 160, '…', preserveWords: true),
+            'title' => $this->limitIfNeeded($title, 70),
+            'description' => $this->limitIfNeeded($description ?? '', 165),
             'canonical_url' => $seo?->canonical_url ?: $this->generateCanonical($model),
             'robots' => $seo?->robots ?: 'index,follow',
             'og_image' => $seo?->og_image ?: $this->generateImage($model),
             'structured_data' => $seo?->structured_data,
         ];
+    }
+
+    protected function limitIfNeeded(string $text, int $max): string
+    {
+        return mb_strlen($text) > $max ? Str::limit($text, $max, '…', preserveWords: true) : $text;
     }
 
     protected function generateTitle(Model $model): string
@@ -74,9 +88,39 @@ class SeoResolverService
         return null;
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (11/09/2026, audit SEO/GEO) : retournait
+     * le chemin brut stocké en base (ex. "news/Laloum & Consuelo.jpg",
+     * "movies/as de la jungle.jpg") sans jamais le résoudre en URL absolue
+     * ni l'encoder — un `<img src>` classique fonctionne quand même (un
+     * navigateur ré-encode silencieusement les espaces d'un attribut src),
+     * mais une balise `og:image`/`twitter:image`/JSON-LD `image` contient la
+     * valeur BRUTE qu'un crawler externe (réseaux sociaux, Google, moteurs
+     * de réponse IA) va chercher telle quelle — vérifié en direct : cette
+     * URL non encodée répond en échec de connexion, la même une fois
+     * encodée répond 200. Portée mesurée : 231/233 actualités publiées et
+     * la quasi-totalité des films avaient un chemin ainsi cassé. Voir
+     * App\Models\Concerns\ResolvesImageUrl::resolveImageUrlEncoded(),
+     * réutilisée aussi par App\Console\Commands\GenerateSitemap.
+     */
     protected function generateImage(Model $model): ?string
     {
-        return $this->firstAttribute($model, ['og_image', 'image', 'poster', 'logo']);
+        $value = null;
+        foreach (['og_image', 'image', 'poster', 'logo'] as $key) {
+            if (! empty($model->{$key})) {
+                $value = (string) $model->{$key};
+
+                break;
+            }
+        }
+
+        if ($value === null) {
+            return null;
+        }
+
+        return method_exists($model, 'resolveImageUrlEncoded')
+            ? $model::resolveImageUrlEncoded($value)
+            : $value;
     }
 
     protected function firstAttribute(Model $model, array $keys): ?string

@@ -84,6 +84,22 @@ class CleanLegacyHtmlTextTest extends TestCase
         $this->assertSame('Un texte déjà en clair, sans balise ni entité.', $listing->description);
     }
 
+    /** listings.opening_hours (JSON, clé legacy_text) — audit SEO/GEO du 11/09/2026, TECHNICAL_DOCUMENTATION.md §30. */
+    public function test_cleans_opening_hours_legacy_text_inside_the_json_column(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);
+        $listing = Listing::create([
+            'title' => 'Parc de loisirs', 'slug' => 'parc-de-loisirs', 'tier' => 'free', 'status' => 'published',
+            'opening_hours' => ['legacy_text' => 'Horaires :<br>lundi - samedi :<br>08:00&ndash;13:00'],
+        ]);
+
+        Artisan::call('content:clean-legacy-html');
+
+        $listing->refresh();
+        $this->assertStringNotContainsString('<br>', $listing->opening_hours['legacy_text']);
+        $this->assertStringContainsString("Horaires :\nlundi - samedi :\n08:00–13:00", $listing->opening_hours['legacy_text']);
+    }
+
     public function test_dry_run_does_not_write_anything(): void
     {
         $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);

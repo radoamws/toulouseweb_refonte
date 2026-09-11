@@ -95,13 +95,13 @@ class SeoAuditFixesTest extends TestCase
      */
     public function test_seo_title_truncation_preserves_words_and_adds_an_ellipsis(): void
     {
-        $original = 'Un titre extrêmement long qui dépasse largement la limite de soixante caractères recommandée';
+        $original = 'Un titre extrêmement long qui dépasse largement la limite de soixante-dix caractères recommandée pour un vrai titre SEO';
         $page = Page::create(['key' => 'seo-menu-cinema', 'title' => 'Cinéma', 'slug' => 'cinema-menu']);
         $page->seoMeta()->create(['title' => $original]);
 
         $title = $page->resolveSeo()['title'];
 
-        $this->assertLessThanOrEqual(61, mb_strlen($title)); // 60 + le caractère … (compté comme 1 par mb_strlen)
+        $this->assertLessThanOrEqual(71, mb_strlen($title)); // 70 + le caractère … (compté comme 1 par mb_strlen)
         $this->assertStringEndsWith('…', $title);
 
         // Ne coupe pas en plein milieu d'un mot : ce qui précède "…" doit être
@@ -111,6 +111,22 @@ class SeoAuditFixesTest extends TestCase
         $this->assertTrue(str_starts_with($original, $truncated));
         $charAfter = mb_substr($original, mb_strlen($truncated), 1);
         $this->assertTrue($charAfter === '' || $charAfter === ' ');
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (11/09/2026, audit SEO/GEO) : la
+     * troncature s'appliquait INCONDITIONNELLEMENT, y compris à un titre déjà
+     * personnalisé et déjà sous la limite recommandée — constaté en direct
+     * sur la home : le titre migré (69 caractères, déjà correct) perdait
+     * "Toulouse" une fois retaillé à l'ancienne limite de 60.
+     */
+    public function test_seo_title_already_under_the_limit_is_not_truncated(): void
+    {
+        $original = 'ToulouseWeb.com | Sorties, Agenda, Restaurants & Commerces à Toulouse'; // 69 caractères, déjà personnalisé
+        $page = Page::create(['key' => 'home', 'title' => 'Accueil', 'slug' => 'accueil']);
+        $page->seoMeta()->create(['title' => $original]);
+
+        $this->assertSame($original, $page->resolveSeo()['title']);
     }
 
     public function test_homepage_has_exactly_one_h1(): void
@@ -201,5 +217,55 @@ class SeoAuditFixesTest extends TestCase
         $response->assertSee('"description":"Un extrait avec du HTML colle par erreur"', false);
         $response->assertDontSee('&lt;p&gt;', false);
         $response->assertSee('"publisher":{"@type":"Organization"', false);
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (11/09/2026, audit SEO/GEO) : `og:image`/
+     * `twitter:image`/JSON-LD `image` contenaient le chemin BRUT stocké en
+     * base (jamais résolu en URL absolue, jamais encodé) — un `<img src>`
+     * classique fonctionne quand même (un navigateur ré-encode
+     * silencieusement les espaces d'un attribut src), mais un crawler externe
+     * qui lit la valeur brute d'une balise meta échoue à charger l'image.
+     * Portée mesurée : 231/233 actualités publiées avaient un chemin ainsi
+     * cassé.
+     */
+    public function test_news_og_image_is_resolved_and_url_encoded(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-image']);
+        \App\Models\News::create([
+            'category_id' => $category->id, 'title' => 'Une actu avec image', 'slug' => 'une-actu-avec-image',
+            'body' => 'x', 'image' => 'news/Laloum & Consuelo.jpg',
+            'status' => 'published', 'published_at' => now(),
+        ]);
+
+        $expectedUrl = \Illuminate\Support\Facades\Storage::disk('public')->url('news/Laloum%20%26%20Consuelo.jpg');
+
+        $response = $this->get('/actualites/une-actu-avec-image')->assertOk();
+        $response->assertSee('property="og:image" content="'.$expectedUrl.'"', false);
+        $response->assertDontSee('content="news/Laloum & Consuelo.jpg"', false);
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (11/09/2026, audit SEO/GEO) : une page
+     * paginée (?page=2) se voyait TOUJOURS attribuer le canonical de la
+     * page 1 (contenu pourtant réellement différent) — voir
+     * components/layouts/app.blade.php. `?q=` doit, lui, continuer à
+     * canonicaliser vers la page sans filtre (comportement déjà correct,
+     * évite d'indexer une infinité de variantes de recherche).
+     */
+    public function test_paginated_listing_pages_self_canonicalize(): void
+    {
+        $category = \App\Models\Category::create(['name' => 'Restaurants', 'slug' => 'restaurants-pagination', 'level' => 0, 'is_active' => true]);
+        foreach (range(1, 30) as $i) {
+            $listing = \App\Models\Listing::create(['title' => "Resto {$i}", 'slug' => "resto-{$i}", 'tier' => 'free', 'status' => 'published']);
+            $listing->categories()->attach($category->id);
+        }
+
+        $this->get('/annuaire?page=2')->assertOk()
+            ->assertSee('<link rel="canonical" href="'.url('/annuaire?page=2').'">', false);
+
+        // Toujours correct : la recherche continue de canonicaliser vers la page sans filtre.
+        $this->get('/annuaire?q=resto')->assertOk()
+            ->assertSee('<link rel="canonical" href="'.url('/annuaire').'">', false);
     }
 }

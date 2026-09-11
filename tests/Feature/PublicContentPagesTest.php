@@ -82,6 +82,25 @@ class PublicContentPagesTest extends TestCase
         $this->get('/annuaire/fiche/fiche-gratuite')->assertOk()->assertSee('1 rue de Test')->assertDontSee('Visiter le site');
     }
 
+    /**
+     * ⚠️ Gap réel trouvé et corrigé (11/09/2026, audit SEO/GEO) :
+     * `opening_hours` est migré (211 fiches réelles) mais n'était affiché
+     * NULLE PART — voir annuaire/show.blade.php et TECHNICAL_DOCUMENTATION.md §30.
+     */
+    public function test_annuaire_show_displays_opening_hours_when_present(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants']);
+        $listing = Listing::create([
+            'title' => 'Avec Horaires', 'slug' => 'avec-horaires', 'tier' => 'free', 'status' => 'published',
+            'opening_hours' => ['legacy_text' => "Lundi - vendredi :\n09:00-18:00"],
+        ]);
+        $listing->categories()->attach($category);
+
+        $response = $this->get('/annuaire/fiche/avec-horaires')->assertOk();
+        $response->assertSee('Horaires');
+        $response->assertSee('Lundi - vendredi :');
+    }
+
     /** Liens externes en target="_blank" (demande client, "partout") — voir annuaire/show.blade.php. */
     public function test_annuaire_show_reservation_link_opens_in_new_tab(): void
     {

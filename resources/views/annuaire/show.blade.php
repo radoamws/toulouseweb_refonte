@@ -186,6 +186,16 @@
                             <dd class="text-ink-800">{{ $listing->address }}@if($listing->city), {{ $listing->city }}@endif</dd>
                         </div>
                     @endif
+                    {{-- Migrée mais jamais affichée nulle part avant ce correctif
+                    (audit SEO/GEO du 11/09/2026, TECHNICAL_DOCUMENTATION.md §30)
+                    — texte libre legacy (pas de structure jour par jour fiable
+                    à extraire), nettoyé de son HTML par content:clean-legacy-html. --}}
+                    @if ($openingHours = $listing->opening_hours['legacy_text'] ?? null)
+                        <div>
+                            <dt class="font-medium text-ink-500">Horaires</dt>
+                            <dd class="whitespace-pre-line text-ink-800">{{ $openingHours }}</dd>
+                        </div>
+                    @endif
                     {{-- `clean_phone`, pas `phone` : voir docblock de Listing::cleanPhone()
                     (bug réel corrigé le 08/09/2026, audit SEO final) — le `phone` legacy brut
                     mélangeait parfois téléphone/email/HTML ("Tel: ...<br>Mail: ..."), rendu

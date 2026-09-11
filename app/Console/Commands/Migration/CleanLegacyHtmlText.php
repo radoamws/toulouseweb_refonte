@@ -55,6 +55,9 @@ class CleanLegacyHtmlText extends Command
         ['table' => 'news', 'column' => 'excerpt'],
     ];
 
+    // `listings.opening_hours` (JSON) traité séparément par
+    // `cleanOpeningHours()` — même problème, structure de colonne différente.
+
     public function handle(): int
     {
         $dryRun = (bool) $this->option('dry-run');
@@ -64,9 +67,62 @@ class CleanLegacyHtmlText extends Command
             $this->cleanColumn($target['table'], $target['column'], $dryRun, $log);
         }
 
+        $this->cleanOpeningHours($dryRun, $log);
+
         $this->info($log->summary());
 
         return self::SUCCESS;
+    }
+
+    /**
+     * `listings.opening_hours` (JSON, clé `legacy_text`) a le même problème
+     * que les colonnes texte ci-dessus (`<br>`/entités HTML legacy — voir
+     * TECHNICAL_DOCUMENTATION.md §30) mais n'était pas couvert par
+     * `cleanColumn()`, qui suppose une colonne texte simple, pas du JSON.
+     * Repéré lors de l'audit SEO/GEO du 11/09/2026 : cette donnée n'est de
+     * toute façon affichée nulle part (voir annuaire/show.blade.php) — sans
+     * intérêt de la nettoyer si elle continue à rester invisible, d'où le
+     * correctif conjoint (affichage ajouté dans la même série de correctifs).
+     */
+    protected function cleanOpeningHours(bool $dryRun, MigrationLog $log): void
+    {
+        $changed = 0;
+        $unchanged = 0;
+
+        DB::table('listings')
+            ->select('id', 'opening_hours')
+            ->whereNotNull('opening_hours')
+            ->orderBy('id')
+            ->chunkById(500, function ($rows) use ($dryRun, $log, &$changed, &$unchanged) {
+                foreach ($rows as $row) {
+                    $data = json_decode($row->opening_hours, true);
+
+                    if (! is_array($data) || ! isset($data['legacy_text']) || ! is_string($data['legacy_text'])) {
+                        $unchanged++;
+
+                        continue;
+                    }
+
+                    $cleanedText = $this->cleanText($data['legacy_text']);
+
+                    if ($cleanedText === $data['legacy_text']) {
+                        $unchanged++;
+
+                        continue;
+                    }
+
+                    $changed++;
+                    $data['legacy_text'] = $cleanedText;
+
+                    if (! $dryRun) {
+                        DB::table('listings')->where('id', $row->id)
+                            ->update(['opening_hours' => json_encode($data, JSON_UNESCAPED_UNICODE)]);
+                    }
+                }
+            });
+
+        $log->updated("listings.opening_hours : {$changed} ligne(s) nettoyée(s), {$unchanged} déjà propre(s)".($dryRun ? ' [dry-run, rien écrit]' : ''));
+        $this->line("listings.opening_hours : {$changed} nettoyée(s) / {$unchanged} déjà propre(s)");
     }
 
     protected function cleanColumn(string $table, string $column, bool $dryRun, MigrationLog $log): void

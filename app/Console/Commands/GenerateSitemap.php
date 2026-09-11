@@ -57,9 +57,13 @@ class GenerateSitemap extends Command
             fn (Category $c) => $sitemap->add(Url::create("/annuaire/{$c->slug}")->setLastModificationDate($c->updated_at)->setPriority(0.7))
         );
 
-        Listing::published()->each(
-            fn (Listing $l) => $sitemap->add(Url::create("/annuaire/fiche/{$l->slug}")->setLastModificationDate($l->updated_at)->setPriority($l->isPaid() ? 0.7 : 0.5))
-        );
+        Listing::published()->each(function (Listing $l) use ($sitemap) {
+            $url = Url::create("/annuaire/fiche/{$l->slug}")->setLastModificationDate($l->updated_at)->setPriority($l->isPaid() ? 0.7 : 0.5);
+            if ($logo = $l->getFirstMediaUrl('logo')) {
+                $url->addImage($logo, $l->title);
+            }
+            $sitemap->add($url);
+        });
 
         EventCategory::each(
             fn (EventCategory $c) => $sitemap->add(Url::create("/agenda/{$c->slug}")->setLastModificationDate($c->updated_at)->setPriority(0.6))
@@ -73,13 +77,24 @@ class GenerateSitemap extends Command
             fn (Cinema $c) => $sitemap->add(Url::create("/cinema/salles/{$c->slug}")->setLastModificationDate($c->updated_at)->setPriority(0.6))
         );
 
-        Movie::whereHas('screenings', fn ($q) => $q->currentlyValid())->each(
-            fn (Movie $m) => $sitemap->add(Url::create("/cinema/films/{$m->slug}")->setLastModificationDate($m->updated_at)->setPriority(0.6))
-        );
+        // `resolveImageUrlEncoded()` (pas le simple `poster_url`/`image_url`
+        // affiché en <img src>) : une balise <image:image> est lue telle
+        // quelle par un crawler externe, voir docblock de cette méthode.
+        Movie::whereHas('screenings', fn ($q) => $q->currentlyValid())->each(function (Movie $m) use ($sitemap) {
+            $url = Url::create("/cinema/films/{$m->slug}")->setLastModificationDate($m->updated_at)->setPriority(0.6);
+            if ($poster = Movie::resolveImageUrlEncoded($m->poster)) {
+                $url->addImage($poster, $m->title);
+            }
+            $sitemap->add($url);
+        });
 
-        News::published()->each(
-            fn (News $n) => $sitemap->add(Url::create("/actualites/{$n->slug}")->setLastModificationDate($n->updated_at)->setPriority(0.5))
-        );
+        News::published()->each(function (News $n) use ($sitemap) {
+            $url = Url::create("/actualites/{$n->slug}")->setLastModificationDate($n->updated_at)->setPriority(0.5);
+            if ($image = News::resolveImageUrlEncoded($n->image)) {
+                $url->addImage($image, $n->title);
+            }
+            $sitemap->add($url);
+        });
 
         Classified::where('status', 'published')->each(
             fn (Classified $c) => $sitemap->add(Url::create("/annonces/{$c->slug}")->setLastModificationDate($c->updated_at)->setPriority(0.4))

@@ -21,6 +21,22 @@
         // vrai visuel OG dédié (bannière, pas un simple logo/favicon).
         'og_image' => $siteSettings->default_og_image_url ?: asset('branding/toulouseweb-icon.png'),
     ], array_filter($seo));
+
+    // ⚠️ Bug réel trouvé et corrigé (11/09/2026, audit SEO/GEO) : une page
+    // paginée (ex. /annuaire?page=2) se voyait TOUJOURS attribuer le
+    // canonical de la page 1 — que ce soit via `url()->current()` ci-dessus
+    // (exclut par conception toute query string) ou via un canonical
+    // personnalisé résolu par SeoResolverService pour la page "menu" d'une
+    // catégorie (App\Models\Concerns\HasSeoMeta::resolveSeo() -> publicUrl(),
+    // lui aussi sans pagination). Or le contenu de la page 2 est
+    // RÉELLEMENT différent de la page 1 (d'autres fiches) — Google
+    // recommande qu'une telle page s'auto-canonicalise. Volontairement
+    // limité à `?page=` SANS `?q=` : une page de résultats de RECHERCHE
+    // paginée continue de canonicaliser vers la page sans filtre (déjà
+    // correct, évite d'indexer une infinité de variantes de recherche).
+    if (request()->filled('page') && ! request()->filled('q')) {
+        $seo['canonical_url'] = url()->current().'?page='.request()->query('page');
+    }
 @endphp
 <!DOCTYPE html>
 <html lang="fr" class="scroll-smooth">

@@ -66,6 +66,24 @@ class GenerateSitemapTest extends TestCase
         $this->assertStringContainsString(url('/annonces/une-annonce'), $xml);
     }
 
+    /**
+     * ⚠️ Gap réel trouvé et corrigé (11/09/2026, audit SEO/GEO) : le sitemap
+     * déclarait le namespace `xmlns:image` mais n'ajoutait jamais aucune
+     * balise `<image:image>`, malgré des milliers de contenus avec photo —
+     * opportunité d'indexation Google Images manquée sur tout le catalogue.
+     */
+    public function test_content_with_a_photo_gets_an_image_tag(): void
+    {
+        News::create(['title' => 'Une actu avec image', 'slug' => 'une-actu-image', 'body' => 'x', 'image' => 'news/photo.jpg', 'status' => 'published']);
+
+        $this->artisan('sitemap:generate')->assertSuccessful();
+
+        $xml = file_get_contents(public_path('sitemap.xml'));
+        $this->assertStringContainsString('<image:image>', $xml);
+        $this->assertStringContainsString('news/photo.jpg', $xml);
+        $this->assertStringContainsString('<image:caption>Une actu avec image</image:caption>', $xml);
+    }
+
     public function test_excludes_draft_and_expired_content(): void
     {
         News::create(['title' => 'Brouillon', 'slug' => 'brouillon', 'body' => 'x', 'status' => 'draft']);
