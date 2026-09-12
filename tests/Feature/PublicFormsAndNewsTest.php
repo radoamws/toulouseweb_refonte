@@ -34,6 +34,58 @@ class PublicFormsAndNewsTest extends TestCase
         $this->get('/actualites/une-actu-de-test')->assertOk()->assertSee('Contenu');
     }
 
+    /**
+     * Tri par défaut de /actualites (demande client, 12/09/2026) :
+     * publication la plus récente d'abord. Voir NewsController::renderIndex().
+     */
+    public function test_actualites_index_sorts_by_most_recent_publication_by_default(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-tri']);
+        News::create(['category_id' => $category->id, 'title' => 'Plus ancienne', 'slug' => 'plus-ancienne', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subDays(5)]);
+        News::create(['category_id' => $category->id, 'title' => 'Plus recente', 'slug' => 'plus-recente', 'body' => 'x', 'status' => 'published', 'published_at' => now()]);
+
+        $response = $this->get('/actualites')->assertOk();
+        $response->assertSeeInOrder(['Plus recente', 'Plus ancienne']);
+    }
+
+    /** Choix de tri explicite : publication la plus ancienne d'abord. */
+    public function test_actualites_index_can_sort_by_oldest_publication(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-tri2']);
+        News::create(['category_id' => $category->id, 'title' => 'Plus ancienne', 'slug' => 'plus-ancienne-2', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subDays(5)]);
+        News::create(['category_id' => $category->id, 'title' => 'Plus recente', 'slug' => 'plus-recente-2', 'body' => 'x', 'status' => 'published', 'published_at' => now()]);
+
+        $response = $this->get('/actualites?sort=published_asc')->assertOk();
+        $response->assertSeeInOrder(['Plus ancienne', 'Plus recente']);
+    }
+
+    /**
+     * Tri par date de l'événement (croissante/décroissante) — les articles
+     * SANS date d'événement (la majorité, simples actus) restent toujours
+     * relégués en fin de liste, quel que soit le sens choisi.
+     */
+    public function test_actualites_index_can_sort_by_event_date_pushing_articles_without_one_to_the_end(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-tri3']);
+        News::create(['category_id' => $category->id, 'title' => 'Sans date événement', 'slug' => 'sans-date-evenement', 'body' => 'x', 'status' => 'published', 'published_at' => now()]);
+        News::create(['category_id' => $category->id, 'title' => 'Événement proche', 'slug' => 'evenement-proche', 'body' => 'x', 'status' => 'published', 'published_at' => now(), 'start_date' => now()->addDays(2)]);
+        News::create(['category_id' => $category->id, 'title' => 'Événement lointain', 'slug' => 'evenement-lointain', 'body' => 'x', 'status' => 'published', 'published_at' => now(), 'start_date' => now()->addDays(20)]);
+
+        $asc = $this->get('/actualites?sort=event_asc')->assertOk();
+        $asc->assertSeeInOrder(['Événement proche', 'Événement lointain', 'Sans date événement']);
+
+        $desc = $this->get('/actualites?sort=event_desc')->assertOk();
+        $desc->assertSeeInOrder(['Événement lointain', 'Événement proche', 'Sans date événement']);
+    }
+
+    /** Une valeur de tri inventée retombe silencieusement sur le tri par défaut, pas une erreur. */
+    public function test_actualites_index_ignores_an_invalid_sort_value(): void
+    {
+        NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-tri4']);
+
+        $this->get('/actualites?sort=n-importe-quoi')->assertOk();
+    }
+
     public function test_draft_news_is_not_accessible(): void
     {
         News::create(['title' => 'Brouillon', 'slug' => 'brouillon', 'body' => 'x', 'status' => 'draft']);

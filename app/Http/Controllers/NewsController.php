@@ -8,6 +8,7 @@ use App\Models\Page;
 use App\Support\AdminNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -16,6 +17,25 @@ use Illuminate\View\View;
  */
 class NewsController extends Controller
 {
+    /**
+     * Choix de tri de `/actualites` (demande client, 12/09/2026) — par
+     * défaut, publication la plus récente d'abord (déjà le comportement
+     * historique). "Date de l'événement" trie sur `start_date` (voir
+     * App\Models\News, brief "informations pratiques" du 03/09/2026) — les
+     * articles sans date d'événement (la majorité, simples actus) sont
+     * toujours relégués en fin de liste quel que soit le sens choisi (voir
+     * `orderByRaw('start_date IS NULL')` dans renderIndex()), jamais
+     * mélangés arbitrairement avec des dates réelles.
+     *
+     * @var array<string, string>
+     */
+    public const SORT_OPTIONS = [
+        'published_desc' => 'Publication — plus récente d\'abord',
+        'published_asc' => 'Publication — plus ancienne d\'abord',
+        'event_asc' => 'Date de l\'événement — croissante',
+        'event_desc' => 'Date de l\'événement — décroissante',
+    ];
+
     public function index(Request $request, ?NewsCategory $category = null): View
     {
         return $this->renderIndex($request, $category);
@@ -37,12 +57,25 @@ class NewsController extends Controller
 
     protected function renderIndex(Request $request, ?NewsCategory $category): View
     {
+        $requestedSort = $request->get('sort');
+        $sort = is_string($requestedSort) && array_key_exists($requestedSort, self::SORT_OPTIONS) ? $requestedSort : 'published_desc';
+
         $news = News::query()
             ->published()
             ->with('category')
             ->when($category, fn ($q) => $q->where('category_id', $category->id))
             ->when($request->filled('q'), fn ($q) => $q->where('title', 'like', '%'.$request->string('q').'%'))
-            ->latest('published_at')
+            ->when(in_array($sort, ['event_asc', 'event_desc'], true), fn ($q) => $q->orderByRaw('start_date IS NULL'))
+            ->orderBy(
+                str_starts_with($sort, 'event_')
+                    // `COALESCE` : un article publié sans `published_at` renseigné
+                    // ne doit pas être trié comme s'il datait de l'origine des temps
+                    // (NULL = plus petite valeur possible en ASC) — voir même
+                    // remarque sur HomeController::index().
+                    ? 'start_date'
+                    : DB::raw('COALESCE(published_at, created_at)'),
+                str_ends_with($sort, '_asc') ? 'asc' : 'desc',
+            )
             ->paginate(12)
             ->withQueryString();
 
@@ -52,6 +85,8 @@ class NewsController extends Controller
             'news' => $news,
             'categories' => $categories,
             'category' => $category,
+            'sort' => $sort,
+            'sortOptions' => self::SORT_OPTIONS,
             // Fiche "menu" migrée en repli (bug réel corrigé le 08/09/2026,
             // voir docblock équivalent sur EventController::renderIndex()) —
             // contrairement à agenda/annonces/cinema, aucun `t_seo_entity`

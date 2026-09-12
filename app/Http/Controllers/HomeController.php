@@ -28,7 +28,14 @@ class HomeController extends Controller
         return view('home', [
             'seo' => $page?->resolveSeo() ?? [],
             'slides' => Slider::activeOn('home')->with('placements')->get(),
-            'latestNews' => News::query()->published()->latest('published_at')->limit(4)->get(),
+            // Tri par date de publication la plus récente (demande client,
+            // 12/09/2026) — `COALESCE` plutôt qu'un simple `latest('published_at')` :
+            // un article publié sans `published_at` renseigné (rare, 1/234
+            // en production) remonterait sinon systématiquement en tête de
+            // liste (NULL trié comme la plus petite valeur en DESC sur
+            // MySQL), peu importe son ancienneté réelle — repli sur
+            // `created_at` dans ce cas précis.
+            'latestNews' => News::query()->published()->orderByRaw('COALESCE(published_at, created_at) DESC')->limit(4)->get(),
             'upcomingEvents' => Event::query()->published()->upcoming()->with(['area', 'categories'])
                 ->orderBy('start_date')->limit(4)->get(),
             'featuredListings' => Listing::query()->where('status', 'published')->where('tier', 'paid')

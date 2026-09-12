@@ -8,10 +8,19 @@
             <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">
                 {{ $category?->name ?? 'Actualités de Toulouse' }}
             </h1>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
                 <form method="GET" class="flex gap-2">
                     <input type="search" name="q" value="{{ request('q') }}" placeholder="Rechercher…"
                         class="w-full rounded-full border border-ink-200 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none sm:w-64">
+                    {{-- Tri (demande client, 12/09/2026) : soumission automatique au
+                    changement, le champ de recherche `q` du même formulaire reste
+                    préservé (pas besoin d'un input caché séparé). --}}
+                    <select name="sort" onchange="this.form.submit()"
+                        class="rounded-full border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                        @foreach ($sortOptions as $value => $label)
+                            <option value="{{ $value }}" @selected($sort === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
                     <x-ui.button type="submit" variant="outline" size="sm">Rechercher</x-ui.button>
                 </form>
                 <x-ui.button href="/actualites/proposer" variant="primary" size="sm">Proposer une actualité</x-ui.button>

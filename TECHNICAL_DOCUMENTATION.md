@@ -1371,3 +1371,21 @@ Les 3 widgets de clics (`ClicksOverview`, `ClicksByTypeChart`, `TopClickedEntiti
 **Fix** : nouveau `App\Filament\Pages\Dashboard` (remplace `Filament\Pages\Dashboard` générique dans `AdminPanelProvider`) implémentant `HasFiltersForm` — un formulaire "Du"/"Au" (`DatePicker`) au-dessus des widgets. `App\Filament\Widgets\Concerns\ResolvesDateFilters` (nouveau trait, partagé par les 3 widgets plutôt que dupliqué) résout `$this->filters['from']`/`['to']` avec repli sur les 30 derniers jours si non renseigné (comportement identique à avant ce correctif quand aucun filtre n'est choisi). `ClicksByTypeChart`/`TopClickedEntities` utilisent désormais cette plage directement ; `ClicksOverview` GARDE ses 3 repères fixes (aujourd'hui/7j/30j — des points de repère habituels, pas ce qu'un filtre est censé faire varier) et ajoute un 4e stat "Clics — période filtrée" reflétant la plage choisie.
 
 Tests : `tests/Feature/ClickTrackingTest.php` (6 tests — exemption CSRF, enregistrement réel d'un clic, validation des champs requis, résolution des dates du filtre avec et sans valeur choisie, rendu du dashboard avec le nouveau formulaire).
+
+## 35. Tri des actualités : homepage + choix de tri sur `/actualites` (12/09/2026, demande client)
+
+Demande client : *"1- sur la homepage, afficher par la date de publication la plus récente. 2- dans la page détaillée /actualites, par défaut trier par ordre de publication la plus récente mais ajoute un choix de tri par date de publication (croissante/décroissante) ou par date des événements (croissante/décroissante)."*
+
+**Vérifié** : la home et `/actualites` triaient déjà par `published_at` décroissant (`HomeController`/`NewsController::renderIndex()`) — confirmé en direct sur `toulouseweb.com` (4 articles homepage dans le bon ordre chronologique de publication). Le point 1 était donc déjà correct ; deux choses restaient réellement à faire :
+
+### ⚠️ Cas limite corrigé : un article sans `published_at` remontait artificiellement en tête
+
+1 actualité publiée sur 234 en production n'a pas de `published_at` renseigné (donnée legacy/saisie manuelle incomplète). `ORDER BY published_at DESC` trie NULL comme la plus petite valeur possible sur MySQL — cet article serait donc systématiquement remonté en TÊTE de la home, peu importe son ancienneté réelle. Fix : `orderByRaw('COALESCE(published_at, created_at) DESC')` (home et tri par défaut de `/actualites`) — repli sur la date de création quand la date de publication n'est pas renseignée.
+
+### Nouveau : choix de tri sur `/actualites`
+
+`NewsController::SORT_OPTIONS` (`published_desc` par défaut, `published_asc`, `event_asc`, `event_desc`) piloté par `?sort=` — menu déroulant ajouté dans `actualites/index.blade.php` (soumission automatique au changement, dans le même formulaire que la recherche `?q=`, qui reste donc préservée). Le tri par "date de l'événement" utilise `start_date` (le champ ajouté le 03/09/2026 pour les actualités-événements, brief "informations pratiques") — les articles SANS date d'événement (la majorité, simples actus) sont explicitement relégués en fin de liste quel que soit le sens choisi (`orderByRaw('start_date IS NULL')` avant le tri principal), jamais mélangés arbitrairement avec de vraies dates.
+
+Aucun changement nécessaire au correctif de canonical de pagination du §32 : `?sort=` seul continue de canonicaliser vers `/actualites` (comportement déjà correct de `url()->current()`, qui exclut toute query string) — seul `?page=` a un traitement spécial.
+
+Tests : `tests/Feature/PublicFormsAndNewsTest.php` (tri par défaut, tri explicite ancien→récent, tri par date d'événement croissante/décroissante avec articles sans date relégués en fin, valeur de tri invalide silencieusement ignorée), `tests/Feature/HomepageTest.php` (tri par défaut de la home, article sans `published_at` ne remonte plus en tête).

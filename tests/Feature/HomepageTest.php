@@ -136,6 +136,32 @@ class HomepageTest extends TestCase
      * de publication) quand elle est renseignée. Repli sur la date de
      * publication pour une actu classique sans dates d'événement.
      */
+    public function test_homepage_news_is_sorted_by_most_recent_publication_first(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-home-tri']);
+        News::create(['category_id' => $category->id, 'title' => 'Actu ancienne', 'slug' => 'actu-ancienne', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subDays(10)]);
+        News::create(['category_id' => $category->id, 'title' => 'Actu recente', 'slug' => 'actu-recente', 'body' => 'x', 'status' => 'published', 'published_at' => now()]);
+
+        $this->get('/')->assertOk()->assertSeeInOrder(['Actu recente', 'Actu ancienne']);
+    }
+
+    /**
+     * ⚠️ Cas limite corrigé (12/09/2026) : un article publié sans
+     * `published_at` renseigné (rare, 1/234 en production) ne doit pas
+     * artificiellement remonter en tête de liste (NULL trié comme la plus
+     * petite valeur en DESC sur MySQL) — repli sur `created_at`.
+     */
+    public function test_homepage_news_without_published_at_does_not_jump_to_the_top(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-home-tri2']);
+        // created_at nettement plus ancien, sans published_at.
+        $withoutPublishedAt = News::create(['category_id' => $category->id, 'title' => 'Sans date de publication', 'slug' => 'sans-date-publication', 'body' => 'x', 'status' => 'published']);
+        $withoutPublishedAt->forceFill(['created_at' => now()->subDays(30)])->save();
+        News::create(['category_id' => $category->id, 'title' => 'Actu recente', 'slug' => 'actu-recente-2', 'body' => 'x', 'status' => 'published', 'published_at' => now()]);
+
+        $this->get('/')->assertOk()->assertSeeInOrder(['Actu recente', 'Sans date de publication']);
+    }
+
     public function test_homepage_news_card_shows_event_date_range_when_set(): void
     {
         $news = News::create([
