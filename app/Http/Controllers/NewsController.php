@@ -76,6 +76,12 @@ class NewsController extends Controller
                     : DB::raw('COALESCE(published_at, created_at)'),
                 str_ends_with($sort, '_asc') ? 'asc' : 'desc',
             )
+            // Départage stable en cas d'égalité (ex. plusieurs articles sans
+            // start_date, ou publiés à la même seconde) — sans ce
+            // départage, l'ordre relatif de ces lignes n'est pas garanti
+            // d'une requête à l'autre, ce qui casserait la pagination
+            // (une fiche pourrait apparaître deux fois ou jamais entre 2 pages).
+            ->orderBy('id', str_ends_with($sort, '_asc') ? 'asc' : 'desc')
             ->paginate(12)
             ->withQueryString();
 
