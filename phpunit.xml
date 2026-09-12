@@ -46,5 +46,10 @@
         (Mail::fake() dans les tests concernés — aucun email réel n'est
         jamais envoyé pendant la suite de tests). -->
         <env name="ADMIN_NOTIFICATION_EMAILS" value="admin-test@example.com"/>
+        <!-- Défense en profondeur (même logique que CLOUDFLARE_CACHE_PURGE_ENABLED
+        ci-dessus) : aucun test ne doit pouvoir déclencher un envoi à TOUS les
+        abonnés, même par erreur — voir App\Services\Newsletter\NewsletterSender. -->
+        <env name="NEWSLETTER_SENDING_ENABLED" value="false"/>
+        <env name="NEWSLETTER_TEST_RECIPIENTS" value="newsletter-test@example.com"/>
     </php>
 </phpunit>

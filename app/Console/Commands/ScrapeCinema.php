@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\ScraperSource;
+use App\Services\Newsletter\ScrapingDigestBuilder;
 use App\Services\Scraping\ScraperRunner;
 use Illuminate\Console\Command;
 
@@ -42,6 +43,7 @@ class ScrapeCinema extends Command
         }
 
         $hasFailure = false;
+        $totals = ['created' => 0, 'updated' => 0];
 
         foreach ($sources as $source) {
             $this->info("=== {$source->name} ===");
@@ -50,11 +52,18 @@ class ScrapeCinema extends Command
             if ($result['success']) {
                 $stats = $result['stats'];
                 $this->info("Trouvés: {$stats['found']}, créés: {$stats['created']}, mis à jour: {$stats['updated']}, ignorés: {$stats['skipped']}");
+                $totals['created'] += $stats['created'];
+                $totals['updated'] += $stats['updated'];
             } else {
                 $this->error("Échec : {$result['error']}");
                 $hasFailure = true;
             }
         }
+
+        // Brouillon de newsletter (demande client, 12/09/2026, voir
+        // App\Services\Newsletter\ScrapingDigestBuilder) — jamais envoyé
+        // automatiquement, laissé à la validation d'un administrateur.
+        ScrapingDigestBuilder::build('Cinéma', 'cinema', $totals);
 
         return $hasFailure ? self::FAILURE : self::SUCCESS;
     }

@@ -140,6 +140,43 @@
             </section>
         @endif
 
+        {{-- Newsletter (demande client, 12/09/2026, voir TECHNICAL_DOCUMENTATION.md §36) --}}
+        <section class="rounded-3xl border border-brand-100 bg-brand-50 px-6 py-10 sm:px-12" aria-labelledby="newsletter-heading">
+            <div class="mx-auto max-w-2xl text-center">
+                <h2 id="newsletter-heading" class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">
+                    Ne manquez rien de Toulouse
+                </h2>
+                <p class="mx-auto mt-3 max-w-xl text-ink-600">
+                    Actualités, agenda, bons plans : recevez le meilleur de ToulouseWeb directement par email.
+                </p>
+
+                @if (session('status'))
+                    {{-- Le bandeau générique du layout affiche déjà ce message en haut de page ;
+                    on le répète ici, au plus près du formulaire, pour qu'il reste visible même
+                    si le visiteur a fait défiler la page avant de soumettre. --}}
+                    <p class="mt-4 rounded-lg bg-green-100 px-4 py-2 text-sm font-medium text-green-800">{{ session('status') }}</p>
+                @endif
+
+                <form method="POST" action="{{ route('newsletter.subscribe') }}" class="mx-auto mt-6 flex max-w-md flex-col gap-3 sm:flex-row">
+                    @csrf
+                    <div class="absolute -left-[9999px]" aria-hidden="true">
+                        <label for="newsletter-website">Laisser vide</label>
+                        <input type="text" name="website" id="newsletter-website" tabindex="-1" autocomplete="off">
+                    </div>
+                    <label for="newsletter-email" class="sr-only">Adresse email</label>
+                    <input
+                        type="email" name="email" id="newsletter-email" required placeholder="votre@email.fr"
+                        class="w-full flex-1 rounded-full border border-ink-200 px-4 py-2.5 text-sm focus:border-brand-500 focus:outline-none"
+                    >
+                    <button type="submit" class="inline-flex items-center justify-center rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700">
+                        S'inscrire
+                    </button>
+                </form>
+                <x-ui.field-error name="email" />
+                <p class="mt-3 text-xs text-ink-400">Désinscription possible à tout moment en un clic.</p>
+            </div>
+        </section>
+
         {{-- CTA dépôt d'annonce / proposer un événement --}}
         <section class="rounded-3xl bg-ink-900 px-6 py-10 text-center sm:px-12">
             <h2 class="font-heading text-2xl font-bold text-white sm:text-3xl">Une actu, un événement, une annonce ?</h2>

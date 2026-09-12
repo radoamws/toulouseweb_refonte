@@ -1,0 +1,22 @@
+<?php
+
+namespace App\Filament\Resources\NewsletterResource\Pages;
+
+use App\Filament\Concerns\RedirectsToIndexAfterSave;
+use App\Filament\Resources\NewsletterResource;
+use Filament\Actions;
+use Filament\Resources\Pages\EditRecord;
+
+class EditNewsletter extends EditRecord
+{
+    use RedirectsToIndexAfterSave;
+
+    protected static string $resource = NewsletterResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\DeleteAction::make(),
+        ];
+    }
+}

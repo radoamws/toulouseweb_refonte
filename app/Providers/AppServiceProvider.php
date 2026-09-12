@@ -14,6 +14,7 @@ use App\Models\Page;
 use App\Models\Slider;
 use App\Observers\CloudflarePurgeObserver;
 use App\Observers\GoogleIndexingObserver;
+use App\Observers\NewsletterDraftObserver;
 use App\Observers\RegeneratesSitemapObserver;
 use App\Services\Cache\CloudflareCachePurger;
 use App\Services\Seo\GoogleIndexingService;
@@ -61,6 +62,17 @@ class AppServiceProvider extends ServiceProvider
     ];
 
     /**
+     * Modèles dont le passage au statut "published" doit générer un
+     * BROUILLON de newsletter (demande client, 12/09/2026, voir
+     * App\Observers\NewsletterDraftObserver et
+     * TECHNICAL_DOCUMENTATION.md §36) — jamais d'envoi automatique, voir
+     * docblock de l'observer.
+     */
+    protected const NEWSLETTER_DRAFT_MODELS = [
+        Listing::class, News::class, Classified::class,
+    ];
+
+    /**
      * Register any application services.
      */
     public function register(): void
@@ -88,6 +100,10 @@ class AppServiceProvider extends ServiceProvider
 
         foreach (self::SITEMAP_MODELS as $model) {
             $model::observe(RegeneratesSitemapObserver::class);
+        }
+
+        foreach (self::NEWSLETTER_DRAFT_MODELS as $model) {
+            $model::observe(NewsletterDraftObserver::class);
         }
 
         // Un seul lot d'appels HTTP à la toute fin du processus (requête HTTP

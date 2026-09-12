@@ -31,6 +31,14 @@ class HomepageTest extends TestCase
         $this->get('/')->assertOk()->assertSee('ToulouseWeb');
     }
 
+    /** Section d'inscription newsletter (demande client, 12/09/2026) — voir tests/Feature/NewsletterTest.php pour le comportement du formulaire lui-même. */
+    public function test_homepage_shows_the_newsletter_signup_form(): void
+    {
+        $this->get('/')
+            ->assertOk()
+            ->assertSee(route('newsletter.subscribe'), false);
+    }
+
     public function test_homepage_renders_all_sections_with_content(): void
     {
         Page::create(['key' => 'home', 'title' => 'Accueil', 'slug' => 'accueil']);

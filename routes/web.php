@@ -9,6 +9,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ListingController;
 use App\Http\Controllers\LlmsTxtController;
 use App\Http\Controllers\NewsController;
+use App\Http\Controllers\NewsletterSubscriptionController;
 use App\Http\Controllers\RedirectFallbackController;
 use App\Http\Controllers\WebCronController;
 use Illuminate\Support\Facades\Route;
@@ -69,6 +70,13 @@ Route::get('/annonces/{slug}', [ClassifiedController::class, 'bySlug'])->name('a
 // Contact (brief §11).
 Route::get('/contact', [ContactController::class, 'show'])->name('contact.show');
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact.store');
+
+// Newsletter (demande client, 12/09/2026, voir TECHNICAL_DOCUMENTATION.md §36).
+Route::post('/newsletter/inscription', [NewsletterSubscriptionController::class, 'store'])
+    ->middleware('throttle:5,1')
+    ->name('newsletter.subscribe');
+Route::get('/newsletter/desinscription/{token}', [NewsletterSubscriptionController::class, 'unsubscribe'])
+    ->name('newsletter.unsubscribe');
 
 // Déclencheur WebCron (hébergement mutualisé Infomaniak, pas de crontab
 // serveur — voir App\Console\Commands\RunWebCron et

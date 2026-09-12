@@ -1389,3 +1389,44 @@ Demande client : *"1- sur la homepage, afficher par la date de publication la pl
 Aucun changement nécessaire au correctif de canonical de pagination du §32 : `?sort=` seul continue de canonicaliser vers `/actualites` (comportement déjà correct de `url()->current()`, qui exclut toute query string) — seul `?page=` a un traitement spécial.
 
 Tests : `tests/Feature/PublicFormsAndNewsTest.php` (tri par défaut, tri explicite ancien→récent, tri par date d'événement croissante/décroissante avec articles sans date relégués en fin, valeur de tri invalide silencieusement ignorée), `tests/Feature/HomepageTest.php` (tri par défaut de la home, article sans `published_at` ne remonte plus en tête).
+
+## 36. Newsletter — inscription, brouillons automatiques, envoi test/GO, reprise historique (12/09/2026, demande client)
+
+Demande client (verbatim) : *"dans le front et dans le backend, ajoute un newsletter [...] en front, une section dans la homepage pour s'inscrire à la newsletter [...] toute personne s'inscrivant dans la page contact s'inscrit automatiquement aussi à la newsletter [...] dans l'admin, permettre de créer et d'envoyer un newsletter [...] pour toutes entités créées dans l'admin, envoyer automatiquement un newsletter [...] les annuaires à chaque publication, les actualités à chaque publication, les agendas/théâtres/cinémas [...] les changements dans les scrapings, les annonces à chaque publication [...] reprendre `toulouseweb_old.t_contacts` [...]. Important : N'envoie pas à tout le monde mais à moi seulement d'abord pour validation 'rado.rakotoarivelo@amws.space'. [...] Je donnerai le GO pour publier à tous les contacts seulement après ma validation."*
+
+### Garde-fou central : `services.newsletter.sending_enabled`
+
+Toute la conception tourne autour d'UNE règle imposée par le client : tant que `NEWSLETTER_SENDING_ENABLED` (config/services.php, `.env`) reste à `false` (valeur par défaut), **aucun email ne peut atteindre un vrai abonné**, ni depuis l'admin ni depuis un déclenchement automatique. `App\Services\Newsletter\NewsletterSender::sendToAll()` lève une `RuntimeException` si ce flag est faux — l'action Filament "Envoyer à tous les abonnés" (`NewsletterResource`) l'attrape et affiche une notification explicite plutôt que d'échouer silencieusement. Seule `sendTest()` reste toujours disponible, et n'envoie JAMAIS qu'aux adresses de `NEWSLETTER_TEST_RECIPIENTS` (`rado.rakotoarivelo@amws.space` par défaut) — jamais aux abonnés réels, même si `sending_enabled` est vrai. Double sécurité testée explicitement (`tests/Feature/NewsletterTest.php`) : Cloudflare/Google Indexing avaient déjà ce même schéma "désactivé par défaut + double vérification" (voir §17/§20) — appliqué ici pour une raison différente (validation éditoriale du client), pas technique.
+
+### Modèles
+
+- `newsletter_subscribers` (App\Models\NewsletterSubscriber) : email (unique), nom, statut (`active`/`unsubscribed`), origine (`homepage`/`contact_form`/`legacy_import`/`admin`), jeton de désinscription à usage web (`unsubscribe_token`, généré à la création), `legacy_id` (idempotence de l'import historique).
+- `newsletters` (App\Models\Newsletter) : sujet, texte d'aperçu, corps HTML (RichEditor Filament), statut (`draft`/`sent`), `trigger_type` (`manual`/`listing_published`/`news_published`/`classified_published`/`scraping_digest`), lien polymorphe optionnel vers la fiche à l'origine (`triggerable`), compteurs/horodatages d'envoi.
+
+### Front : inscription homepage + inscription implicite via le contact
+
+- Section dédiée sur la home (`resources/views/home.blade.php`, avant le CTA "Déposer une annonce") — formulaire email + honeypot, POST `/newsletter/inscription` (`NewsletterSubscriptionController::store`, throttle 5/min). Réactive un abonné désinscrit (volonté explicite du visiteur qui remplit à nouveau le formulaire).
+- `ContactController::store()` appelle `NewsletterSubscriber::subscribeEmail(...)` sur CHAQUE soumission du formulaire de contact (demande client explicite, aucune case à cocher) — inscription IMPLICITE : contrairement au formulaire newsletter direct, elle ne réactive JAMAIS un email déjà désinscrit (respecte un choix de désabonnement antérieur).
+- Désinscription en un clic : `GET /newsletter/desinscription/{token}` (`resources/views/newsletter/unsubscribed.blade.php`), lien inséré en pied de chaque email envoyé (`resources/views/emails/newsletter.blade.php`).
+
+### Admin : `NewsletterResource` + `NewsletterSubscriberResource`
+
+Groupe de navigation "Newsletter". `NewsletterResource` : formulaire (sujet, aperçu, corps RichEditor), actions "Envoyer un test" (toujours active, affiche les adresses de test avant confirmation) et "Envoyer à tous les abonnés" (affiche le nombre réel d'abonnés actifs avant confirmation, bloquée par le garde-fou ci-dessus). `NewsletterSubscriberResource` : liste filtrable par statut/origine, action rapide désinscrire/réactiver.
+
+### Brouillons automatiques — jamais d'envoi automatique
+
+`App\Observers\NewsletterDraftObserver` (Listing/News/Classified) crée un **brouillon** à chaque publication (voir `App\Providers\AppServiceProvider::NEWSLETTER_DRAFT_MODELS`). ⚠️ Piège rencontré et corrigé en cours de route : `wasChanged('status')` seul ne détecte pas une création directe en statut "published" (`performInsert()` n'appelle jamais `syncChanges()`) — et `wasRecentlyCreated`, l'alternative évidente, ne convient pas non plus (il reste `true` pour toute la durée de vie de l'objet PHP, y compris lors d'un `update()` ultérieur sur la même instance : un test créant puis modifiant le même `$listing` dans la même requête générait un second brouillon à tort). Fix : deux méthodes séparées, `created()` (une seule fois, juste après l'insertion) et `updated()` (`wasChanged('status')`, jamais vrai sur une simple modification d'une fiche déjà publiée) — voir le docblock de la classe.
+
+`App\Services\Newsletter\ScrapingDigestBuilder` fait de même pour agenda/théâtres (`scrape:events` — les théâtres sont des sources `type=agenda` comme Théâtre de la Cité, pas une catégorie séparée) et cinéma (`scrape:cinema`) : UN brouillon "digest" par exécution (total créés/mis à jour), jamais une ligne par fiche scrapée — un scraping touche potentiellement des centaines de lignes par jour, un email par fiche aurait été un spam massif et non demandé explicitement par le client (contrairement à "chaque publication" pour annuaire/actualités/annonces, un événement unitaire rare). Ces digests sont créés à CHAQUE exécution du WebCron quotidien dès qu'au moins une ligne a changé — l'admin peut supprimer les brouillons sans intérêt éditorial depuis `NewsletterResource`.
+
+Dans tous les cas : uniquement `status = draft`, jamais d'envoi — un administrateur valide/édite/envoie depuis Filament, conformément à la demande explicite du client ("n'envoie à personne d'autre que moi avant mon GO", qui s'applique à toutes les entités).
+
+### Reprise de l'historique `toulouseweb_old.t_contacts`
+
+`php artisan newsletter:import-legacy-contacts` (`App\Console\Commands\Migration\ImportLegacyNewsletterContacts`) — PAS le même choix que `migrate:contacts` (qui avait explicitement écarté `t_contacts` comme historique de messagerie obsolète, voir §10) : ici on ne reprend QUE l'email, comme point de départ d'une liste de diffusion. 1885 lignes legacy (2001-2014), dédoublonnées par email (de nombreuses personnes ont écrit plusieurs fois) : **1644 abonnés créés, 241 lignes ignorées** (email absent/invalide ou doublon) lors de l'exécution locale du 12/09/2026. Idempotent (`legacy_id` unique) — vérifié par un second lancement local (0 création, 1885 ignorées).
+
+### Première campagne : annonce de la refonte
+
+`php artisan newsletter:seed-relaunch` crée le brouillon "ToulouseWeb fait peau neuve" (contenu dans `resources/views/emails/partials/relaunch-announcement.blade.php`). Conformément à la demande client, **seul un envoi de test à `rado.rakotoarivelo@amws.space` a été effectué** (via l'action Filament "Envoyer un test") — aucun envoi aux 1644 abonnés importés tant que le client n'a pas donné son GO explicite (`NEWSLETTER_SENDING_ENABLED` reste `false` en production jusqu'à nouvel ordre).
+
+Tests : `tests/Feature/NewsletterTest.php` (16 tests — inscription homepage, non-duplication, réactivation, honeypot, désinscription/jeton invalide, inscription implicite contact + non-réactivation d'un désinscrit, brouillon auto sur publication Listing/News/Classified, pas de second brouillon sur simple édition, digest de scraping conditionnel, envoi test limité aux adresses configurées, refus d'envoi général tant que le flag est désactivé, envoi en file limité aux abonnés actifs une fois activé), `tests/Feature/HomepageTest.php` (présence du formulaire).

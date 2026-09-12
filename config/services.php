@@ -88,4 +88,27 @@ return [
         ))),
     ],
 
+    /*
+     * Newsletter (demande client, 12/09/2026, voir
+     * App\Services\Newsletter\NewsletterSender et
+     * TECHNICAL_DOCUMENTATION.md §36).
+     *
+     * ⚠️ `sending_enabled` = false par défaut, ET DOIT LE RESTER tant que le
+     * client n'a pas donné son "GO" explicite : demande verbatim du client
+     * le 12/09/2026 — "N'envoie pas à tout le monde mais à moi seulement
+     * d'abord pour validation. Je donnerai le GO pour publier à tous les
+     * contacts seulement après ma validation." Tant que ce flag est à
+     * false, `NewsletterResource` bloque l'action "Envoyer à tous les
+     * abonnés" (le bouton "Envoyer un test" reste toujours disponible,
+     * lui, car il ne cible jamais que `test_recipients`). Ne PAS passer à
+     * true sans confirmation explicite du client.
+     */
+    'newsletter' => [
+        'sending_enabled' => (bool) env('NEWSLETTER_SENDING_ENABLED', false),
+        'test_recipients' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('NEWSLETTER_TEST_RECIPIENTS', 'rado.rakotoarivelo@amws.space'))
+        ))),
+    ],
+
 ];

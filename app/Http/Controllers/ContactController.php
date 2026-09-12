@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ContactMessage;
+use App\Models\NewsletterSubscriber;
 use App\Models\Page;
 use App\Support\AdminNotifier;
 use Illuminate\Http\RedirectResponse;
@@ -31,6 +32,16 @@ class ContactController extends Controller
         ]);
 
         $contactMessage = ContactMessage::create(collect($validated)->except('website')->all());
+
+        // Demande client (12/09/2026, voir TECHNICAL_DOCUMENTATION.md §36) :
+        // "toute personne s'inscrivant dans la page contact s'inscrit
+        // automatiquement aussi à la newsletter" — inscription IMPLICITE,
+        // sans case à cocher. `subscribeEmail()` ne réactive jamais de force
+        // un email déjà désinscrit (contrairement au formulaire newsletter
+        // explicite de la home, voir NewsletterSubscriptionController) :
+        // une inscription implicite ne doit pas passer outre un
+        // désabonnement volontaire antérieur.
+        NewsletterSubscriber::subscribeEmail($validated['email'], $validated['name'], 'contact_form');
 
         // Notification admin (demande client, voir App\Support\AdminNotifier
         // et TECHNICAL_DOCUMENTATION.md §28) — aucun email n'était envoyé
