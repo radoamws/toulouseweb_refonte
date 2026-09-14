@@ -20,6 +20,19 @@
             <p class="mt-2 text-2xl font-bold text-brand-700">{{ number_format($classified->price, 0, ',', ' ') }} €</p>
         @endif
 
+        {{-- Bug réel trouvé et corrigé (15/09/2026, demande client) : les photos
+        uploadées (visibles en admin, jusqu'à 8 via SpatieMediaLibraryFileUpload)
+        ne s'affichaient nulle part sur le front. --}}
+        @if ($classified->getMedia('photos')->isNotEmpty())
+            <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                @foreach ($classified->getMedia('photos') as $photo)
+                    <a href="{{ $photo->getUrl() }}" target="_blank" rel="noopener" class="block overflow-hidden rounded-xl bg-ink-100">
+                        <img src="{{ $photo->getUrl() }}" alt="{{ $classified->title }}" loading="lazy" class="aspect-[4/3] w-full object-cover transition hover:scale-105">
+                    </a>
+                @endforeach
+            </div>
+        @endif
+
         <div class="prose prose-ink mt-6 max-w-none">{!! nl2br(e($classified->description)) !!}</div>
 
         <div class="mt-8 rounded-2xl border border-ink-100 bg-white p-6 shadow-sm">
@@ -42,6 +55,7 @@
                     @foreach ($related as $item)
                         <x-ui.card
                             :href="'/annonces/'.$item->slug"
+                            :image="$item->getFirstMediaUrl('photos')"
                             :title="$item->title"
                             :meta="$item->price ? number_format($item->price, 0, ',', ' ').' €' : null"
                             :track="'classified:'.$item->id.':annonces_related'"

@@ -10,6 +10,8 @@ use App\Models\Listing;
 use App\Models\News;
 use App\Models\NewsCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -227,6 +229,39 @@ class PublicFormsAndNewsTest extends TestCase
         ]);
 
         $this->get('/annonces/'.$classified->slug)->assertOk()->assertSee('Annonce publiée');
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (15/09/2026, demande client : photo
+     * visible en admin mais absente du front sur une annonce réelle en
+     * production). La fiche/carte n'affichait jamais `getMedia('photos')`/
+     * `getFirstMediaUrl('photos')` nulle part (show, index, apparentées,
+     * homepage) — l'upload fonctionnait, l'affichage public était juste
+     * absent.
+     */
+    public function test_classified_show_displays_uploaded_photos(): void
+    {
+        Storage::fake('public');
+        $category = ClassifiedCategory::create(['name' => 'Voitures', 'slug' => 'voitures']);
+        $classified = Classified::create([
+            'category_id' => $category->id, 'title' => 'Annonce avec photo', 'slug' => 'annonce-avec-photo',
+            'description' => 'x', 'contact_email' => 'a@example.test', 'status' => 'published',
+        ]);
+        $classified->addMedia(UploadedFile::fake()->image('photo.jpg', 400, 300))->toMediaCollection('photos');
+
+        $response = $this->get('/annonces/'.$classified->slug)->assertOk();
+        $response->assertSee($classified->getFirstMediaUrl('photos'), false);
+    }
+
+    public function test_classified_without_a_photo_shows_no_broken_image(): void
+    {
+        $category = ClassifiedCategory::create(['name' => 'Voitures', 'slug' => 'voitures']);
+        $classified = Classified::create([
+            'category_id' => $category->id, 'title' => 'Annonce sans photo', 'slug' => 'annonce-sans-photo',
+            'description' => 'x', 'contact_email' => 'a@example.test', 'status' => 'published',
+        ]);
+
+        $this->get('/annonces/'.$classified->slug)->assertOk()->assertSee('Annonce sans photo');
     }
 
     /** Maillage interne (brief §13, SEO/GEO) — voir docblock de ClassifiedController::show(). */

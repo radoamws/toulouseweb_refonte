@@ -36,8 +36,11 @@
         @else
             <div class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 @foreach ($classifieds as $classified)
+                    {{-- Bug réel trouvé et corrigé (15/09/2026, demande client) : la photo
+                    uploadée (visible en admin) ne s'affichait nulle part sur le front. --}}
                     <x-ui.card
                         :href="'/annonces/'.$classified->slug"
+                        :image="$classified->getFirstMediaUrl('photos')"
                         :eyebrow="$classified->category?->name"
                         :title="$classified->title"
                         :meta="$classified->price ? number_format($classified->price, 0, ',', ' ').' €' : null"

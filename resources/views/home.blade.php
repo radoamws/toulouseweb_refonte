@@ -130,6 +130,7 @@
                     @foreach ($latestClassifieds as $classified)
                         <x-ui.card
                             :href="'/annonces/'.$classified->slug"
+                            :image="$classified->getFirstMediaUrl('photos')"
                             :eyebrow="$classified->category?->name"
                             :title="$classified->title"
                             :meta="$classified->price ? number_format($classified->price, 0, ',', ' ').' €' : null"

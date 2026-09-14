@@ -1546,3 +1546,13 @@ Fix : `data-track="cinema:{id}:cinema_listing"` sur les pastilles de salle, `dat
 `App\Services\Stats\EntityLabelResolver::MAP` ne connaissait ni `cinema` (salle, déjà utilisé par les cartes "Autres salles" depuis le début) ni `screening_time` (clic "réserver" sur un horaire) — ces clics étaient bien enregistrés dans `click_events`, mais s'affichaient dans les widgets avec un libellé générique ("Cinema #5", "Screening_time #42") au lieu du vrai nom de la salle ou du film — facile à confondre avec une absence totale de données. Ajout de `cinema` à `MAP` (résolution simple, comme les autres types) et d'un cas spécial pour `screening_time` (pas de colonne "titre" propre — résolu via ses relations `Screening -> Movie`/`Cinema`, ex. *"Le Comte de Toulouse — Gaumont Wilson"*).
 
 Tests : `tests/Feature/EntityLabelResolverTest.php` (+2 : résolution `cinema`, résolution `screening_time` via relations + repli générique), `tests/Feature/PublicContentPagesTest.php::test_cinema_pages_track_navigation_to_salles_and_movies` (présence des `data-track` sur les deux liens corrigés).
+
+## 42. ⚠️ Photo d'annonce visible en admin mais absente du front (15/09/2026, demande client)
+
+Demande client (avec URL précise) : *"pour les annonces, [...] il y a une image uploadée par l'utilisateur visible dans l'admin, mais ne s'affiche pas sur le front."*
+
+Vérifié en production (`diagnostics-immobiliers-dpe`) : la photo existe bien (`getMedia('photos')` renvoie 1 fichier, l'URL de stockage répond en `200`) — le problème n'est ni l'upload, ni le stockage, ni un lien cassé. **Aucune vue publique n'affichait jamais `getMedia('photos')`/`getFirstMediaUrl('photos')`** : `annonces/show.blade.php` (fiche détaillée), `annonces/index.blade.php` (liste), les annonces apparentées (fiche + liste) et la section "Petites annonces" de la homepage — nulle part la photo n'était référencée, alors que l'admin (`SpatieMediaLibraryFileUpload`, jusqu'à 8 photos) permet bel et bien l'upload depuis toujours.
+
+Fix : galerie photo sur la fiche détaillée (`annonces/show.blade.php`, toutes les photos de la collection, cliquables vers la taille originale), vignette sur les cartes (`x-ui.card :image=`) partout ailleurs (liste, apparentées, homepage) — même composant/même repli (icône générique) que les autres types de contenu du site.
+
+Tests : `tests/Feature/PublicFormsAndNewsTest.php` (+2 : photo uploadée affichée sur la fiche, absence de photo n'affiche rien de cassé).
