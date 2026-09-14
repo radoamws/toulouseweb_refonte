@@ -1466,3 +1466,12 @@ Identifiant retrouvé dans l'ancien code source (`old/client-app/plugins/analyti
 Second point signalé par le client (fichiers `google...html` à la racine) : deux fichiers de vérification Search Console existaient bien du temps de l'ancien site (`old/client-app/google01855af25646e5c0.html`, `google791424ce5f7484f7.html`) mais avaient été perdus — ils vivaient à la racine du serveur de production, **hors du dépôt git**, et le déploiement CI/CD (`rsync --delete`, voir `.github/workflows/deploy.yml`) les supprimait silencieusement à chaque déploiement depuis la mise en place du CI/CD (§26). Recopiés dans `public/` (donc désormais suivis par git, livrés à chaque déploiement, jamais supprimés par `--delete`).
 
 Tests : `tests/Feature/PublicContentPagesTest.php::test_google_site_verification_files_are_present_in_public` (garde contre une future suppression accidentelle — test de fichier, pas HTTP : le noyau de test Laravel ne reproduit pas le court-circuit "fichier statique servi directement" d'Apache).
+
+## 39. Newsletter test toujours pas reçue via Brevo — mauvais identifiant SMTP + domaine/expéditeur non vérifiés (14/09/2026)
+
+Suite au §37 : même après bascule sur le mailer `brevo`, le test envoyé à `rado.rakotoarivelo@amws.space` n'était toujours pas reçu. Deux causes cumulées, identifiées par le client directement dans son compte Brevo :
+
+1. **Domaine et expéditeur non vérifiés** : `toulouseweb.com` et l'adresse `contact@toulouseweb.com` n'étaient pas marqués "Verified" côté Brevo — un compte Brevo peut accepter la connexion SMTP d'un expéditeur non vérifié sans erreur immédiate, mais retient/rejette le message en aval. Résolu côté client (validation dans l'interface Brevo).
+2. **Mauvais identifiant SMTP** : `config/mail.php` utilisait `BREVO_USER`/`BREVO_PWD` (email + mot de passe du COMPTE Brevo) — Brevo exige en réalité une **clé SMTP dédiée** (préfixe `xsmtpsib-`, générée dans Brevo > SMTP & API > SMTP), distincte du mot de passe de connexion au site. Le mailer `brevo` utilise maintenant `BREVO_SMTP_LOGIN`/`BREVO_SMTP_KEY` (repli sur `BREVO_USER`/`BREVO_PWD` si absents, pour ne pas casser une config existante).
+
+Aucune des deux causes ne générait d'erreur exploitable côté Laravel (`Mail::send()` rendait la main normalement dans tous les cas) — la seule façon de les détecter a été de vérifier directement l'état du compte Brevo.

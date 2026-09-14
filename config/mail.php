@@ -68,10 +68,16 @@ return [
          */
         'brevo' => [
             'transport' => 'smtp',
-            'host' => 'smtp-relay.brevo.com',
-            'port' => 587,
-            'username' => env('BREVO_USER'),
-            'password' => env('BREVO_PWD'),
+            'host' => env('BREVO_SMTP_SERVER', 'smtp-relay.brevo.com'),
+            'port' => env('BREVO_SMTP_PORT', 587),
+            // ⚠️ Le mot de passe du COMPTE Brevo (BREVO_PWD) ne suffit pas pour le
+            // relais SMTP — Brevo exige une "clé SMTP" dédiée (préfixe `xsmtpsib-`,
+            // générée dans Brevo > SMTP & API > SMTP), distincte du mot de passe de
+            // connexion au site. Constaté le 14/09/2026 : les envois de test via
+            // BREVO_USER/BREVO_PWD n'arrivaient jamais à destination (voir
+            // TECHNICAL_DOCUMENTATION.md §37/§39).
+            'username' => env('BREVO_SMTP_LOGIN', env('BREVO_USER')),
+            'password' => env('BREVO_SMTP_KEY', env('BREVO_PWD')),
         ],
 
         'ses' => [
