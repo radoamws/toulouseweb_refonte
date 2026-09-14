@@ -1447,4 +1447,22 @@ Conclusion : le mail transactionnel simple passe, mais un contenu de type newsle
 
 `config/mail.php` — nouveau mailer `brevo` (transport `smtp`, `smtp-relay.brevo.com:587`, identifiants `BREVO_USER`/`BREVO_PWD` fournis par le client). `App\Mail\NewsletterMail` force cet mailer dans son constructeur (`$this->mailer('brevo')`) — **uniquement** les newsletters basculent sur ce canal ; `App\Mail\AdminNotification` (notifications de modération) reste sur `MAIL_MAILER=smtp` (boîte Infomaniak), qui fonctionne très bien pour ce type d'usage transactionnel et n'a aucune raison de changer.
 
-Vérifié en local : un envoi de test via le mailer `brevo` s'exécute sans erreur (`Mail::send()` retourne normalement). Le test de bout en bout avec réception réelle (`rado.rakotoarivelo@amws.space` + mail-tester.com) est en cours au moment d'écrire cette section — voir le commit suivant pour la confirmation.
+Vérifié en local et en production : un envoi de test via le mailer `brevo` s'exécute sans erreur (`Mail::send()` retourne normalement, `storage/logs/laravel.log` ne montre aucune exception). ⚠️ **Non résolu au 14/09/2026** : le test envoyé en production vers `rado.rakotoarivelo@amws.space` via Brevo n'est toujours pas arrivé (ni en boîte de réception, ni en spam) après plusieurs minutes — un test parallèle vers mail-tester.com n'a lui non plus rien reçu, mais ce canal de test est probablement filtré volontairement par les ESP (anti-abus) et n'est donc pas concluant. Le sujet reste ouvert : la piste envisagée est un filtrage spécifique côté Microsoft 365 du tenant `amws.space` (quarantaine ou règle de flux mail), à vérifier côté client (`security.microsoft.com` > Revue > Quarantaine) ou via un test vers une adresse non-Microsoft — aucune conclusion définitive à ce stade.
+
+## 38. Affiches des films sur les pages salle + Google Analytics tombé à 0 (14/09/2026, demande client)
+
+### Affiches sur `/cinema/salles/{slug}`
+
+Demande client : *"dans cinema pour toutes les salles [...], ajoute l'image de chaque film en bas de chaque titre et dans une colonne gauche des horaires pour que ça soit plus attirante."* `resources/views/cinema/salle.blade.php` : chaque film affiche maintenant son affiche (`Movie::poster_url`, déjà utilisé ailleurs — homepage, sitemap) sous son titre, dans une colonne à droite (largeur fixe, `sm:w-32`) ; les horaires occupent la colonne large à gauche (`sm:flex-1`). Sans affiche renseignée (film scrapé sans poster capturé), aucune balise `<img>` orpheline n'est rendue. Empile normalement en une seule colonne sur mobile.
+
+Tests : `tests/Feature/PublicContentPagesTest.php::test_cinema_salle_page_shows_each_movie_poster` (affiche présente pour un film qui en a une, page sans erreur pour un film sans affiche).
+
+### ⚠️ Bug réel trouvé et corrigé : Google Analytics n'a jamais été configuré sur la refonte
+
+Demande client : *"vérifie car google analytics est tombé à 0."* Diagnostic en base de production : `site_settings.google_analytics_id` était **`NULL`** — la balise `gtag.js` (`resources/views/components/layouts/app.blade.php`, conditionnée par ce champ) ne s'est donc jamais affichée sur AUCUNE page depuis la bascule DNS vers la refonte. Ce n'est pas "tombé à 0" au sens d'une perte de données : le tracking n'a simplement jamais été réactivé après la migration (le champ `google_analytics_id` est une donnée de configuration du nouveau site, pas une colonne migrée depuis `toulouseweb_old`).
+
+Identifiant retrouvé dans l'ancien code source (`old/client-app/plugins/analytics.js`, plugin Nuxt `vue-gtag`) : **`G-N2PLZW2FJL`**. Renseigné dans `site_settings.google_analytics_id` (local + production) — le tracking est donc de nouveau actif sur toutes les pages à partir de ce correctif.
+
+Second point signalé par le client (fichiers `google...html` à la racine) : deux fichiers de vérification Search Console existaient bien du temps de l'ancien site (`old/client-app/google01855af25646e5c0.html`, `google791424ce5f7484f7.html`) mais avaient été perdus — ils vivaient à la racine du serveur de production, **hors du dépôt git**, et le déploiement CI/CD (`rsync --delete`, voir `.github/workflows/deploy.yml`) les supprimait silencieusement à chaque déploiement depuis la mise en place du CI/CD (§26). Recopiés dans `public/` (donc désormais suivis par git, livrés à chaque déploiement, jamais supprimés par `--delete`).
+
+Tests : `tests/Feature/PublicContentPagesTest.php::test_google_site_verification_files_are_present_in_public` (garde contre une future suppression accidentelle — test de fichier, pas HTTP : le noyau de test Laravel ne reproduit pas le court-circuit "fichier statique servi directement" d'Apache).

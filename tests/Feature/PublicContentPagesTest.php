@@ -24,6 +24,32 @@ class PublicContentPagesTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (14/09/2026, signalé par le client :
+     * "Google Analytics est tombé à 0") : ces 2 fichiers de vérification
+     * Search Console (repris du legacy `old/client-app/`) avaient été
+     * uploadés à la main directement sur le serveur de prod, HORS du dépôt
+     * git — le déploiement CI/CD (rsync --delete, voir .github/workflows/
+     * deploy.yml) les supprimait donc silencieusement à CHAQUE déploiement.
+     * Committés ici dans public/ pour qu'ils survivent définitivement aux
+     * déploiements ; ce test garantit qu'ils ne disparaissent plus par
+     * inadvertance à l'avenir (ex. un futur nettoyage de `public/`).
+     */
+    public function test_google_site_verification_files_are_present_in_public(): void
+    {
+        // Test de FICHIER (pas HTTP) : le noyau de test Laravel route toute
+        // requête via le kernel applicatif, il ne reproduit pas le
+        // court-circuit "fichier existant servi directement" d'Apache
+        // (.htaccess) qui s'applique en vrai sur le serveur — seule la
+        // présence réelle du fichier dans public/ (ce qui est la garantie
+        // recherchée ici) est vérifiable depuis un test.
+        foreach (['google01855af25646e5c0.html', 'google791424ce5f7484f7.html'] as $file) {
+            $path = public_path($file);
+            $this->assertFileExists($path);
+            $this->assertSame("google-site-verification: {$file}", file_get_contents($path));
+        }
+    }
+
     public function test_annuaire_index_renders(): void
     {
         $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants']);
@@ -299,6 +325,26 @@ class PublicContentPagesTest extends TestCase
         $this->get('/cinema')->assertOk()->assertSee('Le Comte de Toulouse');
         $this->get('/cinema/films/le-comte-de-toulouse')->assertOk()->assertSee('Gaumont Wilson');
         $this->get('/cinema/salles/gaumont-wilson')->assertOk()->assertSee('Le Comte de Toulouse');
+    }
+
+    /** Demande client (14/09/2026) : l'affiche de chaque film sous son titre sur /cinema/salles/{slug}, pour un rendu plus attirant. */
+    public function test_cinema_salle_page_shows_each_movie_poster(): void
+    {
+        $cinema = Cinema::create(['name' => 'CGR Blagnac Affiches', 'slug' => 'cgr-blagnac-affiches', 'is_active' => true]);
+        $withPoster = Movie::create(['title' => 'Avec Affiche', 'slug' => 'avec-affiche', 'poster' => 'movies/avec-affiche.jpg']);
+        $withoutPoster = Movie::create(['title' => 'Sans Affiche', 'slug' => 'sans-affiche']);
+        foreach ([$withPoster, $withoutPoster] as $movie) {
+            $screening = Screening::create([
+                'cinema_id' => $cinema->id, 'movie_id' => $movie->id,
+                'start_date' => now()->subDay(), 'end_date' => now()->addWeek(),
+            ]);
+            $screening->times()->create(['weekday' => 1, 'time' => '20:30:00']);
+        }
+
+        $response = $this->get('/cinema/salles/cgr-blagnac-affiches')->assertOk();
+        $response->assertSee($withPoster->poster_url, false);
+        // Pas d'affiche cassée/vide pour un film sans poster (pas de balise <img> orpheline).
+        $response->assertSee('Sans Affiche');
     }
 
     /**

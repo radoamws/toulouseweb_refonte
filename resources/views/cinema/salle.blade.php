@@ -48,34 +48,54 @@
         @else
             <div class="mt-4 space-y-6">
                 @foreach ($screeningsByMovie as $movieTitle => $screenings)
+                    @php $movie = $screenings->first()->movie; @endphp
+                    {{-- Demande client (14/09/2026) : affichage plus attirant — l'affiche du
+                    film sous son titre, et les horaires (l'info la plus consultée) dans une
+                    colonne large à gauche plutôt qu'un simple bloc de texte pleine largeur. --}}
                     <div class="rounded-2xl border border-ink-100 bg-white p-5 shadow-sm">
-                        <a href="/cinema/films/{{ $screenings->first()->movie?->slug }}" class="font-heading font-semibold text-ink-900 hover:text-brand-700">
+                        <a href="/cinema/films/{{ $movie?->slug }}" class="block font-heading font-semibold text-ink-900 hover:text-brand-700">
                             {{ $movieTitle }}
                         </a>
-                        @foreach ($screenings as $screening)
-                            <div class="mt-3 flex flex-wrap gap-2 text-sm">
-                                @foreach ($screening->times as $time)
-                                    {{-- Horaire cliquable vers la réservation sur le vrai site source
-                                    (demande client — "2e scraping" du legacy, autoUpdateCinemaAllocineLiens/Liens2,
-                                    voir docblock d'AllocineDriver::extractBookingUrl()) quand un lien a
-                                    été capturé ; simple badge non cliquable sinon. --}}
-                                    @if ($time->booking_url)
-                                        <a
-                                            href="{{ $time->booking_url }}"
-                                            target="_blank"
-                                            rel="noopener"
-                                            data-track="screening_time:{{ $time->id }}:cinema_booking_click"
-                                            title="Réserver — {{ $weekdays[$time->weekday] ?? '' }}"
-                                            class="rounded-lg bg-ink-50 px-2 py-1 text-ink-700 underline decoration-dotted underline-offset-2 transition hover:bg-brand-50 hover:text-brand-700"
-                                        >{{ $weekdays[$time->weekday] ?? '' }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}</a>
-                                    @else
-                                        <span class="rounded-lg bg-ink-50 px-2 py-1 text-ink-700">
-                                            {{ $weekdays[$time->weekday] ?? '' }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}
-                                        </span>
-                                    @endif
+                        <div class="mt-3 sm:flex sm:items-start sm:gap-6">
+                            <div class="sm:order-1 sm:flex-1">
+                                @foreach ($screenings as $screening)
+                                    <div class="flex flex-wrap gap-2 text-sm">
+                                        @foreach ($screening->times as $time)
+                                            {{-- Horaire cliquable vers la réservation sur le vrai site source
+                                            (demande client — "2e scraping" du legacy, autoUpdateCinemaAllocineLiens/Liens2,
+                                            voir docblock d'AllocineDriver::extractBookingUrl()) quand un lien a
+                                            été capturé ; simple badge non cliquable sinon. --}}
+                                            @if ($time->booking_url)
+                                                <a
+                                                    href="{{ $time->booking_url }}"
+                                                    target="_blank"
+                                                    rel="noopener"
+                                                    data-track="screening_time:{{ $time->id }}:cinema_booking_click"
+                                                    title="Réserver — {{ $weekdays[$time->weekday] ?? '' }}"
+                                                    class="rounded-lg bg-ink-50 px-2 py-1 text-ink-700 underline decoration-dotted underline-offset-2 transition hover:bg-brand-50 hover:text-brand-700"
+                                                >{{ $weekdays[$time->weekday] ?? '' }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}</a>
+                                            @else
+                                                <span class="rounded-lg bg-ink-50 px-2 py-1 text-ink-700">
+                                                    {{ $weekdays[$time->weekday] ?? '' }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}
+                                                </span>
+                                            @endif
+                                        @endforeach
+                                    </div>
                                 @endforeach
                             </div>
-                        @endforeach
+                            @if ($movie?->poster_url)
+                                <div class="mt-4 shrink-0 sm:order-2 sm:mt-0 sm:w-32">
+                                    <a href="/cinema/films/{{ $movie->slug }}" class="block overflow-hidden rounded-lg bg-ink-100">
+                                        <img
+                                            src="{{ $movie->poster_url }}"
+                                            alt="{{ $movieTitle }}"
+                                            loading="lazy"
+                                            class="aspect-[2/3] w-full object-cover transition hover:scale-105"
+                                        >
+                                    </a>
+                                </div>
+                            @endif
+                        </div>
                     </div>
                 @endforeach
             </div>
