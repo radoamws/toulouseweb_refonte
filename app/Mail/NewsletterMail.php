@@ -29,7 +29,12 @@ class NewsletterMail extends Mailable implements ShouldQueue
     public function __construct(
         public Newsletter $newsletter,
         public NewsletterSubscriber $subscriber,
-    ) {}
+    ) {
+        // Passe par Brevo, jamais par la boîte transactionnelle
+        // contact@toulouseweb.com (voir config/mail.php, mailer 'brevo', et
+        // TECHNICAL_DOCUMENTATION.md §37 pour le pourquoi).
+        $this->mailer('brevo');
+    }
 
     public function envelope(): Envelope
     {

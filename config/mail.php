@@ -49,6 +49,31 @@ return [
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
+        /*
+         * Newsletters uniquement (App\Mail\NewsletterMail::mailer('brevo'),
+         * voir TECHNICAL_DOCUMENTATION.md §37) — jamais les notifications
+         * admin/transactionnelles, qui restent sur 'smtp' (boîte
+         * contact@toulouseweb.com d'Infomaniak). Constaté en pratique le
+         * 14/09/2026 : un email de type newsletter (mise en page, liste à
+         * puces, bouton d'action) envoyé depuis cette boîte mutualisée
+         * classique n'arrivait JAMAIS à destination (ni chez un vrai
+         * destinataire, ni chez le service neutre mail-tester.com), alors
+         * qu'une notification transactionnelle simple envoyée depuis la
+         * même boîte arrive normalement — l'hébergement mutualisé
+         * filtre/retient silencieusement ce qui ressemble à un envoi de
+         * masse/marketing. Le SPF de `toulouseweb.com` autorise déjà
+         * `spf.sendinblue.com` : Brevo (ex-Sendinblue) servait déjà à ça
+         * historiquement, on reprend ce canal plutôt que d'insister sur la
+         * boîte transactionnelle.
+         */
+        'brevo' => [
+            'transport' => 'smtp',
+            'host' => 'smtp-relay.brevo.com',
+            'port' => 587,
+            'username' => env('BREVO_USER'),
+            'password' => env('BREVO_PWD'),
+        ],
+
         'ses' => [
             'transport' => 'ses',
         ],

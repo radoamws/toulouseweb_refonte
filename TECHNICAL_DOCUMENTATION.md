@@ -1430,3 +1430,21 @@ Dans tous les cas : uniquement `status = draft`, jamais d'envoi — un administr
 `php artisan newsletter:seed-relaunch` crée le brouillon "ToulouseWeb fait peau neuve" (contenu dans `resources/views/emails/partials/relaunch-announcement.blade.php`). Conformément à la demande client, **seul un envoi de test à `rado.rakotoarivelo@amws.space` a été effectué** (via l'action Filament "Envoyer un test") — aucun envoi aux 1644 abonnés importés tant que le client n'a pas donné son GO explicite (`NEWSLETTER_SENDING_ENABLED` reste `false` en production jusqu'à nouvel ordre).
 
 Tests : `tests/Feature/NewsletterTest.php` (16 tests — inscription homepage, non-duplication, réactivation, honeypot, désinscription/jeton invalide, inscription implicite contact + non-réactivation d'un désinscrit, brouillon auto sur publication Listing/News/Classified, pas de second brouillon sur simple édition, digest de scraping conditionnel, envoi test limité aux adresses configurées, refus d'envoi général tant que le flag est désactivé, envoi en file limité aux abonnés actifs une fois activé), `tests/Feature/HomepageTest.php` (présence du formulaire).
+
+## 37. ⚠️ Newsletter jamais livrée en test — la boîte transactionnelle Infomaniak ne convient pas au contenu de type newsletter (14/09/2026)
+
+Suite au §36 : le premier email de test envoyé à `rado.rakotoarivelo@amws.space` via `contact@toulouseweb.com` (boîte SMTP Infomaniak, celle utilisée pour toutes les notifications admin) n'est **jamais arrivé** — ni dans la boîte réelle, ni chez un service neutre indépendant ([mail-tester.com](https://www.mail-tester.com)) utilisé pour objectiver le diagnostic (aucune réception après 4+ minutes, deux tentatives).
+
+### Diagnostic
+
+- **Écarté** : un problème DNS — SPF (`spf.infomaniak.ch`), DKIM (sélecteur `20250326._domainkey`, retrouvé après coup, mon premier essai avait juste testé les mauvais noms de sélecteur) et DMARC (`p=reject`, mais avec alignement SPF valide) sont tous corrects.
+- **Écarté** : un bug de code — aucune exception, aucune ligne d'erreur dans `storage/logs/laravel.log` sur aucune des tentatives ; `Mail::send()` rend la main normalement (accepté par le serveur SMTP d'Infomaniak).
+- **Confirmé** : le même jour, une notification admin ("Nouveau message de contact", déclenchée par une vraie soumission du formulaire à 8h) envoyée par **cette même boîte** est bien arrivée normalement chez le client.
+
+Conclusion : le mail transactionnel simple passe, mais un contenu de type newsletter (mise en page riche, liste à puces, bouton d'action) envoyé depuis une boîte mail mutualisée classique est **silencieusement filtré/retenu** — comportement typique d'un hébergement mutualisé conçu pour du mail transactionnel bas volume, pas pour de l'emailing. Indice confirmant cette lecture : le SPF de `toulouseweb.com` autorise déjà `spf.sendinblue.com` — Brevo (ex-Sendinblue) servait déjà, du temps de l'ancien site, de canal dédié à l'envoi de newsletters, séparément de la boîte de contact.
+
+### Fix : mailer Brevo dédié, uniquement pour les newsletters
+
+`config/mail.php` — nouveau mailer `brevo` (transport `smtp`, `smtp-relay.brevo.com:587`, identifiants `BREVO_USER`/`BREVO_PWD` fournis par le client). `App\Mail\NewsletterMail` force cet mailer dans son constructeur (`$this->mailer('brevo')`) — **uniquement** les newsletters basculent sur ce canal ; `App\Mail\AdminNotification` (notifications de modération) reste sur `MAIL_MAILER=smtp` (boîte Infomaniak), qui fonctionne très bien pour ce type d'usage transactionnel et n'a aucune raison de changer.
+
+Vérifié en local : un envoi de test via le mailer `brevo` s'exécute sans erreur (`Mail::send()` retourne normalement). Le test de bout en bout avec réception réelle (`rado.rakotoarivelo@amws.space` + mail-tester.com) est en cours au moment d'écrire cette section — voir le commit suivant pour la confirmation.
