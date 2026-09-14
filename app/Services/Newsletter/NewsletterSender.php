@@ -18,6 +18,22 @@ use Illuminate\Support\Facades\Mail;
  * - `sendToAll()` : met en FILE un envoi par abonné actif, refuse de le
  *   faire si `services.newsletter.sending_enabled` est à false (voir
  *   config/services.php pour la justification complète du flag).
+ *
+ * ⚠️ Toujours `Mail::mailer('brevo')->to(...)->...` — JAMAIS `Mail::to(...)`
+ * seul : voir le docblock de App\Mail\NewsletterMail (bug réel trouvé le
+ * 14/09/2026, TECHNICAL_DOCUMENTATION.md §40) — sans le `mailer('brevo')`
+ * choisi ICI, en amont, Laravel route silencieusement vers le mailer par
+ * défaut ('smtp', la boîte Infomaniak). `sendTest()` utilise `sendNow()`
+ * (pas `send()`) : `NewsletterMail` implémente `ShouldQueue`, et
+ * `Mailer::send()` MET TOUJOURS EN FILE un mailable `ShouldQueue` (même
+ * appelé via `->send()`, pas seulement `->queue()` — vérifié dans
+ * `Illuminate\Mail\Mailer::sendMailable()`) ; seul `sendNow()` envoie
+ * réellement de façon synchrone quel que soit `ShouldQueue`. Cette
+ * confusion (`send()` vs `sendNow()` sur un mailable `ShouldQueue`) a fait
+ * que TOUS les tests précédents (SMTP direct, SMTP Brevo, API Brevo)
+ * étaient en réalité mis en file sans jamais être traités (aucun
+ * `queue:work` déclenché entre-temps) — jamais un problème de délivrabilité
+ * SMTP/API à proprement parler.
  */
 class NewsletterSender
 {
@@ -40,7 +56,7 @@ class NewsletterSender
         ]);
 
         foreach ($recipients as $email) {
-            Mail::to($email)->send(new NewsletterMail($newsletter, $previewSubscriber));
+            Mail::mailer('brevo')->to($email)->sendNow(new NewsletterMail($newsletter, $previewSubscriber));
         }
 
         $newsletter->update([
@@ -67,7 +83,7 @@ class NewsletterSender
         $subscribers = NewsletterSubscriber::active()->get();
 
         foreach ($subscribers as $subscriber) {
-            Mail::to($subscriber->email)->queue(new NewsletterMail($newsletter, $subscriber));
+            Mail::mailer('brevo')->to($subscriber->email)->queue(new NewsletterMail($newsletter, $subscriber));
         }
 
         $newsletter->update([

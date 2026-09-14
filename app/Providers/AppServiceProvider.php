@@ -12,12 +12,14 @@ use App\Models\Movie;
 use App\Models\News;
 use App\Models\Page;
 use App\Models\Slider;
+use App\Mail\Transport\BrevoApiTransport;
 use App\Observers\CloudflarePurgeObserver;
 use App\Observers\GoogleIndexingObserver;
 use App\Observers\NewsletterDraftObserver;
 use App\Observers\RegeneratesSitemapObserver;
 use App\Services\Cache\CloudflareCachePurger;
 use App\Services\Seo\GoogleIndexingService;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -105,6 +107,16 @@ class AppServiceProvider extends ServiceProvider
         foreach (self::NEWSLETTER_DRAFT_MODELS as $model) {
             $model::observe(NewsletterDraftObserver::class);
         }
+
+        // Envoi des newsletters via l'API Brevo (demande client, 14/09/2026,
+        // voir config/mail.php mailer 'brevo' et TECHNICAL_DOCUMENTATION.md
+        // §40) — transport personnalisé, pas de driver Laravel natif pour
+        // Brevo.
+        Mail::extend('brevo-api', fn (array $config) => new BrevoApiTransport(
+            apiKey: $config['key'],
+            senderEmail: $config['sender_email'] ?? null,
+            senderName: $config['sender_name'] ?? null,
+        ));
 
         // Un seul lot d'appels HTTP à la toute fin du processus (requête HTTP
         // ou commande artisan), pas un par modèle sauvegardé — voir docblock

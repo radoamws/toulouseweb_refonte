@@ -51,33 +51,32 @@ return [
 
         /*
          * Newsletters uniquement (App\Mail\NewsletterMail::mailer('brevo'),
-         * voir TECHNICAL_DOCUMENTATION.md §37) — jamais les notifications
-         * admin/transactionnelles, qui restent sur 'smtp' (boîte
-         * contact@toulouseweb.com d'Infomaniak). Constaté en pratique le
-         * 14/09/2026 : un email de type newsletter (mise en page, liste à
-         * puces, bouton d'action) envoyé depuis cette boîte mutualisée
-         * classique n'arrivait JAMAIS à destination (ni chez un vrai
-         * destinataire, ni chez le service neutre mail-tester.com), alors
+         * voir TECHNICAL_DOCUMENTATION.md §37/§39/§40) — jamais les
+         * notifications admin/transactionnelles, qui restent sur 'smtp'
+         * (boîte contact@toulouseweb.com d'Infomaniak). Constaté en
+         * pratique le 14/09/2026 : un email de type newsletter (mise en
+         * page, liste à puces, bouton d'action) envoyé depuis cette boîte
+         * mutualisée classique n'arrivait JAMAIS à destination, alors
          * qu'une notification transactionnelle simple envoyée depuis la
          * même boîte arrive normalement — l'hébergement mutualisé
          * filtre/retient silencieusement ce qui ressemble à un envoi de
          * masse/marketing. Le SPF de `toulouseweb.com` autorise déjà
          * `spf.sendinblue.com` : Brevo (ex-Sendinblue) servait déjà à ça
-         * historiquement, on reprend ce canal plutôt que d'insister sur la
-         * boîte transactionnelle.
+         * historiquement.
+         *
+         * Transport 'brevo-api' (App\Mail\Transport\BrevoApiTransport,
+         * enregistré dans AppServiceProvider::boot()) plutôt que le relais
+         * SMTP Brevo essayé en premier (§37/§39) : l'API répond
+         * immédiatement par une erreur explicite en cas de clé invalide ou
+         * de domaine/expéditeur non vérifié, alors que le relais SMTP
+         * acceptait silencieusement des envois qui n'arrivaient ensuite
+         * jamais à destination — bien plus facile à diagnostiquer.
          */
         'brevo' => [
-            'transport' => 'smtp',
-            'host' => env('BREVO_SMTP_SERVER', 'smtp-relay.brevo.com'),
-            'port' => env('BREVO_SMTP_PORT', 587),
-            // ⚠️ Le mot de passe du COMPTE Brevo (BREVO_PWD) ne suffit pas pour le
-            // relais SMTP — Brevo exige une "clé SMTP" dédiée (préfixe `xsmtpsib-`,
-            // générée dans Brevo > SMTP & API > SMTP), distincte du mot de passe de
-            // connexion au site. Constaté le 14/09/2026 : les envois de test via
-            // BREVO_USER/BREVO_PWD n'arrivaient jamais à destination (voir
-            // TECHNICAL_DOCUMENTATION.md §37/§39).
-            'username' => env('BREVO_SMTP_LOGIN', env('BREVO_USER')),
-            'password' => env('BREVO_SMTP_KEY', env('BREVO_PWD')),
+            'transport' => 'brevo-api',
+            'key' => env('BREVO_API_KEY'),
+            'sender_email' => env('BREVO_SENDER_EMAIL', env('MAIL_FROM_ADDRESS')),
+            'sender_name' => env('BREVO_SENDER_NAME', env('MAIL_FROM_NAME')),
         ],
 
         'ses' => [

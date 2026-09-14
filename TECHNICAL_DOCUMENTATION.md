@@ -1475,3 +1475,38 @@ Suite au §37 : même après bascule sur le mailer `brevo`, le test envoyé à `
 2. **Mauvais identifiant SMTP** : `config/mail.php` utilisait `BREVO_USER`/`BREVO_PWD` (email + mot de passe du COMPTE Brevo) — Brevo exige en réalité une **clé SMTP dédiée** (préfixe `xsmtpsib-`, générée dans Brevo > SMTP & API > SMTP), distincte du mot de passe de connexion au site. Le mailer `brevo` utilise maintenant `BREVO_SMTP_LOGIN`/`BREVO_SMTP_KEY` (repli sur `BREVO_USER`/`BREVO_PWD` si absents, pour ne pas casser une config existante).
 
 Aucune des deux causes ne générait d'erreur exploitable côté Laravel (`Mail::send()` rendait la main normalement dans tous les cas) — la seule façon de les détecter a été de vérifier directement l'état du compte Brevo.
+
+## 40. ⚠️ Le vrai bug : les newsletters de test n'étaient jamais réellement envoyées (mises en file, jamais traitées) (14/09/2026)
+
+Après avoir bâti l'API Brevo (transport `App\Mail\Transport\BrevoApiTransport`, `POST /v3/smtp/email` — préféré au relais SMTP Brevo du §37/§39, qui échouait silencieusement sans jamais indiquer la vraie cause), un test de diagnostic a révélé la cause racine de **tous** les échecs de livraison précédents (Infomaniak direct, SMTP Brevo, API Brevo) : `SELECT * FROM jobs` en production montrait plusieurs jobs `App\Mail\NewsletterMail` avec `attempts = 0`, jamais traités.
+
+### Cause : `Mail::to(...)->send(...)` MET TOUJOURS EN FILE un mailable `ShouldQueue`
+
+`App\Mail\NewsletterMail` implémente `ShouldQueue` (choix voulu, voir son docblock — un envoi à des milliers d'abonnés doit passer par la file). Ce qui n'avait pas été anticipé : `Illuminate\Mail\Mailer::sendMailable()` (le code réellement exécuté par `Mail::to(...)->send($mailable)`) contient :
+
+```php
+return $mailable instanceof ShouldQueue
+    ? $mailable->mailer($this->name)->queue($this->queue)
+    : $mailable->mailer($this->name)->send($this);
+```
+
+Autrement dit : **`->send()` sur un mailable `ShouldQueue` le met en file, exactement comme `->queue()`** — ce n'est PAS un envoi synchrone, contrairement à l'intuition (et contrairement à ce que suggérait le docblock originel de `NewsletterSender::sendTest()`, qui affirmait à tort un envoi synchrone). Résultat concret : chaque appel à `NewsletterSender::sendTest()` mettait simplement un job en base — et comme rien ne déclenchait `queue:work` entre chaque test (le WebCron quotidien n'était jamais tombé pile au bon moment), ces jobs restaient éternellement en attente. Aucune des pistes explorées précédemment (DMARC, DKIM, sender non vérifié Brevo, mauvaise clé SMTP) n'était donc la vraie cause de la non-réception — toutes ces pistes étaient réelles et corrigées à juste titre, mais **aucun envoi n'avait jamais été réellement tenté**.
+
+Seule `Mailer::sendNow()` envoie réellement de façon synchrone, quel que soit `ShouldQueue` :
+```php
+return $mailable instanceof MailableContract
+    ? $mailable->mailer($this->name)->send($this)
+    : $this->send($mailable, $data, $callback);
+```
+
+### Second effet de bord découvert au passage : le mailer choisi dans le constructeur du Mailable est ignoré
+
+`App\Mail\NewsletterMail` appelait `$this->mailer('brevo')` dans son propre constructeur, en pensant forcer le mailer utilisé. **Sans effet** : `$mailable->mailer($this->name)` (visible dans les extraits ci-dessus, où `$this` est le `Mailer` PAR LEQUEL `Mail::to()` a été appelé, ex. le mailer par défaut `smtp`) écrase TOUJOURS ce choix avant que `Mailable::send()`/`queue()` ne s'exécute — que ce soit via `send()`, `sendNow()` ou `queue()`. Le seul moyen fiable de router vers un mailer précis est de le choisir **en amont**, à l'appel : `Mail::mailer('brevo')->to($email)->sendNow(...)`.
+
+### Fix
+
+- `App\Mail\NewsletterMail` : suppression du `$this->mailer('brevo')` inefficace dans le constructeur (voir son docblock mis à jour).
+- `App\Services\Newsletter\NewsletterSender` : `sendTest()` utilise maintenant `Mail::mailer('brevo')->to($email)->sendNow(...)` (synchrone, garanti) ; `sendToAll()` utilise `Mail::mailer('brevo')->to($subscriber->email)->queue(...)` (explicite, plutôt que de compter sur le comportement implicite de `->send()`).
+- 3 jobs `NewsletterMail` fantômes (jamais traités, construits sous l'ancien code) supprimés de la table `jobs` en production.
+
+Tests : `tests/Feature/BrevoApiTransportTest.php::test_send_test_makes_an_immediate_http_call_not_a_queued_job` (garde-fou explicite : `sendTest()` doit produire une requête HTTP immédiate, `jobs` doit rester à 0) ; `tests/Feature/NewsletterTest.php::test_send_test_only_reaches_the_configured_test_recipients` (mis à jour : `assertSent`/`assertNothingQueued`, plus `assertQueued` comme avant — ce dernier aurait laissé passer la régression sans la détecter).

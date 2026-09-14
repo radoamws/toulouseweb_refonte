@@ -21,6 +21,20 @@ use Illuminate\Mail\Mailables\Envelope;
  * App\Console\Commands\RunWebCron et TECHNICAL_DOCUMENTATION.md §27) — un
  * envoi de newsletter n'est pas urgent à la minute près, contrairement aux
  * notifications de modération.
+ *
+ * ⚠️ Le mailer 'brevo' (voir config/mail.php) N'EST PAS choisi ici, dans le
+ * constructeur — bug réel trouvé le 14/09/2026 (TECHNICAL_DOCUMENTATION.md
+ * §40) : `Illuminate\Mail\Mailer::sendMailable()`/`sendNow()`/`queue()`
+ * appellent TOUJOURS `$mailable->mailer($this->name)` (où `$this->name` est
+ * le mailer AYANT INITIÉ l'appel `Mail::to()`, ex. 'smtp' par défaut) AVANT
+ * d'invoquer `Mailable::send()`/`queue()` — ce qui écrase silencieusement
+ * tout choix de mailer fait ici, dans le constructeur, quel qu'il soit.
+ * Un `$this->mailer('brevo')` ici n'a donc AUCUN EFFET tant que l'appel
+ * passe par `Mail::to(...)->send(...)` (le cas normal). Le mailer correct
+ * ('brevo') doit être choisi en amont, à l'appel :
+ * `Mail::mailer('brevo')->to($email)->sendNow(...)`/`->queue(...)` — voir
+ * App\Services\Newsletter\NewsletterSender, seul point qui envoie
+ * réellement cette classe.
  */
 class NewsletterMail extends Mailable implements ShouldQueue
 {
@@ -29,12 +43,7 @@ class NewsletterMail extends Mailable implements ShouldQueue
     public function __construct(
         public Newsletter $newsletter,
         public NewsletterSubscriber $subscriber,
-    ) {
-        // Passe par Brevo, jamais par la boîte transactionnelle
-        // contact@toulouseweb.com (voir config/mail.php, mailer 'brevo', et
-        // TECHNICAL_DOCUMENTATION.md §37 pour le pourquoi).
-        $this->mailer('brevo');
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

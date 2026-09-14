@@ -205,6 +205,16 @@ class NewsletterTest extends TestCase
      * qui appelle bien `->send()`, jamais `->queue()`). D'où
      * `assertQueued()` ici plutôt que `assertSent()`, qui échouerait à tort.
      */
+    /**
+     * `sendTest()` doit envoyer de façon SYNCHRONE (`sendNow()`, pas
+     * `send()`) — bug réel trouvé le 14/09/2026 (voir docblock de
+     * NewsletterSender) : `Mail::to(...)->send($mailable)` MET TOUJOURS EN
+     * FILE un mailable `ShouldQueue`, même appelé via `->send()` — seul
+     * `sendNow()` envoie réellement de façon synchrone. `Mail::fake()`
+     * reproduit fidèlement cette distinction (`assertSent` vs
+     * `assertQueued`), ce qui permet de vérifier ici que `sendTest()`
+     * utilise bien la bonne méthode.
+     */
     public function test_send_test_only_reaches_the_configured_test_recipients(): void
     {
         Mail::fake();
@@ -213,8 +223,9 @@ class NewsletterTest extends TestCase
 
         app(NewsletterSender::class)->sendTest($newsletter);
 
-        Mail::assertQueued(NewsletterMail::class, fn (NewsletterMail $mail) => $mail->hasTo('newsletter-test@example.com'));
-        Mail::assertNotQueued(NewsletterMail::class, fn (NewsletterMail $mail) => $mail->hasTo('vrai-abonne@example.com'));
+        Mail::assertSent(NewsletterMail::class, fn (NewsletterMail $mail) => $mail->hasTo('newsletter-test@example.com'));
+        Mail::assertNotSent(NewsletterMail::class, fn (NewsletterMail $mail) => $mail->hasTo('vrai-abonne@example.com'));
+        Mail::assertNothingQueued();
         $this->assertNotNull($newsletter->fresh()->test_sent_at);
     }
 
