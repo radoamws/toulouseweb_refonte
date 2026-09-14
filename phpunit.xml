@@ -51,5 +51,15 @@
         abonnés, même par erreur — voir App\Services\Newsletter\NewsletterSender. -->
         <env name="NEWSLETTER_SENDING_ENABLED" value="false"/>
         <env name="NEWSLETTER_TEST_RECIPIENTS" value="newsletter-test@example.com"/>
+        <!-- Valeur fictive (voir App\Mail\Transport\BrevoApiTransport) — un vrai
+        envoi est toujours intercepté par Http::fake() dans les tests concernés,
+        jamais un appel réseau réel. Sans cette valeur ici, `.env.example` +
+        key:generate (utilisé par le CI/CD, voir .github/workflows/deploy.yml)
+        laisse BREVO_API_KEY absent — a fait échouer le déploiement le
+        14/09/2026 (TypeError, voir TECHNICAL_DOCUMENTATION.md §40) alors que
+        la suite passait en local (vraie clé présente dans le .env local). -->
+        <env name="BREVO_API_KEY" value="test-fake-brevo-key"/>
+        <env name="BREVO_SENDER_EMAIL" value="contact@example.com"/>
+        <env name="BREVO_SENDER_NAME" value="ToulouseWeb Test"/>
     </php>
 </phpunit>

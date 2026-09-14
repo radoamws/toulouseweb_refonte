@@ -32,7 +32,18 @@ use Symfony\Component\Mime\MessageConverter;
 class BrevoApiTransport extends AbstractTransport
 {
     public function __construct(
-        protected string $apiKey,
+        // ⚠️ Nullable : dans l'environnement de test (CI, `.env.example` +
+        // `key:generate`, voir .github/workflows/deploy.yml), BREVO_API_KEY
+        // n'est jamais renseigné — un simple `string` non nullable ici fait
+        // planter TOUTE la suite de tests avec un TypeError dès que
+        // `Mail::mailer('brevo')` est résolu (bug réel trouvé le 14/09/2026 :
+        // passait en local, car la vraie clé était dans le `.env` local,
+        // mais faisait échouer le déploiement CI/CD, qui repart d'un `.env`
+        // vierge — voir TECHNICAL_DOCUMENTATION.md §40). `doSend()` échoue
+        // proprement (TransportException, message Brevo explicite) si la
+        // clé est absente/invalide au moment d'un VRAI envoi — jamais
+        // silencieusement.
+        protected ?string $apiKey,
         protected ?string $senderEmail = null,
         protected ?string $senderName = null,
     ) {

@@ -1510,3 +1510,18 @@ return $mailable instanceof MailableContract
 - 3 jobs `NewsletterMail` fantômes (jamais traités, construits sous l'ancien code) supprimés de la table `jobs` en production.
 
 Tests : `tests/Feature/BrevoApiTransportTest.php::test_send_test_makes_an_immediate_http_call_not_a_queued_job` (garde-fou explicite : `sendTest()` doit produire une requête HTTP immédiate, `jobs` doit rester à 0) ; `tests/Feature/NewsletterTest.php::test_send_test_only_reaches_the_configured_test_recipients` (mis à jour : `assertSent`/`assertNothingQueued`, plus `assertQueued` comme avant — ce dernier aurait laissé passer la régression sans la détecter).
+
+## 41. ⚠️ Le déploiement du §40 a échoué en CI/CD (BREVO_API_KEY absent) — passait en local, masqué par le vrai `.env`
+
+Le déploiement du commit du §40 a échoué à l'étape "Suite de tests" (confirmé via l'API GitHub Actions, `conclusion: failure` — le déploiement proprement dit ne s'est donc jamais exécuté, contrairement à un déploiement réussi). Reproduit en local en simulant l'environnement CI exact (`.env.example` + `artisan key:generate`, comme le fait `.github/workflows/deploy.yml`, au lieu du `.env` local qui contient les vraies clés) :
+
+```
+TypeError: App\Mail\Transport\BrevoApiTransport::__construct():
+Argument #1 ($apiKey) must be of type string, null given
+```
+
+Cause : `BREVO_API_KEY` n'est jamais renseigné dans `.env.example` (ni dans `phpunit.xml`) — en local, le `.env` réel (avec la vraie clé) masquait complètement le problème ; en CI, l'environnement repart toujours d'un `.env` vierge, donc `config('mail.mailers.brevo.key')` vaut `null`, ce qui faisait planter le constructeur de `BrevoApiTransport` (paramètre `string $apiKey` non nullable) dès que `Mail::mailer('brevo')` était résolu — y compris pendant `NewsletterTest`/`BrevoApiTransportTest`, qui n'avaient jamais été exécutés dans cette configuration avant ce déploiement.
+
+Fix : `$apiKey` rendu nullable (une clé absente/invalide échoue proprement à l'envoi réel, via `TransportException`, jamais silencieusement) + `BREVO_API_KEY`/`BREVO_SENDER_EMAIL`/`BREVO_SENDER_NAME` ajoutés à `phpunit.xml` (valeurs fictives, `Http::fake()` empêche tout appel réseau réel dans les tests concernés) — reproduit et vérifié en local avec un `.env` vierge avant nouveau déploiement.
+
+**Leçon retenue** : pour toute nouvelle variable d'environnement introduite par du code applicatif (pas seulement les secrets de service), vérifier `.env.example`/`phpunit.xml` ET tester avec un `.env` vierge avant de pousser — un `.env` local déjà rempli de vraies valeurs masque ce type de régression jusqu'au déploiement.
