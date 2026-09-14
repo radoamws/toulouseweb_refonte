@@ -348,6 +348,31 @@ class PublicContentPagesTest extends TestCase
     }
 
     /**
+     * ⚠️ Bug réel trouvé et corrigé (15/09/2026, demande client : "j'ai
+     * navigué sur les salles/films de cinéma, ça n'apparaît pas dans les
+     * stats du dashboard") : les liens vers une salle depuis /cinema, et
+     * vers une fiche film (titre + affiche) depuis une salle, n'avaient
+     * jamais eu de `data-track` — voir aussi EntityLabelResolverTest pour
+     * le second volet (libellés génériques "Cinema #id"/"Screening_time #id").
+     */
+    public function test_cinema_pages_track_navigation_to_salles_and_movies(): void
+    {
+        $cinema = Cinema::create(['name' => 'CGR Blagnac Tracking', 'slug' => 'cgr-blagnac-tracking', 'is_active' => true]);
+        $movie = Movie::create(['title' => 'Film Traqué', 'slug' => 'film-traque']);
+        $screening = Screening::create([
+            'cinema_id' => $cinema->id, 'movie_id' => $movie->id,
+            'start_date' => now()->subDay(), 'end_date' => now()->addWeek(),
+        ]);
+        $screening->times()->create(['weekday' => 1, 'time' => '20:30:00']);
+
+        $this->get('/cinema')->assertOk()
+            ->assertSee("data-track=\"cinema:{$cinema->id}:cinema_listing\"", false);
+
+        $this->get('/cinema/salles/cgr-blagnac-tracking')->assertOk()
+            ->assertSee("data-track=\"movie:{$movie->id}:cinema_salle\"", false);
+    }
+
+    /**
      * Horaires cliquables vers la réservation sur le vrai site source
      * (demande client — "2e scraping" du legacy, `autoUpdateCinemaAllocineLiens`/
      * `Liens2`, voir docblock d'`AllocineDriver::extractBookingUrl()`). Un

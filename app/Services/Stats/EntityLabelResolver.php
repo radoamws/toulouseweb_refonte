@@ -3,12 +3,14 @@
 namespace App\Services\Stats;
 
 use App\Models\Category;
+use App\Models\Cinema;
 use App\Models\Classified;
 use App\Models\Event;
 use App\Models\Listing;
 use App\Models\Movie;
 use App\Models\News;
 use App\Models\PartnerSite;
+use App\Models\ScreeningTime;
 use App\Models\Slider;
 
 /**
@@ -31,10 +33,27 @@ class EntityLabelResolver
         'category' => [Category::class, 'name'],
         'partner_site' => [PartnerSite::class, 'name'],
         'slider' => [Slider::class, 'title'],
+        // Salles de cinéma (demande client, 15/09/2026 — voir
+        // resources/views/cinema/index.blade.php et cinema/salle.blade.php).
+        'cinema' => [Cinema::class, 'name'],
     ];
 
     public function resolve(string $entityType, int $entityId): string
     {
+        // `screening_time` (clic "réserver" sur un horaire, voir
+        // cinema/movie.blade.php et cinema/salle.blade.php) n'a pas de colonne
+        // "titre" propre — cas à part, résolu via ses relations (film + salle).
+        if ($entityType === 'screening_time') {
+            $time = ScreeningTime::with('screening.movie', 'screening.cinema')->find($entityId);
+            $movie = $time?->screening?->movie;
+            $cinema = $time?->screening?->cinema;
+            if ($movie) {
+                return $movie->title.($cinema ? " — {$cinema->name}" : '');
+            }
+
+            return "Horaire #{$entityId}";
+        }
+
         [$modelClass, $column] = self::MAP[$entityType] ?? [null, null];
 
         if ($modelClass) {
@@ -63,6 +82,8 @@ class EntityLabelResolver
             'category' => 'Catégories',
             'partner_site' => 'Sites partenaires',
             'slider' => 'Sliders / bannières',
+            'cinema' => 'Salles de cinéma',
+            'screening_time' => 'Horaires de séance',
             default => ucfirst($entityType),
         };
     }

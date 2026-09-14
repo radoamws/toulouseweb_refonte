@@ -1525,3 +1525,24 @@ Cause : `BREVO_API_KEY` n'est jamais renseigné dans `.env.example` (ni dans `ph
 Fix : `$apiKey` rendu nullable (une clé absente/invalide échoue proprement à l'envoi réel, via `TransportException`, jamais silencieusement) + `BREVO_API_KEY`/`BREVO_SENDER_EMAIL`/`BREVO_SENDER_NAME` ajoutés à `phpunit.xml` (valeurs fictives, `Http::fake()` empêche tout appel réseau réel dans les tests concernés) — reproduit et vérifié en local avec un `.env` vierge avant nouveau déploiement.
 
 **Leçon retenue** : pour toute nouvelle variable d'environnement introduite par du code applicatif (pas seulement les secrets de service), vérifier `.env.example`/`phpunit.xml` ET tester avec un `.env` vierge avant de pousser — un `.env` local déjà rempli de vraies valeurs masque ce type de régression jusqu'au déploiement.
+
+## 41. ⚠️ Navigation cinéma non suivie dans les stats admin (15/09/2026, demande client)
+
+Demande client : *"Verifie les cinémas car j'ai navigué dessus et ça n'apparait pas dans les stats du dashboard de l'admin. Il faut que les salles, films, ... soient tous inclus dans le dashboard. Ainsi que tous les autres entités (annonces, spectacles...)."*
+
+### Audit du suivi de clics existant
+
+`ClicksByTypeChart`/`TopClickedEntities` (widgets du dashboard) et `ClickTrackingService` sont entièrement génériques — aucune liste blanche de types, aucun filtre qui exclurait un type d'entité particulier. "Annonces" (`classified`) et "spectacles" (catégorie du module Agenda, type `event`) étaient déjà correctement suivis partout (listing, fiche, éléments liés, tel/email/site). Le vrai problème était localisé au module cinéma :
+
+### ⚠️ Deux bugs réels trouvés et corrigés
+
+1. **`/cinema` (index)** : les pastilles de salles (`<a href="/cinema/salles/{slug}">`) n'avaient **aucun** `data-track` — naviguer vers une salle depuis la liste des cinémas n'était jamais enregistré.
+2. **`/cinema/salles/{slug}`** : le titre du film et son affiche (ajoutés au §38, 14/09/2026) n'avaient pas non plus de `data-track` — un oubli lors de ce correctif précédent, la même logique de suivi que le reste du site (`data-track="type:id:contexte"`) n'avait pas été reprise sur ces deux nouveaux liens.
+
+Fix : `data-track="cinema:{id}:cinema_listing"` sur les pastilles de salle, `data-track="movie:{id}:cinema_salle"` sur le titre et l'affiche du film (`resources/views/cinema/index.blade.php`, `cinema/salle.blade.php`).
+
+### Second problème (plus discret) : libellés génériques pour `cinema`/`screening_time`
+
+`App\Services\Stats\EntityLabelResolver::MAP` ne connaissait ni `cinema` (salle, déjà utilisé par les cartes "Autres salles" depuis le début) ni `screening_time` (clic "réserver" sur un horaire) — ces clics étaient bien enregistrés dans `click_events`, mais s'affichaient dans les widgets avec un libellé générique ("Cinema #5", "Screening_time #42") au lieu du vrai nom de la salle ou du film — facile à confondre avec une absence totale de données. Ajout de `cinema` à `MAP` (résolution simple, comme les autres types) et d'un cas spécial pour `screening_time` (pas de colonne "titre" propre — résolu via ses relations `Screening -> Movie`/`Cinema`, ex. *"Le Comte de Toulouse — Gaumont Wilson"*).
+
+Tests : `tests/Feature/EntityLabelResolverTest.php` (+2 : résolution `cinema`, résolution `screening_time` via relations + repli générique), `tests/Feature/PublicContentPagesTest.php::test_cinema_pages_track_navigation_to_salles_and_movies` (présence des `data-track` sur les deux liens corrigés).

@@ -53,7 +53,11 @@
                     film sous son titre, et les horaires (l'info la plus consultée) dans une
                     colonne large à gauche plutôt qu'un simple bloc de texte pleine largeur. --}}
                     <div class="rounded-2xl border border-ink-100 bg-white p-5 shadow-sm">
-                        <a href="/cinema/films/{{ $movie?->slug }}" class="block font-heading font-semibold text-ink-900 hover:text-brand-700">
+                        {{-- Bug réel trouvé et corrigé (15/09/2026, demande client) : ni ce
+                        lien ni celui de l'affiche ci-dessous n'étaient suivis — naviguer
+                        vers une fiche film depuis une salle n'apparaissait jamais dans les
+                        stats de l'admin. --}}
+                        <a href="/cinema/films/{{ $movie?->slug }}" data-track="movie:{{ $movie?->id }}:cinema_salle" class="block font-heading font-semibold text-ink-900 hover:text-brand-700">
                             {{ $movieTitle }}
                         </a>
                         <div class="mt-3 sm:flex sm:items-start sm:gap-6">
@@ -85,7 +89,7 @@
                             </div>
                             @if ($movie?->poster_url)
                                 <div class="mt-4 shrink-0 sm:order-2 sm:mt-0 sm:w-32">
-                                    <a href="/cinema/films/{{ $movie->slug }}" class="block overflow-hidden rounded-lg bg-ink-100">
+                                    <a href="/cinema/films/{{ $movie->slug }}" data-track="movie:{{ $movie->id }}:cinema_salle" class="block overflow-hidden rounded-lg bg-ink-100">
                                         <img
                                             src="{{ $movie->poster_url }}"
                                             alt="{{ $movieTitle }}"

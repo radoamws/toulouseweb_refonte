@@ -14,7 +14,10 @@
         @if ($cinemas->isNotEmpty())
             <div class="mt-6 flex flex-wrap gap-2">
                 @foreach ($cinemas as $cinema)
-                    <a href="/cinema/salles/{{ $cinema->slug }}" class="rounded-full bg-ink-50 px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-100">
+                    {{-- Bug réel trouvé et corrigé (15/09/2026, demande client) : ce lien
+                    n'était suivi nulle part — naviguer vers une salle depuis /cinema
+                    n'apparaissait jamais dans les stats de l'admin. --}}
+                    <a href="/cinema/salles/{{ $cinema->slug }}" data-track="cinema:{{ $cinema->id }}:cinema_listing" class="rounded-full bg-ink-50 px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-100">
                         {{ $cinema->name }}
                     </a>
                 @endforeach
