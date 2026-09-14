@@ -20,6 +20,7 @@ use App\Observers\RegeneratesSitemapObserver;
 use App\Services\Cache\CloudflareCachePurger;
 use App\Services\Seo\GoogleIndexingService;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -92,6 +93,36 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // ⚠️ Bug réel trouvé et corrigé (15/09/2026, urgent, signalé par le
+        // client : "les domaines dans le sitemap sont devenus localhost:8000
+        // au lieu de toulouseweb.com"). `APP_URL` (.env) et le cache de
+        // config (`bootstrap/cache/config.php`) étaient corrects en
+        // production — mais `url()`/`route()`, appelés PAR `sitemap:generate`
+        // (voir vendor/spatie/laravel-sitemap `url.blade.php`, `{{ url($tag->url) }}`),
+        // se basent par défaut sur le HOST de la requête HTTP EN COURS
+        // quand une requête est liée au conteneur — pas sur `config('app.url')`
+        // — sauf en CLI pur (aucune requête liée), où `config('app.url')`
+        // sert de repli et le résultat est donc correct. Or `sitemap:generate`
+        // est aussi appelé DEPUIS UNE REQUÊTE HTTP par
+        // App\Console\Commands\RunWebCron, lui-même déclenché via
+        // App\Http\Controllers\WebCronController (`GET /webcron/{token}`,
+        // voir TECHNICAL_DOCUMENTATION.md §27) : si cette requête arrive
+        // avec un Host différent du domaine final (ancien domaine de
+        // prévisualisation Infomaniak, requête directe par IP, health-check,
+        // scan automatisé...), le sitemap régénéré à ce moment-là hérite de
+        // CE host, pas de `toulouseweb.com` — confirmé en reproduisant :
+        // `php artisan sitemap:generate` en SSH pur produit le bon domaine,
+        // seul le déclenchement HTTP était en cause. `forceRootUrl()` élimine
+        // structurellement ce risque : TOUTE génération d'URL absolue
+        // (sitemap, mais aussi emails, redirections...) utilise désormais
+        // `APP_URL` quel que soit le contexte d'appel (HTTP ou CLI),
+        // ignorant le Host de la requête entrante — élimine au passage tout
+        // risque de type "Host header injection" sur la génération d'URLs.
+        URL::forceRootUrl(config('app.url'));
+        if (str_starts_with((string) config('app.url'), 'https://')) {
+            URL::forceScheme('https');
+        }
+
         foreach (self::CLOUDFLARE_PURGE_MODELS as $model) {
             $model::observe(CloudflarePurgeObserver::class);
         }

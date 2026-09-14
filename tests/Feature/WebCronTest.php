@@ -16,9 +16,37 @@ class WebCronTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function tearDown(): void
+    {
+        @unlink(public_path('sitemap.xml'));
+        parent::tearDown();
+    }
+
     public function test_correct_token_runs_the_webcron_command_and_returns_200(): void
     {
         $this->get('/webcron/test-webcron-secret-value')->assertOk();
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (15/09/2026, urgent, signalé par le
+     * client : sitemap en prod avec des URLs localhost:8000 au lieu de
+     * toulouseweb.com). `sitemap:generate` (appelé ici via `webcron:run`,
+     * lui-même déclenché par CETTE requête HTTP) utilise `url()` — qui,
+     * SANS `URL::forceRootUrl()` (voir App\Providers\AppServiceProvider::boot()),
+     * se base sur le Host de la requête HTTP en cours plutôt que sur
+     * `config('app.url')`. Un Host quelconque (ancien domaine de
+     * prévisualisation, requête directe par IP, voire un Host falsifié par
+     * un client malveillant) contaminerait alors le sitemap régénéré. Ce
+     * test envoie volontairement un Host différent de `config('app.url')`
+     * pour vérifier que le sitemap généré ignore bien ce Host.
+     */
+    public function test_sitemap_generated_via_webcron_always_uses_app_url_never_the_request_host(): void
+    {
+        $this->get('/webcron/test-webcron-secret-value', ['Host' => 'attacker.example'])->assertOk();
+
+        $sitemap = file_get_contents(public_path('sitemap.xml'));
+        $this->assertStringContainsString((string) config('app.url'), $sitemap);
+        $this->assertStringNotContainsString('attacker.example', $sitemap);
     }
 
     public function test_wrong_token_returns_404_not_403(): void

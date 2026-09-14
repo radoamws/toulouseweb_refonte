@@ -1556,3 +1556,25 @@ Vérifié en production (`diagnostics-immobiliers-dpe`) : la photo existe bien (
 Fix : galerie photo sur la fiche détaillée (`annonces/show.blade.php`, toutes les photos de la collection, cliquables vers la taille originale), vignette sur les cartes (`x-ui.card :image=`) partout ailleurs (liste, apparentées, homepage) — même composant/même repli (icône générique) que les autres types de contenu du site.
 
 Tests : `tests/Feature/PublicFormsAndNewsTest.php` (+2 : photo uploadée affichée sur la fiche, absence de photo n'affiche rien de cassé).
+
+## 43. ⚠️ URGENT — Sitemap en production avec des URLs localhost:8000 (15/09/2026)
+
+Demande client (urgent) : *"les domaines dans le sitemap sont devenus localhost:8000 au lieu de toulouseweb.com. Il faut fixer définitivement en prod. À revalider le sitemap sur GSC aussi."*
+
+### Diagnostic
+
+Vérifié en production : `.env` (`APP_URL=https://toulouseweb.com`) et le cache de config (`bootstrap/cache/config.php`, `'url' => 'https://toulouseweb.com'`) étaient tous les deux CORRECTS — pourtant `public/sitemap.xml` contenait des `<loc>http://localhost:8000/...</loc>`. Reproduit en isolant la cause : `php artisan sitemap:generate` en SSH pur (CLI, aucune requête HTTP liée) régénère immédiatement un sitemap correct.
+
+**Cause réelle** : `sitemap:generate` construit ses URLs via `url()` (voir `vendor/spatie/laravel-sitemap`, `resources/views/url.blade.php` : `{{ url($tag->url) }}`). Sans `URL::forceRootUrl()`, Laravel base `url()`/`route()` sur le **Host de la requête HTTP en cours** dès qu'une requête est liée au conteneur — pas sur `config('app.url')`, qui ne sert de repli qu'en CLI pur (aucune requête liée). Or `sitemap:generate` est aussi appelé **depuis une requête HTTP** par `App\Console\Commands\RunWebCron`, lui-même déclenché par `GET /webcron/{token}` (`App\Http\Controllers\WebCronController`, voir §27) : si cette requête arrive avec un Host différent du domaine final (ancien domaine de prévisualisation Infomaniak resté actif, requête directe par IP, scan automatisé, etc.), le sitemap hérite de CE host — pas de `toulouseweb.com`. Le comportement dépend donc du Host de la requête qui a déclenché le DERNIER passage du WebCron, pas d'une configuration figée — ce qui explique aussi pourquoi la régénération manuelle en SSH (CLI pur) donnait toujours le bon résultat lors de vérifications précédentes.
+
+⚠️ Ce même mécanisme est aussi un risque de sécurité générique ("Host header poisoning") : sans ce correctif, un client capable d'atteindre `/webcron/{token}` avec un Host arbitraire (le jeton reste la seule protection, voir §27) pourrait faire générer un sitemap avec un domaine de son choix.
+
+### Fix définitif
+
+`App\Providers\AppServiceProvider::boot()` : `URL::forceRootUrl(config('app.url'))` (+ `URL::forceScheme('https')` si `APP_URL` est en `https://`) — force **toute** génération d'URL absolue (sitemap, mais aussi emails, redirections...) à utiliser `APP_URL`, quel que soit le contexte d'appel (HTTP ou CLI) et quel que soit le Host de la requête entrante. Sitemap régénéré manuellement en production juste après le diagnostic (4774 URLs, toutes en `https://toulouseweb.com`) — voir aussi l'action à mener côté Google Search Console (revalidation manuelle du sitemap) ci-dessous.
+
+Tests : `tests/Feature/WebCronTest.php::test_sitemap_generated_via_webcron_always_uses_app_url_never_the_request_host` — envoie volontairement un Host différent de `config('app.url')` (`attacker.example`) lors du déclenchement HTTP du WebCron, vérifie que le sitemap généré ne contient JAMAIS ce Host et contient bien `config('app.url')`.
+
+### ⚠️ Action restante côté client (hors code)
+
+Une fois ce correctif déployé et le sitemap corrigé en production, revalider manuellement le sitemap dans **Google Search Console** (Sitemaps > soumettre à nouveau `https://toulouseweb.com/sitemap.xml`) — Google peut avoir mis en cache la version corrompue (localhost) lors d'une exploration précédente ; une nouvelle soumission force une réexploration immédiate plutôt que d'attendre le prochain passage naturel du robot.
