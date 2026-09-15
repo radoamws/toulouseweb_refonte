@@ -52,7 +52,7 @@ class NewsController extends Controller
             return $this->redirectOrAbort($request->path());
         }
 
-        return $this->show($news);
+        return $this->show($request, $news);
     }
 
     protected function renderIndex(Request $request, ?NewsCategory $category): View
@@ -87,6 +87,8 @@ class NewsController extends Controller
 
         $categories = NewsCategory::orderBy('name')->get();
 
+        $this->recordPageView($request, $category ? 'news_category' : null, $category?->id);
+
         return view('actualites.index', [
             'news' => $news,
             'categories' => $categories,
@@ -110,7 +112,7 @@ class NewsController extends Controller
         ]);
     }
 
-    public function show(News $news): View
+    public function show(Request $request, News $news): View
     {
         abort_unless($news->status === 'published', 404);
 
@@ -122,6 +124,8 @@ class NewsController extends Controller
             ->latest('published_at')
             ->limit(3)
             ->get();
+
+        $this->recordPageView($request, 'news', $news->id);
 
         return view('actualites.show', [
             'news' => $news,

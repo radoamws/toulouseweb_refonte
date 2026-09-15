@@ -4,11 +4,26 @@ namespace App\Http\Controllers;
 
 use App\Models\MissedRedirect;
 use App\Models\Redirect;
+use App\Services\Stats\PageViewService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 abstract class Controller
 {
+    /**
+     * Enregistre une vue de page (demande client, 15/09/2026, voir
+     * App\Services\Stats\PageViewService et TECHNICAL_DOCUMENTATION.md §44)
+     * — à appeler juste avant chaque `return view(...)` d'une page
+     * publique. `rescue()` (log + avale l'exception, ne la relance jamais) :
+     * un souci d'enregistrement des stats ne doit JAMAIS empêcher
+     * l'affichage réel de la page au visiteur.
+     */
+    protected function recordPageView(Request $request, ?string $entityType = null, ?int $entityId = null): void
+    {
+        rescue(fn () => app(PageViewService::class)->record($request, $request->path(), $entityType, $entityId));
+    }
+
     /**
      * Consulte la table `redirects` avant d'abandonner en 404 (brief §15).
      *

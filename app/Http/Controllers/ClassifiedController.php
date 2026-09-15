@@ -40,7 +40,7 @@ class ClassifiedController extends Controller
             return $this->redirectOrAbort($request->path());
         }
 
-        return $this->show($classified);
+        return $this->show($request, $classified);
     }
 
     protected function renderIndex(Request $request, ?ClassifiedCategory $category): View
@@ -58,6 +58,8 @@ class ClassifiedController extends Controller
 
         $categories = ClassifiedCategory::where('is_active', true)->orderBy('name')->get();
 
+        $this->recordPageView($request, $category ? 'classified_category' : null, $category?->id);
+
         return view('annonces.index', [
             'classifieds' => $classifieds,
             'categories' => $categories,
@@ -68,7 +70,7 @@ class ClassifiedController extends Controller
         ]);
     }
 
-    public function show(Classified $classified): View
+    public function show(Request $request, Classified $classified): View
     {
         abort_unless($classified->status === 'published', 404);
 
@@ -83,6 +85,8 @@ class ClassifiedController extends Controller
             ->latest()
             ->limit(4)
             ->get();
+
+        $this->recordPageView($request, 'classified', $classified->id);
 
         return view('annonces.show', [
             'classified' => $classified,

@@ -13,9 +13,11 @@ use Illuminate\View\View;
 /** Page de contact (brief §11) — refaite, sécurisée (honeypot + throttle sur la route). */
 class ContactController extends Controller
 {
-    public function show(): View
+    public function show(Request $request): View
     {
         $page = Page::where('key', 'contact')->first();
+
+        $this->recordPageView($request);
 
         return view('contact.show', ['seo' => $page?->resolveSeo() ?? []]);
     }

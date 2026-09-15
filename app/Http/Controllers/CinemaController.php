@@ -28,6 +28,8 @@ class CinemaController extends Controller
 
         $cinemas = Cinema::where('is_active', true)->orderBy('name')->get();
 
+        $this->recordPageView($request);
+
         return view('cinema.index', [
             'movies' => $movies,
             'cinemas' => $cinemas,
@@ -61,6 +63,8 @@ class CinemaController extends Controller
             ->limit(4)
             ->get();
 
+        $this->recordPageView($request, 'movie', $movie->id);
+
         return view('cinema.movie', [
             'movie' => $movie,
             'screeningsByCinema' => $screeningsByCinema,
@@ -87,6 +91,8 @@ class CinemaController extends Controller
             ->orderBy('name')
             ->limit(4)
             ->get();
+
+        $this->recordPageView($request, 'cinema', $cinema->id);
 
         return view('cinema.salle', [
             'cinema' => $cinema,

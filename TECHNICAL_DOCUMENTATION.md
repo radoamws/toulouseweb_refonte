@@ -1578,3 +1578,29 @@ Tests : `tests/Feature/WebCronTest.php::test_sitemap_generated_via_webcron_alway
 ### ⚠️ Action restante côté client (hors code)
 
 Une fois ce correctif déployé et le sitemap corrigé en production, revalider manuellement le sitemap dans **Google Search Console** (Sitemaps > soumettre à nouveau `https://toulouseweb.com/sitemap.xml`) — Google peut avoir mis en cache la version corrompue (localhost) lors d'une exploration précédente ; une nouvelle soumission force une réexploration immédiate plutôt que d'attendre le prochain passage naturel du robot.
+
+## 44. Vues de page dans les stats + audit complet des clics + nettoyage des emails invalides Brevo (15/09/2026, demande client)
+
+Demande client (3 volets) : *"reverifie tous les clic car je viens de recliquer sur les cinémas, theatres... il n'y a que les annuaires qui sont dans les stats. [...] les pages visitées doivent être dans les stats aussi car ce ne sera pas forcément un clic par lien interne mais un résultat de recherche de google [...]. [...] si possible de récupérer les contacts dans brevo où les mails ne fonctionnent plus."*
+
+### 1. Audit des clics — vérifié, pas de régression trouvée
+
+`click_events` en production contenait bien des lignes `cinema`/`movie`/`screening_time` récentes (§41). Un test en direct (`POST /track-click` via curl, sans navigateur) a créé une nouvelle ligne `cinema` sans erreur, confirmant que la route, le contrôleur et la base fonctionnent normalement à l'instant du test. Le plus probable : une page cinéma restée ouverte dans un onglet depuis avant le déploiement du §41 (donc sans les `data-track` ajoutés), ou un cache navigateur local — pas un bug côté serveur. `ClicksByTypeChart`/`TopClickedEntities` restent entièrement génériques (voir §41), donc dès qu'un clic réel arrive avec un type donné, il apparaît automatiquement, quel que soit le type.
+
+### 2. Nouveau : vues de page (indépendantes des clics)
+
+Un clic (`App\Models\ClickEvent`) ne capte QUE la navigation interne suivie par JS (`track-click.js`) — un visiteur arrivant directement sur une fiche via un résultat Google/Bing, un lien partagé ou un favori n'en génère jamais. Nouvelle table **`page_views`** (`App\Models\PageView`, `App\Services\Stats\PageViewService`), enregistrée côté **serveur** (donc indépendante du JS, des bloqueurs de script, et du point d'entrée réel) directement dans chaque contrôleur de page publique, juste avant le `return view(...)` : home, annuaire (index + fiche), agenda (index + événement), cinéma (index + film + salle), actualités (index + article), annonces (index + fiche), contact.
+
+Table séparée de `click_events` (pas de fusion) : un clic mesure une INTERACTION, une vue mesure une VISITE — les confondre aurait rendu le libellé "Clics" du dashboard trompeur. Réutilise `EntityLabelResolver` (§41) pour les libellés, donc les nouveaux types `event_category`/`news_category`/`classified_category` (pages "menu" de catégorie) y ont aussi été ajoutés. 3 nouveaux widgets miroir des widgets clics existants : `PageViewsOverview`, `PageViewsByTypeChart`, `TopViewedEntities`.
+
+`Controller::recordPageView()` (protégé, mutualisé) enveloppe l'enregistrement dans `rescue()` : un souci d'écriture des stats ne doit **jamais** faire échouer l'affichage réel de la page — vérifié par un test dédié (table `page_views` supprimée en cours de test, la page continue de répondre normalement).
+
+Tests : `tests/Feature/PageViewTrackingTest.php` (8 tests — home sans entité, chaque page de détail avec la bonne entité, page de catégorie agenda, résilience si l'enregistrement échoue), `tests/Feature/AdminDashboardStatsTest.php` (+2 : widgets de vues rendus avec/sans données), `tests/Feature/EntityLabelResolverTest.php` (déjà couvert au §41, complété pour les nouvelles catégories).
+
+### 3. Emails Brevo qui ne fonctionnent plus
+
+Vérifié : l'envoi transactionnel (§40) n'alimente PAS le carnet de contacts Brevo (`GET /v3/contacts` ne montre que le compte lui-même) — les statistiques de délivrabilité (`GET /v3/smtp/statistics/events`) sont la seule donnée exploitable. Sur l'envoi du 14/09/2026 (1648 emails) : **207 hard bounces, 90 soft bounces** (échec temporaire — boîte pleine, timeout — volontairement PAS traité comme invalide), 2 désinscriptions, sur les ~602 déjà traités par Brevo à ce stade (le reste continue d'être traité en arrière-plan par Brevo).
+
+Nouvelle commande `newsletter:sync-brevo-bounces` (`App\Console\Commands\Newsletter\SyncBrevoBounces`) : récupère les événements `hardBounces`/`blocked` (paginé) sur une fenêtre glissante (30 jours par défaut), marque les abonnés correspondants `status = invalid` (nouvelle valeur, distincte de `unsubscribed` — un email mort n'est pas un désabonnement volontaire). `NewsletterSubscriberResource` mis à jour (filtre + badge rouge dédiés). Ces abonnés sont automatiquement exclus des futurs envois (`NewsletterSubscriber::scopeActive()` ne filtre que sur `status = 'active'`, déjà en place). Pensé pour être rejoué après chaque campagne (Brevo continue de rapporter des bounces dans les heures/jours suivant un envoi).
+
+Tests : `tests/Feature/SyncBrevoBouncesTest.php` (3 tests — hard bounce/blocked marqués invalides, soft bounce jamais touché, pagination sur plusieurs pages Brevo).

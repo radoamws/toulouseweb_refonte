@@ -74,6 +74,8 @@ class ListingController extends Controller
 
         $seo = $category ? $category->resolveSeo() : (Page::where('key', 'seo-menu-annuaire')->first()?->resolveSeo() ?? []);
 
+        $this->recordPageView($request, $category ? 'category' : null, $category?->id);
+
         return view('annuaire.index', compact('listings', 'topCategories', 'category', 'seo', 'cities'));
     }
 
@@ -92,6 +94,8 @@ class ListingController extends Controller
             ->where('id', '!=', $listing->id)
             ->limit(4)
             ->get();
+
+        $this->recordPageView($request, 'listing', $listing->id);
 
         return view('annuaire.show', [
             'listing' => $listing,

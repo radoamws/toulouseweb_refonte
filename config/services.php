@@ -111,4 +111,14 @@ return [
         ))),
     ],
 
+    /*
+     * API Brevo (voir config/mail.php, mailer 'brevo', et
+     * App\Console\Commands\Newsletter\SyncBrevoBounces). Même clé que le
+     * mailer, exposée ici séparément pour les appels API qui ne passent pas
+     * par l'envoi de mail (statistiques de délivrabilité).
+     */
+    'brevo' => [
+        'api_key' => env('BREVO_API_KEY'),
+    ],
+
 ];

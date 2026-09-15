@@ -5,10 +5,13 @@ namespace App\Services\Stats;
 use App\Models\Category;
 use App\Models\Cinema;
 use App\Models\Classified;
+use App\Models\ClassifiedCategory;
 use App\Models\Event;
+use App\Models\EventCategory;
 use App\Models\Listing;
 use App\Models\Movie;
 use App\Models\News;
+use App\Models\NewsCategory;
 use App\Models\PartnerSite;
 use App\Models\ScreeningTime;
 use App\Models\Slider;
@@ -36,6 +39,13 @@ class EntityLabelResolver
         // Salles de cinéma (demande client, 15/09/2026 — voir
         // resources/views/cinema/index.blade.php et cinema/salle.blade.php).
         'cinema' => [Cinema::class, 'name'],
+        // Pages "menu" de catégorie, alimentées par les vues de page
+        // (demande client, 15/09/2026, voir App\Services\Stats\PageViewService
+        // et TECHNICAL_DOCUMENTATION.md §44) — distinctes de `category`
+        // (annuaire) : chaque module a sa propre table de catégories.
+        'event_category' => [EventCategory::class, 'name'],
+        'news_category' => [NewsCategory::class, 'name'],
+        'classified_category' => [ClassifiedCategory::class, 'name'],
     ];
 
     public function resolve(string $entityType, int $entityId): string
@@ -84,6 +94,10 @@ class EntityLabelResolver
             'slider' => 'Sliders / bannières',
             'cinema' => 'Salles de cinéma',
             'screening_time' => 'Horaires de séance',
+            'event_category' => 'Catégories agenda',
+            'news_category' => 'Catégories actualités',
+            'classified_category' => 'Catégories annonces',
+            'page' => 'Pages sans fiche associée (accueil...)',
             default => ucfirst($entityType),
         };
     }

@@ -44,7 +44,7 @@ class EventController extends Controller
             return $this->redirectOrAbort($request->path());
         }
 
-        return $this->show($event);
+        return $this->show($request, $event);
     }
 
     protected function renderIndex(Request $request, ?EventCategory $category): View
@@ -81,6 +81,8 @@ class EventController extends Controller
             $calendarMonth = $this->resolveCalendarMonth($request, $date);
             $calendarCounts = $this->countEventsByDay($calendarMonth, $category);
         }
+
+        $this->recordPageView($request, $category ? 'event_category' : null, $category?->id);
 
         return view('agenda.index', compact(
             'events', 'categories', 'category', 'date', 'seo',
@@ -122,7 +124,7 @@ class EventController extends Controller
             ->all();
     }
 
-    public function show(Event $event): View
+    public function show(Request $request, Event $event): View
     {
         abort_unless(in_array($event->status, ['published', 'expired'], true), 404);
 
@@ -136,6 +138,8 @@ class EventController extends Controller
             ->orderBy('start_date')
             ->limit(4)
             ->get();
+
+        $this->recordPageView($request, 'event', $event->id);
 
         return view('agenda.show', [
             'event' => $event,

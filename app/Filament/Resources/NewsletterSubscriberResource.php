@@ -43,7 +43,7 @@ class NewsletterSubscriberResource extends Resource
                     ->maxLength(255),
                 Forms\Components\Select::make('status')
                     ->label('Statut')
-                    ->options(['active' => 'Actif', 'unsubscribed' => 'Désinscrit'])
+                    ->options(['active' => 'Actif', 'unsubscribed' => 'Désinscrit', 'invalid' => 'Email invalide'])
                     ->required()
                     ->default('active'),
             ]);
@@ -57,8 +57,16 @@ class NewsletterSubscriberResource extends Resource
                 Tables\Columns\TextColumn::make('name')->label('Nom')->searchable(),
                 Tables\Columns\TextColumn::make('status')->label('Statut')->badge()->color(fn (string $state) => match ($state) {
                     'active' => 'success',
+                    // Email invalide (hard bounce/blocked Brevo, voir
+                    // App\Console\Commands\Newsletter\SyncBrevoBounces) —
+                    // couleur distincte d'un simple désabonnement volontaire.
+                    'invalid' => 'danger',
                     default => 'gray',
-                })->formatStateUsing(fn (string $state) => $state === 'active' ? 'Actif' : 'Désinscrit'),
+                })->formatStateUsing(fn (string $state) => match ($state) {
+                    'active' => 'Actif',
+                    'invalid' => 'Email invalide',
+                    default => 'Désinscrit',
+                }),
                 Tables\Columns\TextColumn::make('source')->label('Origine')->formatStateUsing(fn (?string $state) => match ($state) {
                     'homepage' => 'Accueil',
                     'contact_form' => 'Formulaire contact',
@@ -71,7 +79,7 @@ class NewsletterSubscriberResource extends Resource
             ->defaultSort('subscribed_at', 'desc')
             ->filters([
                 Tables\Filters\SelectFilter::make('status')->label('Statut')->options([
-                    'active' => 'Actif', 'unsubscribed' => 'Désinscrit',
+                    'active' => 'Actif', 'unsubscribed' => 'Désinscrit', 'invalid' => 'Email invalide',
                 ])->default('active'),
                 Tables\Filters\SelectFilter::make('source')->label('Origine')->options([
                     'homepage' => 'Accueil', 'contact_form' => 'Formulaire contact',

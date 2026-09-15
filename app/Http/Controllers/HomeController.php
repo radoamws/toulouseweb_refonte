@@ -11,6 +11,7 @@ use App\Models\News;
 use App\Models\Page;
 use App\Models\Slider;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
@@ -21,9 +22,13 @@ use Illuminate\View\View;
  */
 class HomeController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         $page = Page::where('key', 'home')->first();
+
+        // Vue de page (demande client, 15/09/2026, voir §44) — pas d'entité
+        // précise pour la home.
+        $this->recordPageView($request);
 
         return view('home', [
             'seo' => $page?->resolveSeo() ?? [],
