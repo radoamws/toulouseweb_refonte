@@ -8,6 +8,7 @@ use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -142,16 +143,22 @@ class ListingResource extends Resource
                     ->sortable()
                     ->color(fn (string $state) => $state === 'paid' ? 'success' : 'gray')
                     ->formatStateUsing(fn (string $state) => $state === 'paid' ? 'Payante' : 'Gratuite'),
-                Tables\Columns\TextColumn::make('status')
+                // Modifiable directement dans la liste (demande client,
+                // 16/09/2026) — plus besoin d'ouvrir la fiche pour changer
+                // uniquement le statut. Voir aussi ClassifiedResource/
+                // EventResource/NewsResource, même demande "pour toutes les
+                // entités confondues".
+                Tables\Columns\SelectColumn::make('status')
                     ->label('Statut')
-                    ->badge()
+                    ->options([
+                        'draft' => 'Brouillon',
+                        'pending' => 'En attente de validation',
+                        'published' => 'Publiée',
+                        'rejected' => 'Refusée',
+                        'archived' => 'Archivée',
+                    ])
                     ->sortable()
-                    ->color(fn (string $state) => match ($state) {
-                        'published' => 'success',
-                        'pending' => 'warning',
-                        'rejected', 'archived' => 'danger',
-                        default => 'gray',
-                    }),
+                    ->afterStateUpdated(fn () => Notification::make()->title('Statut mis à jour')->success()->send()),
                 Tables\Columns\TextColumn::make('categories.name')->label('Catégories')->badge(),
                 Tables\Columns\TextColumn::make('phone')->label('Téléphone')->sortable(),
                 Tables\Columns\TextColumn::make('created_at')

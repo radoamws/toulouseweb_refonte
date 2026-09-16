@@ -46,10 +46,20 @@ class ClickTrackingService
             ->all();
     }
 
-    /** Nombre total de clics, toutes entités confondues, sur une plage de dates (bornes incluses). */
-    public function totalCount(\DateTimeInterface $from, \DateTimeInterface $to): int
+    /**
+     * Nombre total de clics, toutes entités confondues, sur une plage de
+     * dates (bornes incluses). `$entityType`/`$entityId` (demande client,
+     * 16/09/2026, voir App\Filament\Pages\Dashboard et
+     * TECHNICAL_DOCUMENTATION.md §45) restreignent à un type précis, ou à
+     * un seul élément de ce type — `null` = aucune restriction.
+     */
+    public function totalCount(\DateTimeInterface $from, \DateTimeInterface $to, ?string $entityType = null, ?int $entityId = null): int
     {
-        return ClickEvent::query()->whereBetween('created_at', [$from, $to])->count();
+        return ClickEvent::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->when($entityType, fn ($q) => $q->where('entity_type', $entityType))
+            ->when($entityId, fn ($q) => $q->where('entity_id', $entityId))
+            ->count();
     }
 
     /**
@@ -59,11 +69,13 @@ class ClickTrackingService
      *
      * @return array<string, int> entity_type => total
      */
-    public function totalsByType(\DateTimeInterface $from, \DateTimeInterface $to): array
+    public function totalsByType(\DateTimeInterface $from, \DateTimeInterface $to, ?string $entityType = null, ?int $entityId = null): array
     {
         return ClickEvent::query()
             ->selectRaw('entity_type, COUNT(*) as total')
             ->whereBetween('created_at', [$from, $to])
+            ->when($entityType, fn ($q) => $q->where('entity_type', $entityType))
+            ->when($entityId, fn ($q) => $q->where('entity_id', $entityId))
             ->groupBy('entity_type')
             ->orderByDesc('total')
             ->pluck('total', 'entity_type')
@@ -71,16 +83,19 @@ class ClickTrackingService
     }
 
     /**
-     * Les N entités (tous types confondus) les plus cliquées sur une plage
-     * de dates — alimente le widget "Top clics" du dashboard admin.
+     * Les N entités (tous types confondus, sauf filtre) les plus cliquées
+     * sur une plage de dates — alimente le widget "Top clics" du dashboard
+     * admin.
      *
      * @return array<int, array{entity_type: string, entity_id: int, total: int}>
      */
-    public function topEntities(int $limit, \DateTimeInterface $from, \DateTimeInterface $to): array
+    public function topEntities(int $limit, \DateTimeInterface $from, \DateTimeInterface $to, ?string $entityType = null, ?int $entityId = null): array
     {
         return ClickEvent::query()
             ->selectRaw('entity_type, entity_id, COUNT(*) as total')
             ->whereBetween('created_at', [$from, $to])
+            ->when($entityType, fn ($q) => $q->where('entity_type', $entityType))
+            ->when($entityId, fn ($q) => $q->where('entity_id', $entityId))
             ->groupBy('entity_type', 'entity_id')
             ->orderByDesc('total')
             ->limit($limit)

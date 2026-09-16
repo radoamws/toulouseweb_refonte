@@ -30,13 +30,14 @@ class PageViewsOverview extends StatsOverviewWidget
         $views = app(PageViewService::class);
         $now = now();
         [$from, $to] = [$this->filterFromDate(), $this->filterToDate()];
+        [$entityType, $entityId] = [$this->filterEntityType(), $this->filterEntityId()];
 
         return [
-            Stat::make('Vues de page aujourd\'hui', $views->totalCount($now->copy()->startOfDay(), $now))
+            Stat::make('Vues de page aujourd\'hui', $views->totalCount($now->copy()->startOfDay(), $now, $entityType, $entityId))
                 ->description('Toutes pages confondues — inclut les visites directes (recherche, favoris...)'),
-            Stat::make('Vues — 7 derniers jours', $views->totalCount($now->copy()->subDays(6)->startOfDay(), $now)),
-            Stat::make('Vues — 30 derniers jours', $views->totalCount($now->copy()->subDays(29)->startOfDay(), $now)),
-            Stat::make('Vues — période filtrée', $views->totalCount($from, $to))
+            Stat::make('Vues — 7 derniers jours', $views->totalCount($now->copy()->subDays(6)->startOfDay(), $now, $entityType, $entityId)),
+            Stat::make('Vues — 30 derniers jours', $views->totalCount($now->copy()->subDays(29)->startOfDay(), $now, $entityType, $entityId)),
+            Stat::make('Vues — période filtrée', $views->totalCount($from, $to, $entityType, $entityId))
                 ->description($from->format('d/m/Y').' → '.$to->format('d/m/Y')),
         ];
     }

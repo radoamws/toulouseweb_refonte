@@ -32,7 +32,9 @@ class TopClickedEntities extends Widget
     {
         $resolver = app(EntityLabelResolver::class);
 
-        return collect(app(ClickTrackingService::class)->topEntities(10, $this->filterFromDate(), $this->filterToDate()))
+        return collect(app(ClickTrackingService::class)->topEntities(
+            10, $this->filterFromDate(), $this->filterToDate(), $this->filterEntityType(), $this->filterEntityId(),
+        ))
             ->map(fn (array $row) => [
                 'label' => $resolver->resolve($row['entity_type'], $row['entity_id']),
                 'type_label' => $resolver->typeLabel($row['entity_type']),

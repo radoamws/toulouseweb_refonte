@@ -1604,3 +1604,26 @@ Vérifié : l'envoi transactionnel (§40) n'alimente PAS le carnet de contacts B
 Nouvelle commande `newsletter:sync-brevo-bounces` (`App\Console\Commands\Newsletter\SyncBrevoBounces`) : récupère les événements `hardBounces`/`blocked` (paginé) sur une fenêtre glissante (30 jours par défaut), marque les abonnés correspondants `status = invalid` (nouvelle valeur, distincte de `unsubscribed` — un email mort n'est pas un désabonnement volontaire). `NewsletterSubscriberResource` mis à jour (filtre + badge rouge dédiés). Ces abonnés sont automatiquement exclus des futurs envois (`NewsletterSubscriber::scopeActive()` ne filtre que sur `status = 'active'`, déjà en place). Pensé pour être rejoué après chaque campagne (Brevo continue de rapporter des bounces dans les heures/jours suivant un envoi).
 
 Tests : `tests/Feature/SyncBrevoBouncesTest.php` (3 tests — hard bounce/blocked marqués invalides, soft bounce jamais touché, pagination sur plusieurs pages Brevo).
+
+## 45. Trois coquilles admin (16/09/2026, demande client)
+
+### 1. Libellé "Scraping" peu parlant
+
+Demande client : *"change les libellés 'Scraped' en 'Extracted' ou autre car n'est pas parlant par d'autres admins."* `EventResource` : la colonne "Origine" de la liste des événements affichait la valeur BRUTE non traduite (`scraped`, `manual`...) — contrairement au `<select>` du formulaire, jamais formatée dans le tableau. Fix : `formatStateUsing()` ajouté à la colonne (mêmes libellés que le formulaire), et `'scraped' => 'Scraping'` renommé en `'scraped' => 'Import automatique'` (le mot "Scraping" restait un jargon anglophone peu clair pour un admin non technique).
+
+### 2. Changer le statut directement depuis la liste
+
+Demande client : *"Permettre de changer directement les statuts dans les listings et non pas forcement dans l'édition des fiches (pour toutes les entités confondues)."* Les 4 entités à workflow de modération (Listing/Event/News/Classified) affichaient leur statut en lecture seule (`TextColumn` + badge coloré) — modifiable uniquement en ouvrant la fiche complète. Remplacé par `Tables\Columns\SelectColumn` : menu déroulant directement dans la liste, enregistré immédiatement (sans rechargement de page), avec confirmation ("Statut mis à jour"). Les actions dédiées existantes (ex. "Valider"/"Refuser" de `ClassifiedResource`, qui capturent aussi un motif de refus) restent disponibles en complément, pas remplacées.
+
+Tests : `tests/Feature/AdminInlineStatusEditingTest.php` (4 tests — un par entité, `updateTableColumnState()` en Livewire).
+
+### 3. Dashboard : filtres par type de contenu / élément précis
+
+Demande client : *"dans le dashboard, ajoute toutes les filtrages possible: le rendre en stats et analyse. (exemple: filtre pour les stats par salle de cinéma, filtre par news actifs, filtre par annonce...)"*. Le filtre de dates existant (§33) est complété par 2 nouveaux champs dans `App\Filament\Pages\Dashboard::filtersForm()` :
+
+- **Filtrer par type de contenu** : restreint tous les widgets (clics ET vues de page) à un seul type (ex. "Actualités", "Salles de cinéma"...) — options générées depuis `EntityLabelResolver::typeOptions()` (les mêmes types que la table de correspondance des libellés, donc toujours à jour sans double maintenance).
+- **Filtrer par élément précis** : n'apparaît qu'une fois un type choisi (réactif, `Get`/`Set` Filament) — liste chaque élément RÉEL de ce type (ex. le nom de chaque salle de cinéma) via `EntityLabelResolver::entityOptions()`, pour ne voir que les stats d'UNE salle/UNE actualité/UNE annonce précise.
+
+`App\Filament\Widgets\Concerns\ResolvesDateFilters` (déjà partagé par les 6 widgets clics/vues) gagne `filterEntityType()`/`filterEntityId()` — `null` par défaut (aucune restriction, comportement inchangé sans ce filtre). `ClickTrackingService`/`PageViewService::totalCount()/totalsByType()/topEntities()` acceptent ces 2 paramètres optionnels en plus des dates.
+
+Tests : `tests/Feature/DashboardEntityFilterTest.php` (6 tests — narrowing par type seul et par type+élément précis sur les 2 services, options générées par `EntityLabelResolver`, résolution des filtres depuis `$this->filters` par réflexion — même approche que `ClickTrackingTest` pour les dates, non-régression du rendu dashboard).

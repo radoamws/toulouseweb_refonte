@@ -85,17 +85,20 @@ class ClassifiedResource extends Resource
                 Tables\Columns\TextColumn::make('category.name')->label('Catégorie')->badge()->sortable(),
                 Tables\Columns\TextColumn::make('user.name')->label('Auteur')->placeholder('Invité')->sortable(),
                 Tables\Columns\TextColumn::make('price')->label('Prix')->money('EUR')->sortable(),
-                Tables\Columns\TextColumn::make('status')
+                // Modifiable directement dans la liste (demande client,
+                // 16/09/2026, "pour toutes les entités confondues" — voir
+                // aussi ListingResource/EventResource/NewsResource).
+                Tables\Columns\SelectColumn::make('status')
                     ->label('Statut')
-                    ->badge()
+                    ->options([
+                        'pending' => 'En attente de validation',
+                        'published' => 'Publiée',
+                        'rejected' => 'Refusée',
+                        'expired' => 'Expirée',
+                        'archived' => 'Archivée',
+                    ])
                     ->sortable()
-                    ->color(fn (string $state) => match ($state) {
-                        'published' => 'success',
-                        'pending' => 'warning',
-                        'rejected', 'archived' => 'danger',
-                        'expired' => 'gray',
-                        default => 'gray',
-                    }),
+                    ->afterStateUpdated(fn () => Notification::make()->title('Statut mis à jour')->success()->send()),
                 Tables\Columns\IconColumn::make('is_featured')->label('Mise en avant')->boolean()->sortable(),
                 Tables\Columns\TextColumn::make('created_at')->label('Déposée le')->dateTime('d/m/Y H:i')->sortable(),
             ])

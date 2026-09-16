@@ -26,7 +26,9 @@ class ClicksByTypeChart extends BarChartWidget
 
     protected function getData(): array
     {
-        $totals = app(ClickTrackingService::class)->totalsByType($this->filterFromDate(), $this->filterToDate());
+        $totals = app(ClickTrackingService::class)->totalsByType(
+            $this->filterFromDate(), $this->filterToDate(), $this->filterEntityType(), $this->filterEntityId(),
+        );
         $resolver = app(EntityLabelResolver::class);
 
         return [

@@ -7,6 +7,7 @@ use App\Filament\Resources\EventResource\RelationManagers;
 use App\Models\Event;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -92,7 +93,11 @@ class EventResource extends Resource
                 Forms\Components\Select::make('source')
                     ->options([
                         'manual' => 'Saisie manuelle',
-                        'scraped' => 'Scraping',
+                        // Renommé (demande client, 16/09/2026) : "Scraping" n'est
+                        // pas parlant pour tous les admins — voir aussi le
+                        // formatStateUsing() de la colonne de tableau ci-dessous,
+                        // qui affichait la valeur brute "scraped" sans traduction.
+                        'scraped' => 'Import automatique',
                         'user_submitted' => 'Proposé par un visiteur',
                     ])
                     ->required()
@@ -126,18 +131,32 @@ class EventResource extends Resource
                     ->label('Début')
                     ->dateTime('d/m/Y H:i')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('status')
+                // Modifiable directement dans la liste (demande client,
+                // 16/09/2026, "pour toutes les entités confondues" — voir
+                // aussi ListingResource/ClassifiedResource/NewsResource).
+                Tables\Columns\SelectColumn::make('status')
                     ->label('Statut')
-                    ->badge()
+                    ->options([
+                        'draft' => 'Brouillon',
+                        'pending' => 'En attente de validation',
+                        'published' => 'Publié',
+                        'expired' => 'Expiré',
+                        'cancelled' => 'Annulé',
+                    ])
                     ->sortable()
-                    ->color(fn (string $state) => match ($state) {
-                        'published' => 'success',
-                        'pending' => 'warning',
-                        'expired', 'cancelled' => 'danger',
-                        default => 'gray',
-                    }),
+                    ->afterStateUpdated(fn () => Notification::make()->title('Statut mis à jour')->success()->send()),
                 Tables\Columns\TextColumn::make('source')
                     ->label('Origine')
+                    // ⚠️ Bug réel trouvé et corrigé (16/09/2026, demande
+                    // client) : affichait la valeur brute non traduite
+                    // ("scraped", "manual"...) dans la liste — jamais
+                    // formatée ici, contrairement au <select> du formulaire.
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'manual' => 'Saisie manuelle',
+                        'scraped' => 'Import automatique',
+                        'user_submitted' => 'Proposé par un visiteur',
+                        default => $state,
+                    })
                     ->badge()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')

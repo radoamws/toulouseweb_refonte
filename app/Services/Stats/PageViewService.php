@@ -37,10 +37,20 @@ class PageViewService
         ]);
     }
 
-    /** Nombre total de vues, toutes pages confondues, sur une plage de dates (bornes incluses). */
-    public function totalCount(\DateTimeInterface $from, \DateTimeInterface $to): int
+    /**
+     * Nombre total de vues, toutes pages confondues, sur une plage de dates
+     * (bornes incluses). `$entityType`/`$entityId` (demande client,
+     * 16/09/2026, voir App\Filament\Pages\Dashboard et
+     * TECHNICAL_DOCUMENTATION.md §45) restreignent à un type précis, ou à
+     * un seul élément de ce type — `null` = aucune restriction.
+     */
+    public function totalCount(\DateTimeInterface $from, \DateTimeInterface $to, ?string $entityType = null, ?int $entityId = null): int
     {
-        return PageView::query()->whereBetween('created_at', [$from, $to])->count();
+        return PageView::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->when($entityType, fn ($q) => $q->where('entity_type', $entityType))
+            ->when($entityId, fn ($q) => $q->where('entity_id', $entityId))
+            ->count();
     }
 
     /**
@@ -51,11 +61,13 @@ class PageViewService
      *
      * @return array<string, int> entity_type => total
      */
-    public function totalsByType(\DateTimeInterface $from, \DateTimeInterface $to): array
+    public function totalsByType(\DateTimeInterface $from, \DateTimeInterface $to, ?string $entityType = null, ?int $entityId = null): array
     {
         return PageView::query()
             ->selectRaw("COALESCE(entity_type, 'page') as entity_type, COUNT(*) as total")
             ->whereBetween('created_at', [$from, $to])
+            ->when($entityType, fn ($q) => $q->where('entity_type', $entityType))
+            ->when($entityId, fn ($q) => $q->where('entity_id', $entityId))
             ->groupBy('entity_type')
             ->orderByDesc('total')
             ->pluck('total', 'entity_type')
@@ -63,20 +75,23 @@ class PageViewService
     }
 
     /**
-     * Les N entités (tous types confondus) les plus vues sur une plage de
-     * dates — alimente le widget "Pages les plus vues" du dashboard admin.
-     * Exclut les vues sans entité (`entity_type IS NULL`, ex. home) : sans
-     * identifiant, impossible de les grouper/libeller individuellement —
-     * elles restent comptées dans `totalCount()`/`totalsByType()`.
+     * Les N entités (tous types confondus, sauf filtre) les plus vues sur
+     * une plage de dates — alimente le widget "Pages les plus vues" du
+     * dashboard admin. Exclut les vues sans entité (`entity_type IS NULL`,
+     * ex. home) : sans identifiant, impossible de les grouper/libeller
+     * individuellement — elles restent comptées dans
+     * `totalCount()`/`totalsByType()`.
      *
      * @return array<int, array{entity_type: string, entity_id: int, total: int}>
      */
-    public function topEntities(int $limit, \DateTimeInterface $from, \DateTimeInterface $to): array
+    public function topEntities(int $limit, \DateTimeInterface $from, \DateTimeInterface $to, ?string $entityType = null, ?int $entityId = null): array
     {
         return PageView::query()
             ->whereNotNull('entity_type')
             ->selectRaw('entity_type, entity_id, COUNT(*) as total')
             ->whereBetween('created_at', [$from, $to])
+            ->when($entityType, fn ($q) => $q->where('entity_type', $entityType))
+            ->when($entityId, fn ($q) => $q->where('entity_id', $entityId))
             ->groupBy('entity_type', 'entity_id')
             ->orderByDesc('total')
             ->limit($limit)

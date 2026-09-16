@@ -80,6 +80,42 @@ class EntityLabelResolver
         return ucfirst($entityType)." #{$entityId}";
     }
 
+    /**
+     * Options pour le <select> "Filtrer par type de contenu" du dashboard
+     * (demande client, 16/09/2026, voir App\Filament\Pages\Dashboard et
+     * TECHNICAL_DOCUMENTATION.md §45) — seuls les types listés dans MAP
+     * (ceux ayant un vrai modèle/liste identifiable) sont proposés ;
+     * `screening_time` (résolu via relations, pas de liste simple à
+     * peupler) et `page` (vues sans fiche associée, ex. home) sont
+     * volontairement exclus de ce filtre "par élément précis".
+     *
+     * @return array<string, string> entity_type => libellé
+     */
+    public function typeOptions(): array
+    {
+        return collect(array_keys(self::MAP))
+            ->mapWithKeys(fn (string $type) => [$type => $this->typeLabel($type)])
+            ->all();
+    }
+
+    /**
+     * Options pour le <select> "Filtrer par élément précis" du dashboard,
+     * une fois un type choisi (ex. lister toutes les salles de cinéma pour
+     * ne voir que les stats d'UNE salle précise, demande client 16/09/2026).
+     *
+     * @return array<int, string> id => libellé
+     */
+    public function entityOptions(string $entityType): array
+    {
+        [$modelClass, $column] = self::MAP[$entityType] ?? [null, null];
+
+        if (! $modelClass) {
+            return [];
+        }
+
+        return $modelClass::query()->orderBy($column)->pluck($column, 'id')->all();
+    }
+
     /** Libellé lisible du type lui-même (pour le graphique par type). */
     public function typeLabel(string $entityType): string
     {

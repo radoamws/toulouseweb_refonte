@@ -24,7 +24,9 @@ class PageViewsByTypeChart extends BarChartWidget
 
     protected function getData(): array
     {
-        $totals = app(PageViewService::class)->totalsByType($this->filterFromDate(), $this->filterToDate());
+        $totals = app(PageViewService::class)->totalsByType(
+            $this->filterFromDate(), $this->filterToDate(), $this->filterEntityType(), $this->filterEntityId(),
+        );
         $resolver = app(EntityLabelResolver::class);
 
         return [

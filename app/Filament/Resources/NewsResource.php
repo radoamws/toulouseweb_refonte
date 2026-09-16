@@ -7,6 +7,7 @@ use App\Filament\Resources\NewsResource\RelationManagers;
 use App\Models\News;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -124,16 +125,19 @@ class NewsResource extends Resource
                 Tables\Columns\TextColumn::make('title')->label('Titre')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('category.name')->label('Catégorie')->badge()->sortable(),
                 Tables\Columns\TextColumn::make('author.name')->label('Auteur')->sortable(),
-                Tables\Columns\TextColumn::make('status')
+                // Modifiable directement dans la liste (demande client,
+                // 16/09/2026, "pour toutes les entités confondues" — voir
+                // aussi ListingResource/ClassifiedResource/EventResource).
+                Tables\Columns\SelectColumn::make('status')
                     ->label('Statut')
-                    ->badge()
+                    ->options([
+                        'draft' => 'Brouillon',
+                        'pending' => 'En attente de validation',
+                        'published' => 'Publiée',
+                        'archived' => 'Archivée',
+                    ])
                     ->sortable()
-                    ->color(fn (string $state) => match ($state) {
-                        'published' => 'success',
-                        'pending' => 'warning',
-                        'archived' => 'danger',
-                        default => 'gray',
-                    }),
+                    ->afterStateUpdated(fn () => Notification::make()->title('Statut mis à jour')->success()->send()),
                 Tables\Columns\TextColumn::make('start_date')
                     ->label('Début événement')
                     ->date('d/m/Y')
