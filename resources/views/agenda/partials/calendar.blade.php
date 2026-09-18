@@ -7,30 +7,39 @@
     $today = now()->startOfDay();
     $prevMonth = $calendarMonth->copy()->subMonthNoOverflow();
     $nextMonth = $calendarMonth->copy()->addMonthNoOverflow();
-    $weekdays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    $weekdays = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 @endphp
-<div class="mt-6 rounded-2xl border border-ink-100 bg-white p-4 shadow-sm sm:p-6">
+{{-- Calendrier compact, toujours affiché à côté de la liste (demande
+client, 18/09/2026 : "le calendrier doit être sur la liste et en petit" —
+plus de bascule liste/calendrier séparée, voir agenda/index.blade.php). --}}
+<div class="rounded-2xl border border-ink-100 bg-white p-3 shadow-sm">
     <div class="flex items-center justify-between">
-        <x-ui.button
-            :href="request()->fullUrlWithQuery(['month' => $prevMonth->format('Y-m'), 'date' => null])"
-            variant="ghost" size="sm"
-        >&larr; {{ $prevMonth->translatedFormat('F Y') }}</x-ui.button>
+        <a
+            href="{{ request()->fullUrlWithQuery(['month' => $prevMonth->format('Y-m'), 'date' => null]) }}"
+            class="rounded-lg p-1 text-ink-400 hover:bg-ink-50 hover:text-ink-700"
+            aria-label="Mois précédent"
+        >
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 010 1.06L8.06 10l4.73 4.71a.75.75 0 11-1.06 1.06l-5.25-5.25a.75.75 0 010-1.06l5.25-5.25a.75.75 0 011.06 0z" clip-rule="evenodd" /></svg>
+        </a>
 
-        <h2 class="font-heading text-lg font-bold capitalize text-ink-900">{{ $calendarMonth->translatedFormat('F Y') }}</h2>
+        <h2 class="text-xs font-semibold capitalize text-ink-900">{{ $calendarMonth->translatedFormat('F Y') }}</h2>
 
-        <x-ui.button
-            :href="request()->fullUrlWithQuery(['month' => $nextMonth->format('Y-m'), 'date' => null])"
-            variant="ghost" size="sm"
-        >{{ $nextMonth->translatedFormat('F Y') }} &rarr;</x-ui.button>
+        <a
+            href="{{ request()->fullUrlWithQuery(['month' => $nextMonth->format('Y-m'), 'date' => null]) }}"
+            class="rounded-lg p-1 text-ink-400 hover:bg-ink-50 hover:text-ink-700"
+            aria-label="Mois suivant"
+        >
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 010-1.06L11.94 10 7.21 5.29a.75.75 0 111.06-1.06l5.25 5.25a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 01-1.06 0z" clip-rule="evenodd" /></svg>
+        </a>
     </div>
 
-    <div class="mt-4 grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-wide text-ink-400">
+    <div class="mt-2 grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold uppercase text-ink-400">
         @foreach ($weekdays as $label)
-            <div class="py-1">{{ $label }}</div>
+            <div>{{ $label }}</div>
         @endforeach
     </div>
 
-    <div class="mt-1 grid grid-cols-7 gap-1">
+    <div class="mt-0.5 grid grid-cols-7 gap-0.5">
         @for ($i = 0; $i < 42; $i++)
             @php
                 $day = $gridStart->copy()->addDays($i);
@@ -44,20 +53,22 @@
                  ClickTrackingController) — un jour n'en est pas un, contrairement
                  à une bannière/catégorie/fiche/film réels. --}}
             <a
-                href="{{ request()->fullUrlWithQuery(['date' => $day->format('Y-m-d'), 'view' => 'list']) }}"
-                class="flex aspect-square flex-col items-center justify-center rounded-lg text-sm transition
-                    {{ ! $inMonth ? 'text-ink-300' : 'text-ink-800' }}
+                href="{{ request()->fullUrlWithQuery(['date' => $day->format('Y-m-d')]) }}"
+                class="relative flex aspect-square flex-col items-center justify-center rounded-md text-[11px] transition
+                    {{ ! $inMonth ? 'text-ink-300' : 'text-ink-700' }}
                     {{ $isSelected ? 'bg-brand-600 text-white' : ($isToday ? 'border border-brand-400 font-semibold' : 'hover:bg-ink-50') }}"
             >
                 <span>{{ $day->day }}</span>
                 @if ($count > 0 && $inMonth)
-                    <span class="mt-0.5 h-1.5 w-1.5 rounded-full {{ $isSelected ? 'bg-white' : 'bg-accent-500' }}" aria-hidden="true"></span>
+                    <span class="absolute bottom-0.5 h-1 w-1 rounded-full {{ $isSelected ? 'bg-white' : 'bg-accent-500' }}" aria-hidden="true"></span>
                 @endif
             </a>
         @endfor
     </div>
 
-    <p class="mt-4 text-xs text-ink-400">
-        Un point indique au moins un événement ce jour-là (jour de début). Cliquez sur un jour pour voir le détail.
-    </p>
+    @if ($date)
+        <a href="{{ request()->fullUrlWithQuery(['date' => null]) }}" class="mt-2 block text-center text-xs font-medium text-brand-700 hover:underline">
+            Voir tous les jours
+        </a>
+    @endif
 </div>

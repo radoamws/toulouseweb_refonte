@@ -188,14 +188,20 @@ class PublicContentPagesTest extends TestCase
         $this->get('/agenda/theatre')->assertOk()->assertSee('Le Malade Imaginaire')->assertSee('Théâtre');
     }
 
-    public function test_agenda_calendar_view_renders_with_event_marker(): void
+    /**
+     * Le calendrier est désormais TOUJOURS affiché aux côtés de la liste
+     * (demande client, 18/09/2026 : "le calendrier doit être sur la liste
+     * et en petit" — plus de bascule liste/calendrier séparée), donc visible
+     * dès /agenda, sans paramètre `view` (qui n'existe plus).
+     */
+    public function test_agenda_calendar_renders_with_event_marker(): void
     {
         $event = Event::create([
             'title' => 'Concert Calendrier', 'slug' => 'concert-calendrier',
             'status' => 'published', 'start_date' => now()->startOfMonth()->addDays(4),
         ]);
 
-        $response = $this->get('/agenda?view=calendar');
+        $response = $this->get('/agenda');
 
         $response->assertOk();
         $response->assertSee($event->start_date->translatedFormat('F Y'));
@@ -240,23 +246,23 @@ class PublicContentPagesTest extends TestCase
         \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 9, 15));
 
         try {
-            $response = $this->get('/agenda?view=calendar');
+            $response = $this->get('/agenda');
             $response->assertOk();
             $response->assertSee('septembre 2026');
-            $response->assertSee('http://localhost:8000/agenda?view=calendar&amp;month=2026-08', false);
-            $response->assertSee('http://localhost:8000/agenda?view=calendar&amp;month=2026-10', false);
+            $response->assertSee('http://localhost:8000/agenda?month=2026-08', false);
+            $response->assertSee('http://localhost:8000/agenda?month=2026-10', false);
 
-            $response = $this->get('/agenda?view=calendar&month=2026-08');
+            $response = $this->get('/agenda?month=2026-08');
             $response->assertOk();
             $response->assertSee('août 2026');
-            $response->assertSee('http://localhost:8000/agenda?view=calendar&amp;month=2026-07', false);
-            $response->assertSee('http://localhost:8000/agenda?view=calendar&amp;month=2026-09', false);
+            $response->assertSee('http://localhost:8000/agenda?month=2026-07', false);
+            $response->assertSee('http://localhost:8000/agenda?month=2026-09', false);
 
             // Un 2e clic "précédent" de suite (juillet -> juin).
-            $response = $this->get('/agenda?view=calendar&month=2026-07');
+            $response = $this->get('/agenda?month=2026-07');
             $response->assertOk();
             $response->assertSee('juillet 2026');
-            $response->assertSee('http://localhost:8000/agenda?view=calendar&amp;month=2026-06', false);
+            $response->assertSee('http://localhost:8000/agenda?month=2026-06', false);
         } finally {
             \Illuminate\Support\Carbon::setTestNow();
         }

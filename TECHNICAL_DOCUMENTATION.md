@@ -1627,3 +1627,29 @@ Demande client : *"dans le dashboard, ajoute toutes les filtrages possible: le r
 `App\Filament\Widgets\Concerns\ResolvesDateFilters` (déjà partagé par les 6 widgets clics/vues) gagne `filterEntityType()`/`filterEntityId()` — `null` par défaut (aucune restriction, comportement inchangé sans ce filtre). `ClickTrackingService`/`PageViewService::totalCount()/totalsByType()/topEntities()` acceptent ces 2 paramètres optionnels en plus des dates.
 
 Tests : `tests/Feature/DashboardEntityFilterTest.php` (6 tests — narrowing par type seul et par type+élément précis sur les 2 services, options générées par `EntityLabelResolver`, résolution des filtres depuis `$this->filters` par réflexion — même approche que `ClickTrackingTest` pour les dates, non-régression du rendu dashboard).
+
+## 46. Refonte de l'agenda front (18/09/2026, demande client)
+
+Demande client (4 volets) : afficher début ET fin de chaque événement dans la liste ; fusionner calendrier et liste (calendrier "en petit", toujours visible, plus de bascule séparée) ; distinguer chaque catégorie par une couleur (menu + fiches) ; ajouter un filtre par lieu.
+
+### 1. Date de début et de fin sur chaque fiche
+
+Nouvel accessor `Event::eventDateRange()` (même logique que `News::eventDateRange()`, déjà utilisée en inline sur `agenda/show.blade.php`) : *"03 oct. 2026"* seul, ou *"03 oct. 2026 → 05 oct. 2026"* si la fin diffère du début.
+
+### 2. Calendrier fusionné avec la liste
+
+`EventController::renderIndex()` calcule désormais TOUJOURS `$calendarMonth`/`$calendarCounts` (avant : uniquement si `?view=calendar`) — le paramètre `view` et la bascule liste/calendrier ont disparu. `resources/views/agenda/partials/calendar.blade.php` : version compacte (cellules réduites, textes plus petits, navigation par flèches iconographiques) affichée dans une colonne latérale à côté de la liste plutôt qu'en pleine largeur. Cliquer un jour applique `?date=...` exactement comme avant (mécanisme déjà en place, juste rendu accessible sans bascule) — `countEventsByDay()` prend maintenant en compte la catégorie, le lieu ET la recherche texte en cours, pour que les points affichés correspondent vraiment à ce qu'un clic donnerait.
+
+### 3. Couleur par catégorie
+
+`EventCategory.color` existait déjà en base (ColorPicker en admin) et était déjà rempli pour les 25 catégories existantes (reprise du legacy) — mais jamais exploité côté front. Utilisé maintenant : pastille colorée + bordure à l'état actif sur chaque bouton de catégorie du menu, bordure gauche colorée + badge coloré (teinte calculée via `color-mix()` CSS, pas de calcul PHP) sur chaque fiche événement de la liste. Couleur jamais posée en fond plein sur le texte (seulement en accent) pour rester lisible quelle que soit la teinte — certaines catégories legacy ont des couleurs très claires.
+
+⚠️ **Bug réel trouvé et corrigé pendant l'écriture des tests** : `@style(["border-left-color: {$eventCategory->color}" => $eventCategory])` plantait ("Attempt to read property on null") dès qu'un événement n'a AUCUNE catégorie rattachée — Blade évalue l'interpolation de la clé du tableau AVANT de vérifier la condition associée, donc `$eventCategory->color` s'exécutait même quand `$eventCategory` valait `null`. Fix : `$eventCategory?->color` (opérateur null-safe). Un événement sans catégorie est un cas réel (import legacy), ce bug aurait fait planter `/agenda` en production.
+
+`EventCategoryResource` (admin) : `color` passé en `required()` (toutes les catégories existantes en ont déjà une, une nouvelle doit en avoir une dès sa création) avec une valeur par défaut ; colonne de liste remplacée par `Tables\Columns\ColorColumn` (pastille visuelle plutôt que le code couleur brut).
+
+### 4. Filtre par lieu
+
+Nouveau `<select>` "Lieu" dans la colonne latérale, `?area=`. ⚠️ Ne liste PAS tous les lieux (`Area`, ~3845 lignes en production, import legacy brut — déjà documenté comme "impraticable en `<select>`" pour le formulaire de dépôt, voir `EventController::store()`) : uniquement les lieux ayant au moins un événement PUBLIÉ (~7 en production) — un `<select>` de plusieurs milliers d'options aurait été à la fois inutilisable et rempli à 99% de lieux vides.
+
+Tests : `tests/Feature/AgendaFrontRedesignTest.php` (6 tests — date de début/fin affichée, calendrier+liste sans bascule, clic calendrier + catégorie combinés, couleurs pastille/bordure, filtre lieu, exclusion des lieux sans événement), `tests/Feature/PublicContentPagesTest.php` (3 tests existants mis à jour — calendrier toujours visible sans `?view=calendar`, navigation mois sans ce paramètre).

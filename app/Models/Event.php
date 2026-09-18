@@ -43,6 +43,30 @@ class Event extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUr
         return Attribute::get(fn () => static::resolveImageUrl($this->image));
     }
 
+    /**
+     * "01 sept. 2026" ou "01 sept. 2026 → 15 sept. 2026" (demande client,
+     * 18/09/2026 : afficher début ET fin sur chaque fiche de la liste
+     * agenda — voir resources/views/agenda/index.blade.php). Même logique
+     * que News::eventDateRange() (déjà utilisée manuellement, en inline,
+     * dans agenda/show.blade.php) — centralisée ici pour la liste.
+     */
+    protected function eventDateRange(): Attribute
+    {
+        return Attribute::get(function () {
+            if (! $this->start_date) {
+                return null;
+            }
+
+            $range = $this->start_date->translatedFormat('d M Y');
+
+            if ($this->end_date && ! $this->end_date->isSameDay($this->start_date)) {
+                $range .= ' → '.$this->end_date->translatedFormat('d M Y');
+            }
+
+            return $range;
+        });
+    }
+
     public function area(): BelongsTo
     {
         return $this->belongsTo(Area::class);

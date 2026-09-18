@@ -37,7 +37,15 @@ class EventCategoryResource extends Resource
                     ->unique(ignoreRecord: true)
                     ->helperText('Le slug "theatre" est celui exploité par la page THÉÂTRE du menu principal (brief §6).'),
                 Forms\Components\ColorPicker::make('color')
-                    ->label('Couleur'),
+                    ->label('Couleur')
+                    // Obligatoire depuis le 18/09/2026 (demande client) : le
+                    // front distingue désormais chaque rubrique par sa
+                    // couleur (pastille de menu + bordure des fiches
+                    // agenda) — toutes les catégories existantes en ont déjà
+                    // une (reprise du legacy), une nouvelle catégorie doit
+                    // en avoir une dès sa création.
+                    ->required()
+                    ->default('#a63f23'),
                 Forms\Components\FileUpload::make('icon')
                     ->label('Icône')
                     ->image()
@@ -63,9 +71,12 @@ class EventCategoryResource extends Resource
                 Tables\Columns\TextColumn::make('slug')
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('color')
-                    ->searchable()
-                    ->sortable(),
+                // Pastille visuelle plutôt que le code couleur brut (demande
+                // client, 18/09/2026) — plus lisible pour vérifier d'un coup
+                // d'œil que chaque rubrique a bien une couleur distincte.
+                Tables\Columns\ColorColumn::make('color')
+                    ->label('Couleur')
+                    ->copyable(),
                 Tables\Columns\ImageColumn::make('icon_url')
                     ->label('Icône'),
                 Tables\Columns\TextColumn::make('order')

@@ -51,10 +51,16 @@ class EventController extends Controller
     {
         $date = $request->date('date');
 
+        // Filtre par lieu (demande client, 18/09/2026) — voir docblock de
+        // `$areas` ci-dessous pour pourquoi la liste proposée n'est PAS
+        // "toutes les salles" (~3845 lignes, import legacy brut).
+        $area = $request->filled('area') ? Area::find($request->integer('area')) : null;
+
         $events = Event::query()
             ->published()
             ->with(['area', 'categories'])
             ->when($category, fn ($q) => $q->whereHas('categories', fn ($q2) => $q2->where('event_categories.id', $category->id)))
+            ->when($area, fn ($q) => $q->where('area_id', $area->id))
             ->when($date, fn ($q) => $q->whereDate('start_date', '<=', $date)->where(function ($q2) use ($date) {
                 $q2->whereDate('end_date', '>=', $date)->orWhereNull('end_date');
             }))
@@ -66,6 +72,15 @@ class EventController extends Controller
 
         $categories = EventCategory::orderBy('order')->orderBy('name')->get();
 
+        // Uniquement les lieux ayant au moins un événement PUBLIÉ (~7 en
+        // production) — pas la table `areas` complète (~3845 lignes, import
+        // legacy brut, voir aussi le docblock de EventController::store()
+        // sur ce même piège pour le formulaire de dépôt) : un simple
+        // `<select>` de plusieurs milliers d'options serait à la fois
+        // inutilisable et rempli à 99% de lieux sans aucun événement à
+        // afficher.
+        $areas = Area::whereHas('events', fn ($q) => $q->published())->orderBy('name')->get();
+
         // Fiche "menu" migrée (t_seo_entity) en repli quand aucune catégorie
         // n'est sélectionnée (bug réel trouvé le 08/09/2026, audit SEO final,
         // TECHNICAL_DOCUMENTATION.md §24 : /agenda servait le titre/description
@@ -73,20 +88,20 @@ class EventController extends Controller
         // — même correctif que ListingController::index()).
         $seo = $category ? $category->resolveSeo() : (Page::where('key', 'seo-menu-agenda')->first()?->resolveSeo() ?? []);
 
-        $view = $request->string('view')->value() === 'calendar' ? 'calendar' : 'list';
-        $calendarMonth = null;
-        $calendarCounts = [];
-
-        if ($view === 'calendar') {
-            $calendarMonth = $this->resolveCalendarMonth($request, $date);
-            $calendarCounts = $this->countEventsByDay($calendarMonth, $category);
-        }
+        // Calendrier toujours affiché, en plus de la liste — plus de bascule
+        // liste/calendrier séparée (demande client, 18/09/2026 : "il y a la
+        // liste et le calendrier au choix, mais le calendrier doit être sur
+        // la liste et en petit"). Reflète les mêmes filtres (catégorie/lieu/
+        // recherche) que la liste, pour que les points affichés correspondent
+        // vraiment à ce qui apparaîtra en cliquant sur un jour.
+        $calendarMonth = $this->resolveCalendarMonth($request, $date);
+        $calendarCounts = $this->countEventsByDay($calendarMonth, $category, $area, $request->string('q')->value() ?: null);
 
         $this->recordPageView($request, $category ? 'event_category' : null, $category?->id);
 
         return view('agenda.index', compact(
             'events', 'categories', 'category', 'date', 'seo',
-            'view', 'calendarMonth', 'calendarCounts'
+            'areas', 'area', 'calendarMonth', 'calendarCounts'
         ));
     }
 
@@ -109,15 +124,20 @@ class EventController extends Controller
      * plusieurs jours n'apparaît que sur son jour de début, pas sur toute sa
      * durée — sinon un festival d'une semaine "remplirait" toute la vue.
      * Le filtre par jour précis (`?date=`, vue liste) reste, lui, exact.
+     * `$category`/`$area`/`$q` (demande client, 18/09/2026) : mêmes filtres
+     * que la liste, pour que les points affichés correspondent à ce qui
+     * apparaîtra réellement en cliquant sur un jour.
      *
      * @return array<string, int> clé "Y-m-d" => nombre d'événements
      */
-    protected function countEventsByDay(Carbon $month, ?EventCategory $category): array
+    protected function countEventsByDay(Carbon $month, ?EventCategory $category, ?Area $area = null, ?string $q = null): array
     {
         return Event::query()
             ->published()
             ->whereBetween('start_date', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
-            ->when($category, fn ($q) => $q->whereHas('categories', fn ($q2) => $q2->where('event_categories.id', $category->id)))
+            ->when($category, fn ($q2) => $q2->whereHas('categories', fn ($q3) => $q3->where('event_categories.id', $category->id)))
+            ->when($area, fn ($q2) => $q2->where('area_id', $area->id))
+            ->when($q, fn ($q2) => $q2->where('title', 'like', '%'.$q.'%'))
             ->selectRaw('DATE(start_date) as day, COUNT(*) as total')
             ->groupBy('day')
             ->pluck('total', 'day')
