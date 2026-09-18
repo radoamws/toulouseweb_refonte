@@ -1653,3 +1653,26 @@ Nouvel accessor `Event::eventDateRange()` (même logique que `News::eventDateRan
 Nouveau `<select>` "Lieu" dans la colonne latérale, `?area=`. ⚠️ Ne liste PAS tous les lieux (`Area`, ~3845 lignes en production, import legacy brut — déjà documenté comme "impraticable en `<select>`" pour le formulaire de dépôt, voir `EventController::store()`) : uniquement les lieux ayant au moins un événement PUBLIÉ (~7 en production) — un `<select>` de plusieurs milliers d'options aurait été à la fois inutilisable et rempli à 99% de lieux vides.
 
 Tests : `tests/Feature/AgendaFrontRedesignTest.php` (6 tests — date de début/fin affichée, calendrier+liste sans bascule, clic calendrier + catégorie combinés, couleurs pastille/bordure, filtre lieu, exclusion des lieux sans événement), `tests/Feature/PublicContentPagesTest.php` (3 tests existants mis à jour — calendrier toujours visible sans `?view=calendar`, navigation mois sans ce paramètre).
+
+## 47. Audit des scrapings agenda — doublons (19/09/2026, demande client)
+
+Demande client : *"reverifier les scrapings que tout fonctionne bien car il y a des doublons (capture jointe) à corriger."*
+
+### Audit réalisé (production, en direct)
+
+`movies` : 21 exemplaires de "Spider-Man : New Generation" trouvés — **tous créés le 06/09/2026** (jour de la migration legacy), `external_ref` NULL, `legacy_id` différents à chaque fois : artefact de l'import historique (le legacy créait apparemment une fiche film par séance/salle plutôt qu'une fiche unique), pas un bug du scraper actuel. Vérifié : **aucun doublon parmi les films créés par le scraper depuis** (`created_at >= '2026-09-10'`) — le scraper cinéma fonctionne correctement.
+
+`events` : même vérification négative pour la majorité des sources (Toulouse Métropole/OpenAgenda, Théâtre Garonne, Le Vent des Signes...) — les titres qui se répètent plusieurs fois correspondent à de VRAIES occurrences différentes (dates distinctes) d'un même format récurrent (ex. "Visite flash", "Journées européennes du patrimoine" sur plusieurs jours/sites) : pas des doublons, juste un affichage peu distinctif avant le §46 (dates désormais visibles sur chaque fiche).
+
+### ⚠️ Deux bugs réels trouvés et corrigés — `TheatreDeLaCiteDriver`
+
+1. **Sélecteur incomplet** : ne captait que les cartes `.programmation-grid__item--evenements` (rencontres, ateliers, "Bord de scène"...), en ignorant ENTIÈREMENT les vraies pièces de théâtre (`.programmation-grid__item--spectacles`) — vérifié en direct sur theatre-cite.com le 19/09/2026 : 36 "événements" bien récupérés contre **32 spectacles jamais importés**. Sélecteur élargi (`--evenements, --spectacles`).
+2. **Titre incomplet pour les créneaux récurrents** : le format "Bord de scène" (rencontre après spectacle, rejoué pour ~15 pièces différentes) porte son vrai nom distinctif dans un élément séparé (`.programmation-grid__item__subtitle`, ex. *"9 minutes 43"*) jamais lu — d'où une quinzaine de fiches toutes titrées identiquement **"Bord de scène"**, strictement indiscernables les unes des autres. C'est très probablement ce que montrait la capture d'écran du client. Fix : concaténation `"{titre} — {sous-titre}"` quand un sous-titre existe (aucun effet sur les cartes normales, qui n'ont pas cet élément).
+
+### ⚠️ Doublons manuel/scrapé — nouvelle commande de nettoyage
+
+Investigation complémentaire (`Le Bijou Comédie Club`, `UNMASKED`...) : des événements saisis À LA MAIN (`source = 'manual'`, `external_ref` NULL, souvent une date sans horaire précis — minuit) coexistent avec la MÊME occurrence désormais correctement SCRAPÉE (`external_ref` renseigné, horaire réel) — les deux lignes s'affichent toutes les deux côté public. **125 cas trouvés en production** le 19/09/2026.
+
+Nouvelle commande `content:dedupe-agenda-manual-entries` (`App\Console\Commands\Migration\DedupeManualAgendaEntries`, `--dry-run` disponible) : supprime (soft delete, récupérable) une ligne manuelle SEULEMENT s'il existe une AUTRE ligne scrapée avec le même titre, le même lieu et le même JOUR (pas la même heure, volontairement, vu l'écart minuit/horaire réel) — critère conservateur : un événement manuel sans jumeau scrapé (lieu sans scraper actif) n'est jamais touché, quelle que soit sa date.
+
+Tests : `tests/Feature/ScrapeEventsTest.php` (+3 : sous-titre concaténé, titre inchangé sans sous-titre, cartes spectacles scrapées), `tests/Feature/DedupeManualAgendaEntriesTest.php` (5 tests — suppression du doublon manuel, événement manuel légitime préservé, lieu différent préservé, dry-run, garde-fou observers).

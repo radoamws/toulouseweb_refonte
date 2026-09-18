@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Console\Commands\Migration;
+
+use App\Models\Event;
+use App\Services\Migration\MigrationLog;
+use Illuminate\Console\Command;
+
+/**
+ * Supprime (soft delete) les événements agenda "manuels" qui font doublon
+ * avec une entrée scrapée existante — demande client, 19/09/2026 ("il y a
+ * des doublons [...] à corriger", voir TECHNICAL_DOCUMENTATION.md §47).
+ *
+ * Contexte trouvé en investiguant : avant la mise en place des scrapers
+ * agenda (§13), plusieurs lieux avaient déjà des événements saisis
+ * manuellement (`source = 'manual'`, `external_ref = NULL`) — souvent avec
+ * seulement une date (heure à minuit) sans horaire précis. Depuis, le
+ * scraper de CE MÊME lieu a repris le MÊME événement (même titre, même
+ * jour), cette fois avec un `external_ref` et un horaire réel — les deux
+ * lignes coexistent et s'affichent toutes les deux côté public, ce qui
+ * ressemble à un doublon (confirmé : 125 cas en production le 19/09/2026,
+ * ex. "Le Bijou Comédie Club" en double le 13/10/2026 : une ligne manuelle
+ * à minuit, une ligne scrapée à 19h).
+ *
+ * Critère volontairement CONSERVATEUR pour ne jamais supprimer un
+ * événement manuel légitime (créé à la main dans l'admin pour un lieu SANS
+ * scraper) : une ligne `external_ref IS NULL` n'est supprimée QUE s'il
+ * existe une AUTRE ligne (même titre, même lieu, même JOUR — pas la même
+ * heure, volontairement, vu l'écart minuit/heure réelle ci-dessus) avec un
+ * `external_ref` renseigné. Sans ce jumeau scrapé, la ligne manuelle est
+ * laissée intacte, quelle que soit sa date.
+ */
+class DedupeManualAgendaEntries extends Command
+{
+    protected $signature = 'content:dedupe-agenda-manual-entries {--dry-run : Affiche ce qui serait supprimé sans rien modifier}';
+
+    protected $description = "Supprime les événements manuels qui font doublon avec une entrée déjà scrapée (même titre/lieu/jour)";
+
+    public function handle(): int
+    {
+        $dryRun = (bool) $this->option('dry-run');
+        $log = new MigrationLog('agenda-manual-dupes');
+
+        $candidates = Event::query()
+            ->whereNull('external_ref')
+            ->where('source', 'manual')
+            ->get();
+
+        $deleted = 0;
+
+        // withoutEvents() : suppression en lot, ne doit jamais déclencher
+        // CloudflarePurgeObserver/GoogleIndexingObserver/RegeneratesSitemapObserver
+        // par ligne (pattern déjà établi dans ce projet pour toute écriture
+        // en masse, voir TECHNICAL_DOCUMENTATION.md — épuiserait le quota
+        // Google Indexing, 200 requêtes/jour, pour une simple purge de doublons).
+        Event::withoutEvents(function () use ($candidates, $dryRun, $log, &$deleted) {
+            foreach ($candidates as $manual) {
+                if (! $manual->start_date) {
+                    continue;
+                }
+
+                $hasScrapedTwin = Event::query()
+                    ->whereNotNull('external_ref')
+                    ->where('title', $manual->title)
+                    ->where('area_id', $manual->area_id)
+                    ->whereDate('start_date', $manual->start_date->toDateString())
+                    ->where('id', '!=', $manual->id)
+                    ->exists();
+
+                if (! $hasScrapedTwin) {
+                    continue;
+                }
+
+                if ($dryRun) {
+                    $log->skipped("[dry-run] #{$manual->id} \"{$manual->title}\" ({$manual->start_date->toDateString()}) — doublon d'une entrée scrapée, serait supprimé.");
+
+                    continue;
+                }
+
+                $manual->delete();
+                $deleted++;
+                $log->created("#{$manual->id} \"{$manual->title}\" ({$manual->start_date->toDateString()}) supprimé — doublon d'une entrée scrapée.");
+            }
+        });
+
+        if ($dryRun) {
+            $this->info('Dry-run terminé — voir storage/logs/migration/agenda-manual-dupes.log pour le détail.');
+        } else {
+            $this->info("{$deleted} événement(s) en doublon supprimé(s) (soft delete, récupérables via l'admin si besoin).");
+        }
+
+        $this->info($log->summary());
+
+        return self::SUCCESS;
+    }
+}

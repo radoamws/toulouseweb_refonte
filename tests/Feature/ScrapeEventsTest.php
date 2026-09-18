@@ -46,17 +46,27 @@ class ScrapeEventsTest extends TestCase
         return '<html><body><div class="programmation-grid">'.implode('', $cards).'</div></body></html>';
     }
 
-    protected function card(string $slug, string $title, string $dateText, ?string $timeText = '10:00', ?string $image = 'https://theatre-cite.com/assets/poster.jpg'): string
+    protected function card(string $slug, string $title, string $dateText, ?string $timeText = '10:00', ?string $image = 'https://theatre-cite.com/assets/poster.jpg', ?string $subtitle = null, string $type = 'evenements'): string
     {
         $timeSpan = $timeText ? "<span class=\"period-heure\">{$timeText}</span>" : '';
         $imageTag = $image ? "<img class=\"lazy desktop-image\" data-original=\"{$image}\">" : '';
+        // Certaines cartes "événement" (ex. "Bord de scène", rejoué pour
+        // plusieurs pièces différentes) portent le vrai nom distinctif dans
+        // ce sous-titre, séparé du titre — voir le docblock du correctif du
+        // 19/09/2026 dans TheatreDeLaCiteDriver::run().
+        $subtitleTag = $subtitle ? "<div class=\"programmation-grid__item__subtitle\">{$subtitle}</div>" : '';
+        // Le segment d'URL réel est au SINGULIER ("evenement"/"spectacle")
+        // alors que la classe CSS du type de carte est au PLURIEL
+        // ("--evenements"/"--spectacles") — vérifié en direct sur le vrai
+        // site le 19/09/2026, une incohérence propre au site source.
+        $urlSegment = rtrim($type, 's');
 
         return <<<HTML
-            <div class="programmation-grid__item programmation-grid__item--evenements">
-                <a href="https://theatre-cite.com/programmation/2026-2027/evenement/{$slug}/" title="{$title}">
+            <div class="programmation-grid__item programmation-grid__item--{$type}">
+                <a href="https://theatre-cite.com/programmation/2026-2027/{$urlSegment}/{$slug}/" title="{$title}">
                     {$imageTag}
                     <div class="programmation-grid__item__date">{$dateText}{$timeSpan}</div>
-                    <div class="programmation-grid__item__title"><span class="programmation-grid__item__title__inner">{$title}</span></div>
+                    <div class="programmation-grid__item__title"><span class="programmation-grid__item__title__inner">{$title}</span>{$subtitleTag}</div>
                 </a>
             </div>
         HTML;
@@ -164,6 +174,85 @@ class ScrapeEventsTest extends TestCase
 
         $this->assertSame(1, $exitCode);
         $this->assertSame('failed', ScraperRun::where('source_id', $source->id)->first()->status);
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (19/09/2026, signalé par le client :
+     * "des doublons" sur l'agenda). Vérifié en direct sur theatre-cite.com :
+     * les cartes "Bord de scène" (un format de rencontre après spectacle,
+     * rejoué pour ~15 pièces différentes) portent leur vrai nom distinctif
+     * dans un sous-titre séparé, jamais lu jusqu'ici — d'où une quinzaine de
+     * fiches toutes titrées identiquement "Bord de scène" sur le site
+     * public, illisibles les unes des autres.
+     */
+    public function test_subtitle_is_appended_to_the_title_when_present(): void
+    {
+        Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);
+        EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $this->makeSource();
+
+        Http::fake([
+            'theatre-cite.com/programmation' => Http::response($this->listingHtml([
+                $this->card('bord-de-scene-9-minutes-43', 'Bord de scène', '8 octobre 2026', subtitle: '9 minutes 43'),
+            ])),
+            'theatre-cite.com/programmation/2026-2027/evenement/bord-de-scene-9-minutes-43/' => Http::response($this->detailHtml()),
+        ]);
+
+        $this->artisan('scrape:events')->run();
+
+        $event = Event::where('external_ref', 'bord-de-scene-9-minutes-43')->first();
+        $this->assertNotNull($event);
+        $this->assertSame('Bord de scène — 9 minutes 43', $event->title);
+    }
+
+    /** Une carte SANS sous-titre (l'immense majorité) n'est pas affectée par ce correctif. */
+    public function test_title_is_unchanged_when_no_subtitle_is_present(): void
+    {
+        Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);
+        EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $this->makeSource();
+
+        Http::fake([
+            'theatre-cite.com/programmation' => Http::response($this->listingHtml([
+                $this->card('rendez-vous-complicite', 'Rendez-vous Complicité', '26 septembre 2026'),
+            ])),
+            'theatre-cite.com/programmation/2026-2027/evenement/rendez-vous-complicite/' => Http::response($this->detailHtml()),
+        ]);
+
+        $this->artisan('scrape:events')->run();
+
+        $this->assertSame('Rendez-vous Complicité', Event::where('external_ref', 'rendez-vous-complicite')->first()->title);
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (19/09/2026) : le sélecteur ne captait
+     * QUE les cartes `--evenements`, ignorant entièrement les vraies pièces
+     * de théâtre (`--spectacles`) — vérifié en direct sur theatre-cite.com,
+     * 32 pièces jamais importées (contre 36 "événements" bien récupérés).
+     */
+    public function test_spectacle_cards_are_scraped_alongside_evenements(): void
+    {
+        Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);
+        EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $this->makeSource();
+
+        Http::fake([
+            'theatre-cite.com/programmation' => Http::response($this->listingHtml([
+                $this->card('rendez-vous-complicite', 'Rendez-vous Complicité', '26 septembre 2026'),
+                $this->card('1-2-3-poquelin', '1, 2, 3 Poquelin', '3 octobre 2026', type: 'spectacles'),
+            ])),
+            'theatre-cite.com/programmation/2026-2027/evenement/rendez-vous-complicite/' => Http::response($this->detailHtml()),
+            'theatre-cite.com/programmation/2026-2027/spectacle/1-2-3-poquelin/' => Http::response($this->detailHtml()),
+        ]);
+
+        $this->artisan('scrape:events')->run();
+
+        $this->assertDatabaseHas('events', ['external_ref' => 'rendez-vous-complicite']);
+        $this->assertDatabaseHas('events', ['external_ref' => '1-2-3-poquelin', 'title' => '1, 2, 3 Poquelin']);
+
+        $run = ScraperRun::first();
+        $this->assertSame(2, $run->items_found);
+        $this->assertSame(2, $run->items_created);
     }
 
     public function test_inactive_source_is_not_run(): void

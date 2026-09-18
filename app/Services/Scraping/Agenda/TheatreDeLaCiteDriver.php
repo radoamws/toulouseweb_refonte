@@ -76,7 +76,14 @@ class TheatreDeLaCiteDriver implements ScraperDriver
         }
 
         $crawler = new Crawler($html);
-        $cards = $crawler->filter('.programmation-grid__item--evenements');
+        // ⚠️ Bug réel trouvé et corrigé (19/09/2026, signalé par le client :
+        // "des doublons" sur l'agenda) : ce sélecteur ne capturait QUE les
+        // cartes de type "événement" (bord-de-scène, ateliers, rencontres —
+        // 36 cartes vérifiées en direct le 19/09/2026), en ignorant
+        // ENTIÈREMENT les vraies pièces de théâtre (`--spectacles`, 32
+        // cartes le même jour) — près de la moitié de la programmation
+        // réelle du théâtre n'était jamais importée.
+        $cards = $crawler->filter('.programmation-grid__item--evenements, .programmation-grid__item--spectacles');
 
         foreach ($cards as $node) {
             $card = new Crawler($node);
@@ -96,6 +103,24 @@ class TheatreDeLaCiteDriver implements ScraperDriver
             $title = trim($card->filter('.programmation-grid__item__title__inner')->count()
                 ? $card->filter('.programmation-grid__item__title__inner')->text('')
                 : (string) $link->attr('title'));
+
+            // ⚠️ Bug réel trouvé et corrigé (19/09/2026, signalé par le
+            // client : "des doublons") : pour les cartes de type
+            // "événement" (ex. "Bord de scène", un format de rencontre
+            // après spectacle rejoué pour plusieurs pièces différentes), le
+            // vrai nom distinctif ("9 minutes 43", "Le Silence"...) est
+            // dans un élément SÉPARÉ (`.programmation-grid__item__subtitle`)
+            // jamais lu jusqu'ici — `title` valait donc littéralement "Bord
+            // de scène" pour une quinzaine de dates différentes, illisible
+            // sur le site public (des fiches qui semblent identiques). Les
+            // vraies pièces (`--spectacles`) n'ont pas ce sous-titre, cette
+            // concaténation n'a donc aucun effet sur elles.
+            if ($card->filter('.programmation-grid__item__subtitle')->count()) {
+                $subtitle = trim($card->filter('.programmation-grid__item__subtitle')->text(''));
+                if ($subtitle !== '') {
+                    $title .= " — {$subtitle}";
+                }
+            }
 
             if (! $externalRef || ! $title) {
                 $stats['skipped']++;
