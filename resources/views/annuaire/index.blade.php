@@ -1,8 +1,21 @@
 <x-layouts.app :seo="$seo">
     <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <x-ui.breadcrumb :items="$category
-            ? [['label' => 'Annuaire', 'href' => '/annuaire'], ['label' => $category->name]]
-            : [['label' => 'Annuaire']]" />
+        @php
+            // Fil d'ariane complet (demande client, 19/09/2026) : jusqu'ici
+            // limité à "Annuaire > {catégorie}" même pour une sous-rubrique à
+            // 2 niveaux (ex. Restaurants > Restaurant spectacle) — on
+            // remonte la chaîne de parents pour l'afficher en entier.
+            $ancestors = [];
+            for ($node = $category; $node; $node = $node->parent) {
+                array_unshift($ancestors, $node);
+            }
+            $breadcrumbItems = [['label' => 'Annuaire', 'href' => '/annuaire']];
+            foreach ($ancestors as $i => $ancestor) {
+                $isLast = $i === count($ancestors) - 1;
+                $breadcrumbItems[] = $isLast ? ['label' => $ancestor->name] : ['label' => $ancestor->name, 'href' => '/annuaire/'.$ancestor->slug];
+            }
+        @endphp
+        <x-ui.breadcrumb :items="$breadcrumbItems" />
 
         <div class="flex flex-col gap-8 lg:flex-row">
             {{-- Catégories --}}
@@ -16,10 +29,13 @@
                     </li>
                     @foreach ($topCategories as $top)
                         <li>
+                            {{-- Actif dès qu'on est sur cette rubrique OU une
+                            de ses sous-rubriques (topCategory), pas
+                            seulement une correspondance exacte. --}}
                             <a
                                 href="/annuaire/{{ $top->slug }}"
                                 data-track="category:{{ $top->id }}:annuaire_sidebar"
-                                class="block rounded-lg px-3 py-2 {{ $category?->id === $top->id ? 'bg-brand-50 font-semibold text-brand-700' : 'text-ink-700 hover:bg-ink-50' }}"
+                                class="block rounded-lg px-3 py-2 {{ $topCategory?->id === $top->id ? 'bg-brand-50 font-semibold text-brand-700' : 'text-ink-700 hover:bg-ink-50' }}"
                             >
                                 {{ $top->name }}
                             </a>
@@ -61,6 +77,27 @@
 
                 @if ($category?->description)
                     <p class="mt-4 max-w-3xl text-ink-600">{{ $category->description }}</p>
+                @endif
+
+                {{-- Sous-rubriques (demande client, 19/09/2026) — ex.
+                Restaurants : Restaurant spectacle, Guinguettes,
+                Pizzerias... Toujours les sous-rubriques du TOP niveau
+                (topCategory), pas seulement celles de la catégorie en
+                cours, pour pouvoir naviguer d'une sous-rubrique à l'autre. --}}
+                @if ($subCategories->isNotEmpty())
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <a
+                            href="/annuaire/{{ $topCategory->slug }}"
+                            class="rounded-full border px-3 py-1.5 text-sm font-medium {{ $category?->id === $topCategory->id ? 'border-brand-600 bg-brand-600 text-white' : 'border-ink-200 bg-white text-ink-700 hover:bg-ink-50' }}"
+                        >Toutes</a>
+                        @foreach ($subCategories as $sub)
+                            <a
+                                href="/annuaire/{{ $sub->slug }}"
+                                data-track="category:{{ $sub->id }}:annuaire_subcategory"
+                                class="rounded-full border px-3 py-1.5 text-sm font-medium {{ $category?->id === $sub->id ? 'border-brand-600 bg-brand-600 text-white' : 'border-ink-200 bg-white text-ink-700 hover:bg-ink-50' }}"
+                            >{{ $sub->name }}</a>
+                        @endforeach
+                    </div>
                 @endif
 
                 @if ($listings->isEmpty())

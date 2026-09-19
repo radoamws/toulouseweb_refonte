@@ -44,6 +44,22 @@ class ListingController extends Controller
 
         $categoryIds = $category ? $this->categoryAndDescendantIds($category) : null;
 
+        // Sous-rubriques (demande client, 19/09/2026 : "il y a plusieurs
+        // sous rubriques" — ex. Restaurants a "Restaurant spectacle",
+        // "Guinguettes", "Pizzerias"... déjà en base, mais introuvables nulle
+        // part dans le menu jusqu'ici, aucune page n'exposait les enfants
+        // d'une catégorie). $topCategory = ancêtre de niveau 0, pour rester
+        // actif dans la sidebar ET afficher les sous-rubriques même quand on
+        // navigue déjà DANS une sous-rubrique (ex. sur "Restaurant spectacle",
+        // on doit toujours voir les autres sous-rubriques de Restaurants).
+        $topCategory = $category;
+        while ($topCategory && $topCategory->level > 0) {
+            $topCategory = $topCategory->parent;
+        }
+        $subCategories = $topCategory
+            ? Category::where('parent_id', $topCategory->id)->where('is_active', true)->orderBy('order')->orderBy('name')->get()
+            : collect();
+
         $listings = Listing::query()
             ->published()
             ->when($categoryIds, fn ($q) => $q->whereHas('categories', fn ($q2) => $q2->whereIn('categories.id', $categoryIds)))
@@ -76,7 +92,7 @@ class ListingController extends Controller
 
         $this->recordPageView($request, $category ? 'category' : null, $category?->id);
 
-        return view('annuaire.index', compact('listings', 'topCategories', 'category', 'seo', 'cities'));
+        return view('annuaire.index', compact('listings', 'topCategories', 'category', 'topCategory', 'subCategories', 'seo', 'cities'));
     }
 
     public function show(Request $request, string $slug): View|\Illuminate\Http\RedirectResponse
