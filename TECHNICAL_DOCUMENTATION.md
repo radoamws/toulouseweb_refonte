@@ -1714,3 +1714,24 @@ Vérification en direct (production + fetch live des 12 sites sources) :
 **Bilan** : sur 12 scrapers agenda, 10 fonctionnent (2 corrigés aujourd'hui : Garonne, Grand Rond), 2 restent cassés par changement complet de plateforme côté site source (Casino Barrière, Les Grands Interprètes) — ces deux nécessiteraient chacun un chantier dédié (rétro-ingénierie Nuxt / reconstruction CMS), pas de fix rapide.
 
 Tests : `tests/Feature/Agenda/GaronneScraperTest.php` (fixture mise à jour + 1 nouveau test régression h2/h3), `tests/Feature/Agenda/GrandRondScraperTest.php` (réécrit — fixture fidèle au site réel + 3 tests, un par format de date).
+
+## 49. "Panorama" + semaine cinéma, avis sur les films (19/09/2026, demande client)
+
+Demande client (2 volets) : sur `/cinema`, ajouter entre la liste des salles et la liste des films un titre "Panorama" + la date de la semaine des films en cours (calculée automatiquement) ; ajouter la possibilité de commenter les films (sécurisé), en s'inspirant des bonnes pratiques des sites de cinéma (avis les plus commentés, notes/étoiles).
+
+### 1. "Panorama" — semaine cinéma, PAS la semaine civile
+
+`CinemaController::index()` calcule `weekStart`/`weekEnd`. ⚠️ Piège trouvé pendant l'écriture des tests : l'exemple donné par le client ("du 16 Septembre 2026 au 22 septembre 2026") est un **mercredi à mardi**, pas une semaine civile lundi→dimanche (déjà utilisée par le calendrier agenda, §46) — la France change sa programmation cinéma le mercredi (jour de sortie national des films), ce qui est une convention métier distincte, pas une erreur de l'exemple. Implémenté via `now()->startOfWeek(Carbon::WEDNESDAY)` / `now()->endOfWeek(Carbon::TUESDAY)`. Emplacement retenu après clarification avec le client : H1 + recherche inchangés en haut, bloc "Panorama" + date entre la liste des salles et la grille de films (lecture littérale de la demande, la recherche n'a pas été déplacée).
+
+### 2. Avis sur les films — modération STRICTE, anonyme (comme les annonces)
+
+`MovieComment` (table `movie_comments`, colonnes `author_name`/`rating`/`status` `pending|published|rejected`) existait déjà en base (import legacy) mais était totalement inutilisé : aucune route de soumission publique, aucune UI d'admin pour modérer. Choix client confirmé (AskUserQuestion) : pas de compte visiteur (il n'en existe aucun sur ce site, voir annonces/agenda/annuaire) — soumission anonyme + modération, exactement le pattern `ClassifiedController::store()` :
+- Nouvelle colonne `author_email` (migration, jamais affichée publiquement — contact modération uniquement, même logique que `contact_email` sur les annonces).
+- `CinemaController::storeComment()` (route `POST /cinema/films/{slug}/avis`, `throttle:5,1`) : honeypot `website`, validation (`rating` entier 1-5, `body` requis, email requis), `status` TOUJOURS forcé à `pending` côté serveur (jamais une valeur envoyée par le visiteur, même piège que `ClassifiedController` — testé explicitement, voir `test_comment_submission_cannot_inject_a_status_field`), notification admin via `AdminNotifier::send(...)`.
+- Nouveau `App\Filament\Resources\MovieCommentResource` (nav "Cinéma") : actions Valider/Refuser (pas de `rejection_reason`/`moderated_by`, colonnes absentes de cette table contrairement à `classifieds`), statut modifiable en ligne (`SelectColumn`, même convention que §45), badge de navigation = nombre en attente.
+- `Movie::publishedComments()` : relation dédiée (pas un filtre ad hoc) pour permettre `withCount()`/`withAvg()` sans N+1.
+- Bonnes pratiques "site de cinéma" (demande explicite, inspiré d'AlloCiné) : note moyenne + nombre d'avis affichés sur la fiche film (`x-ui.star-rating`, nouveau composant, étoiles Unicode) ; section "Les plus commentés" sur `/cinema` (films actuellement à l'affiche ayant au moins un avis publié, triés par nombre d'avis).
+
+⚠️ Portabilité SQLite/MySQL trouvée pendant les tests : `having('published_comments_count', '>', 0)` sur un alias de `withCount()` est accepté par MySQL mais rejeté par SQLite ("HAVING clause on a non-aggregate query", moteur utilisé par la suite de tests) — remplacé par `whereHas('publishedComments')`, strictement équivalent et portable.
+
+Tests : `tests/Feature/MovieCommentsTest.php` (11 tests — soumission pending, anti-injection de statut, honeypot, validation note/email, avis publiés visibles avec leur note, note moyenne affichée, section "Les plus commentés", en-tête Panorama avec la bonne plage de dates), `tests/Feature/MovieCommentModerationTest.php` (5 tests — visibilité avant validation, Valider/Refuser, statut en ligne, badge de navigation).

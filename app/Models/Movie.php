@@ -45,6 +45,18 @@ class Movie extends Model implements HasCloudflarePurgeUrls
     }
 
     /**
+     * Avis validés (demande client, 19/09/2026) — relation dédiée plutôt
+     * qu'un filtre ad hoc à chaque usage, pour pouvoir l'agréger sans N+1 via
+     * `withCount('publishedComments')`/`withAvg('publishedComments', 'rating')`
+     * (utilisé par CinemaController::index() pour le classement "les plus
+     * commentés").
+     */
+    public function publishedComments(): HasMany
+    {
+        return $this->comments()->where('status', 'published');
+    }
+
+    /**
      * Toujours inclure la home (demande client, TECHNICAL_DOCUMENTATION.md
      * §17) — voir docblock de News::cloudflarePurgeUrls(). Déclenché aussi
      * par `scrape:cinema` (AllocineDriver::upsertMovie() sauvegarde chaque

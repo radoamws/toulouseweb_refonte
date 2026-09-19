@@ -46,6 +46,9 @@
                 <p class="mt-2 text-sm text-ink-500">
                     {{ collect([$movie->genres, $movie->duration_minutes ? $movie->duration_minutes.' min' : null, $movie->release_date?->translatedFormat('d M Y')])->filter()->implode(' · ') }}
                 </p>
+                {{-- Note moyenne (demande client, 19/09/2026 — bonne pratique
+                des sites de cinéma) : uniquement si au moins un avis validé. --}}
+                <x-ui.star-rating :rating="$averageRating" :count="$commentsCount" class="mt-2" />
                 @if ($movie->director)
                     <p class="mt-1 text-sm text-ink-600">Réalisé par <strong>{{ $movie->director }}</strong></p>
                 @endif
@@ -104,17 +107,80 @@
             </div>
         @endif
 
-        @if ($movie->comments->isNotEmpty())
-            <h2 class="mt-10 font-heading text-xl font-bold text-ink-900">Avis</h2>
+        <h2 class="mt-10 font-heading text-xl font-bold text-ink-900">Avis ({{ $commentsCount }})</h2>
+
+        @if ($movie->publishedComments->isNotEmpty())
             <div class="mt-4 space-y-4">
-                @foreach ($movie->comments as $comment)
+                @foreach ($movie->publishedComments as $comment)
                     <div class="rounded-xl border border-ink-100 bg-white p-4">
-                        <p class="text-sm font-semibold text-ink-800">{{ $comment->author_name }}</p>
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="text-sm font-semibold text-ink-800">{{ $comment->author_name }}</p>
+                            @if ($comment->rating)
+                                <x-ui.star-rating :rating="$comment->rating" />
+                            @endif
+                        </div>
                         <p class="mt-1 text-ink-700">{{ $comment->body }}</p>
                     </div>
                 @endforeach
             </div>
+        @else
+            <p class="mt-3 text-ink-500">Aucun avis pour le moment — soyez le premier à en laisser un.</p>
         @endif
+
+        {{-- Formulaire d'avis (demande client, 19/09/2026) — anonyme +
+        modération, même workflow que les autres formulaires publics du site
+        (voir docblock de CinemaController::storeComment()) : le message de
+        confirmation ("sera publié après validation") est affiché par le
+        layout via session('status'), voir components/layouts/app.blade.php. --}}
+        <div class="mt-8 rounded-2xl border border-ink-100 bg-white p-5 shadow-sm">
+            <h3 class="font-heading text-lg font-semibold text-ink-900">Laisser un avis</h3>
+            <form method="POST" action="{{ route('cinema.movie.comment', $movie->slug) }}" class="mt-4 space-y-4">
+                @csrf
+
+                {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}
+                <div class="absolute -left-[9999px]" aria-hidden="true">
+                    <label for="website">Laisser vide</label>
+                    <input type="text" name="website" id="website" tabindex="-1" autocomplete="off">
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="author_name" class="block text-sm font-medium text-ink-700">Votre nom *</label>
+                        <input type="text" name="author_name" id="author_name" required value="{{ old('author_name') }}"
+                            class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                        <x-ui.field-error name="author_name" />
+                    </div>
+                    <div>
+                        <label for="author_email" class="block text-sm font-medium text-ink-700">Votre email *</label>
+                        <input type="email" name="author_email" id="author_email" required value="{{ old('author_email') }}"
+                            class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                        <p class="mt-1 text-xs text-ink-500">Jamais affiché publiquement.</p>
+                        <x-ui.field-error name="author_email" />
+                    </div>
+                </div>
+
+                <div>
+                    <label for="rating" class="block text-sm font-medium text-ink-700">Votre note *</label>
+                    <select name="rating" id="rating" required
+                        class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                        <option value="">Choisir…</option>
+                        @foreach ([5 => 'Excellent', 4 => 'Très bien', 3 => 'Bien', 2 => 'Moyen', 1 => 'Décevant'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('rating') == $value)>{{ str_repeat('★', $value).str_repeat('☆', 5 - $value) }} — {{ $label }}</option>
+                        @endforeach
+                    </select>
+                    <x-ui.field-error name="rating" />
+                </div>
+
+                <div>
+                    <label for="body" class="block text-sm font-medium text-ink-700">Votre avis *</label>
+                    <textarea name="body" id="body" rows="4" required maxlength="2000"
+                        class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">{{ old('body') }}</textarea>
+                    <x-ui.field-error name="body" />
+                </div>
+
+                <x-ui.button type="submit" variant="primary">Envoyer mon avis</x-ui.button>
+            </form>
+        </div>
 
         @if ($related->isNotEmpty())
             <div class="mt-12">

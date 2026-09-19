@@ -50,6 +50,9 @@ Route::get('/agenda/{slug}', [EventController::class, 'bySlug'])->name('agenda.b
 // Cinéma (brief §9).
 Route::get('/cinema', [CinemaController::class, 'index'])->name('cinema.index');
 Route::get('/cinema/films/{slug}', [CinemaController::class, 'showMovie'])->name('cinema.movie');
+// Avis sur un film (demande client, 19/09/2026) — même throttle que les
+// autres formulaires publics (agenda.store, annonces.store...).
+Route::post('/cinema/films/{slug}/avis', [CinemaController::class, 'storeComment'])->middleware('throttle:5,1')->name('cinema.movie.comment');
 Route::get('/cinema/salles/{slug}', [CinemaController::class, 'showCinema'])->name('cinema.salle');
 
 // Actualités — même pattern catégorie/article que l'agenda. `proposer`
