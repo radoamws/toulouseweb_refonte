@@ -110,6 +110,16 @@ class AreaResource extends Resource
                 //
             ])
             ->actions([
+                // Équivalent à la page "Événements" filtrée sur ce lieu
+                // (demande client, 19/09/2026) — réutilise le filtre
+                // area_id ajouté à EventResource, pré-rempli via l'URL.
+                Tables\Actions\Action::make('viewEvents')
+                    ->label('Voir les événements')
+                    ->icon('heroicon-o-calendar-days')
+                    ->color('gray')
+                    ->url(fn (Area $record) => EventResource::getUrl('index', [
+                        'tableFilters' => ['area_id' => ['value' => $record->id]],
+                    ])),
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([

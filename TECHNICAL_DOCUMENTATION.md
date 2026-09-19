@@ -1676,3 +1676,41 @@ Investigation complémentaire (`Le Bijou Comédie Club`, `UNMASKED`...) : des é
 Nouvelle commande `content:dedupe-agenda-manual-entries` (`App\Console\Commands\Migration\DedupeManualAgendaEntries`, `--dry-run` disponible) : supprime (soft delete, récupérable) une ligne manuelle SEULEMENT s'il existe une AUTRE ligne scrapée avec le même titre, le même lieu et le même JOUR (pas la même heure, volontairement, vu l'écart minuit/horaire réel) — critère conservateur : un événement manuel sans jumeau scrapé (lieu sans scraper actif) n'est jamais touché, quelle que soit sa date.
 
 Tests : `tests/Feature/ScrapeEventsTest.php` (+3 : sous-titre concaténé, titre inchangé sans sous-titre, cartes spectacles scrapées), `tests/Feature/DedupeManualAgendaEntriesTest.php` (5 tests — suppression du doublon manuel, événement manuel légitime préservé, lieu différent préservé, dry-run, garde-fou observers).
+
+## 48. Bouton "Voir les événements" (Areas), fusion Casino Barrière, audit complet des 12 scrapers agenda (19/09/2026, demande client)
+
+Demande client (4 volets) : bouton sur `/admin/areas` pour voir les événements d'un lieu ; fusionner les 2 fiches "Casino barrière" en doublon ; vérifier si le scraper de L'Escale fonctionne ; corriger Théâtre Garonne ("Les Gaulois" manquant) ; auditer les 12 scrapers agenda et signaler ceux qui ne retournent aucun événement.
+
+### 1. Bouton "Voir les événements" sur AreaResource
+
+Nouveau filtre `Tables\Filters\SelectFilter::make('area_id')` sur `EventResource` (n'existait pas). `AreaResource` : nouvelle action de ligne `Tables\Actions\Action::make('viewEvents')` avec `->url(fn (Area $record) => EventResource::getUrl('index', ['tableFilters' => ['area_id' => ['value' => $record->id]]]))` — exploite le support natif de Filament pour pré-remplir un filtre de table via l'URL, jamais utilisé ailleurs dans ce projet jusqu'ici. Tests : `tests/Feature/AreaEventsLinkTest.php` (2 tests — URL de l'action, filtrage effectif de la liste).
+
+### 2. Fusion "Casino Théâtre Barrière" (doublon confirmé)
+
+Trouvé en production : 2 lignes `Area` identiques — `casino-theatre-barriere` (#1659, 627 événements, celui référencé par `ScraperSource#29`) et `casino-theatre-barriere-2` (#1969, 117 événements, un doublon d'import legacy). Nouvelle commande générique mais volontairement scopée à une paire à la fois, `content:merge-duplicate-area {keep} {remove}` (`App\Console\Commands\Migration\MergeDuplicateArea`) : réassigne tous les `Event::area_id` (y compris soft-deleted) de `$remove` vers `$keep`, puis supprime `$remove`. `Area` n'a aucune autre relation entrante que `events` (vérifié) — pas d'autre table à réconcilier. La config du scraper (`area_slug: casino-theatre-barriere`) pointait déjà sur la fiche conservée (#1659) : aucun ajustement de scraper nécessaire ici.
+
+⚠️ Pas généralisé à toute la table `areas` : ~3845 lignes importées du legacy contiennent des **centaines** de noms strictement identiques ("Salle des fêtes" ×4, "Place des Tiercerettes" ×4, "Théâtre du Grand Rond" ×3...) — la grande majorité désigne très probablement des lieux DIFFÉRENTS dans des communes différentes partageant un nom générique. Une fusion automatique casserait des lieux légitimes ; seul "Casino Théâtre Barrière" a été confirmé comme un vrai doublon exact (même salle, même scraper, aucun autre signal de différenciation). Un vrai dédoublonnage de masse nécessiterait une comparaison ville/adresse ligne à ligne, hors cadre de cette demande.
+
+Tests : `tests/Feature/MergeDuplicateAreaTest.php` (3 tests — réassignation + suppression, événements soft-deleted inclus, échec propre si un slug n'existe pas).
+
+### 3. Audit des 12 scrapers agenda — qui fonctionne, qui ne fonctionne pas
+
+Vérification en direct (production + fetch live des 12 sites sources) :
+
+| Scraper | État | Détail |
+|---|---|---|
+| Théâtre de la Cité | ✅ OK | Corrigé au §47. |
+| Zénith / Toulouse Métropole (OpenAgenda) | ✅ OK | 96 / 539 événements scrapés récemment. |
+| Le Vent des Signes | ✅ OK | 28 événements, activité récente (17/09). |
+| Odyssud Blagnac | ✅ OK | 48 événements. |
+| Le Bijou | ✅ OK | 51 événements. |
+| Aria (Cornebarrieu) | ✅ OK | 18 événements. |
+| **L'Escale (Tournefeuille)** | ✅ OK — confirmé fonctionnel | Demande client : vérifié en rappelant directement l'API Ardei-Soft en direct (`ardei-soft.com/tournefeuille/SenousritPGI`) : **76 spectacles retournés**, cohérent avec les 72 événements déjà en base. Rien à corriger. |
+| **Théâtre Garonne** | 🔧 CORRIGÉ | Bug réel : le titre était lu sur `.carte--spectacle__title h2`, qui contient en fait le(s) nom(s) d'artiste(s) ("Olivier Martin-Salvan Thomas Blanchard"), pas le titre de la pièce — le vrai titre ("Les Gaulois") est dans un `h3` frère jamais lu. Constaté sur les 29/29 cartes réelles : CE N'ÉTAIT PAS "Les Gaulois" qui manquait, mais TOUS les titres de cette salle qui étaient erronés. Fix : lecture du `h3` au lieu du `h2`. Un ré-scraping (`updateOrCreate` sur le même `external_ref`) corrige automatiquement les titres déjà en base, sans commande de migration séparée. |
+| **Théâtre du Grand Rond** | 🔧 CORRIGÉ | Bug réel : `#principal table p strong` (sélecteur de la date, repris du legacy) a disparu du site — confirmé en direct le 19/09/2026. `start_date` était donc toujours `null` → CHAQUE fiche `skipped` : **ce scraper ne créait plus aucun événement**. La date existe toujours mais a été déplacée dans `.col-md-5.bloc_type p strong` (même bloc que l'horaire), en texte libre à 3 formats réels ("Du X au Y ANNÉE", "Du X au Y MOIS ANNÉE", "MOIS1 X et MOIS2 Y ANNÉE") — nouvelle méthode `extractDateRangeFromText()` gérant les 3 cas. |
+| **Casino Théâtre Barrière** | ❌ TOUJOURS CASSÉ (déjà documenté) | 0 événement scrapé depuis toujours (627 événements de la fiche = 100% import legacy manuel). Cause connue et déjà documentée dans le docblock du driver : casinosbarriere.com a migré vers un front Nuxt3/Vue3, les cartes spectacle n'ont plus de lien `<a href>` server-side (navigation 100% JS après hydratation) — le HTML brut ne contient donc jamais l'URL de la fiche détail. Piste non explorée : le payload interne `_payload.json` (format `devalue`, pas du JSON standard) contient probablement les données mais nécessiterait un dé-sérialiseur dédié — investigation distincte, plus lourde qu'un correctif de sélecteur CSS. |
+| **Les Grands Interprètes** | ❌ TOUJOURS CASSÉ (déjà documenté) | 0 événement scrapé depuis toujours. Le site a intégralement changé de CMS depuis l'écriture du driver (thème WordPress "The Events Calendar", classes `.gt-event-style-4`...) — plus aucune trace des sélecteurs actuels (`.concert-title`, `.fake-link`...). Nécessite une reconstruction complète des sélecteurs contre le nouveau CMS, pas un correctif ponctuel. |
+
+**Bilan** : sur 12 scrapers agenda, 10 fonctionnent (2 corrigés aujourd'hui : Garonne, Grand Rond), 2 restent cassés par changement complet de plateforme côté site source (Casino Barrière, Les Grands Interprètes) — ces deux nécessiteraient chacun un chantier dédié (rétro-ingénierie Nuxt / reconstruction CMS), pas de fix rapide.
+
+Tests : `tests/Feature/Agenda/GaronneScraperTest.php` (fixture mise à jour + 1 nouveau test régression h2/h3), `tests/Feature/Agenda/GrandRondScraperTest.php` (réécrit — fixture fidèle au site réel + 3 tests, un par format de date).

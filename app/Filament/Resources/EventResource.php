@@ -182,6 +182,12 @@ class EventResource extends Resource
                 Tables\Filters\SelectFilter::make('categories')
                     ->label('Catégorie')
                     ->relationship('categories', 'name'),
+                // Permet le lien "Voir les événements" depuis AreaResource
+                // (demande client, 19/09/2026) — pré-rempli via ?tableFilters[area_id][value]=.
+                Tables\Filters\SelectFilter::make('area_id')
+                    ->label('Lieu')
+                    ->relationship('area', 'name')
+                    ->searchable(),
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([

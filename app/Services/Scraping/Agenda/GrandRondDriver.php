@@ -33,6 +33,19 @@ use Symfony\Component\DomCrawler\Crawler;
  * l'entrée `theatre-du-grand-rond` sans suffixe : plusieurs doublons existent
  * dans la table `areas` migrée pour ce lieu, celui-ci est le seul dont le
  * `legacy_id` correspond exactement au code source réel).
+ *
+ * ⚠️ Bug réel trouvé et corrigé (19/09/2026, audit "aucun agenda retourné"
+ * demandé par le client) : `#principal table p strong` (sélecteur repris du
+ * legacy) n'existe PLUS DU TOUT sur la fiche détail actuelle — constaté en
+ * direct le 19/09/2026, `#principal` a disparu du site. Résultat : `start_date`
+ * était toujours `null`, donc CHAQUE fiche était `skipped` — ce driver ne
+ * créait/mettait à jour aucun événement depuis (au moins) le début du
+ * scraping en prod. Le texte de la date existe toujours, mais a été déplacé
+ * dans `.col-md-5.bloc_type p strong` (le même bloc que l'horaire, déjà lu
+ * pour le "schedule") — sous forme de texte libre très variable
+ * ("Du 24 septembre au 3 octobre 2026, ...", "Du 24 au 26 septembre 2026,
+ * ...", "Mercredi 30 septembre et samedi 3 octobre 2026 ..."), voir
+ * `extractDateRangeFromText()`.
  */
 class GrandRondDriver implements ScraperDriver
 {
@@ -142,10 +155,18 @@ class GrandRondDriver implements ScraperDriver
             ? trim($crawler->filter('#responsiveTabsDemo #tab-1')->text(''))
             : null;
 
-        $schedule = null;
+        // Bloc texte libre contenant à la fois la date/plage et l'horaire —
+        // `#principal` (ancien emplacement de la date) a disparu du site, voir
+        // docblock de classe : c'est désormais le SEUL endroit où la date existe.
+        $blocText = null;
         $scheduleNode = $crawler->filter('.col-md-5.bloc_type p strong');
         if ($scheduleNode->count()) {
-            $parts = explode(' à ', trim($scheduleNode->first()->text('')));
+            $blocText = trim(preg_replace('/\s+/u', ' ', $scheduleNode->first()->text('')) ?? '');
+        }
+
+        $schedule = null;
+        if ($blocText) {
+            $parts = explode(' à ', $blocText);
             if (count($parts) >= 2) {
                 $schedule = trim(str_replace('Genre', '', $parts[1]));
             }
@@ -157,14 +178,7 @@ class GrandRondDriver implements ScraperDriver
             $bookingUrl = $bookingNode->first()->attr('href');
         }
 
-        $start = $end = null;
-        $dateNode = $crawler->filter('#principal table p strong');
-        if ($dateNode->count()) {
-            $text = trim(preg_replace('/\s+/u', ' ', $dateNode->first()->text('')) ?? '');
-            if (preg_match('/(\d{1,2}).*?\b(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\b.*?(\d{4})/ui', $text, $matches)) {
-                [$start, $end] = $this->parseFrenchDateRange("{$matches[1]} {$matches[2]} {$matches[3]}");
-            }
-        }
+        [$start, $end] = $blocText ? $this->extractDateRangeFromText($blocText) : [null, null];
 
         return [
             'description' => $description,
@@ -173,5 +187,41 @@ class GrandRondDriver implements ScraperDriver
             'start_date' => $start,
             'end_date' => $end,
         ];
+    }
+
+    /**
+     * Extrait une date/plage depuis le texte libre de `.col-md-5.bloc_type p
+     * strong` — 3 formats réels constatés en direct le 19/09/2026, du plus
+     * spécifique au plus générique :
+     *   1. "Du 24 septembre au 3 octobre 2026..." (mois différents, année en fin)
+     *   2. "Du 24 au 26 septembre 2026..." (même mois)
+     *   3. "Mercredi 30 septembre et samedi 3 octobre 2026..." (dates ponctuelles
+     *      listées librement) — repli générique : on prend la première et la
+     *      dernière date valide (jour+mois reconnu) trouvée dans le texte.
+     *
+     * @return array{0: ?\Carbon\Carbon, 1: ?\Carbon\Carbon}
+     */
+    protected function extractDateRangeFromText(string $text): array
+    {
+        if (preg_match('/du\s+(\d{1,2})\s+([a-zéûôîâ]+)\s+au\s+(\d{1,2})\s+([a-zéûôîâ]+)\s+(\d{4})/ui', $text, $m)) {
+            return $this->parseFrenchDateRange("{$m[1]} {$m[2]} {$m[5]}", "{$m[3]} {$m[4]} {$m[5]}");
+        }
+
+        if (preg_match('/du\s+(\d{1,2})\s+au\s+(\d{1,2})\s+([a-zéûôîâ]+)\s+(\d{4})/ui', $text, $m)) {
+            return $this->parseFrenchDateRange("{$m[1]} {$m[3]} {$m[4]}", "{$m[2]} {$m[3]} {$m[4]}");
+        }
+
+        if (preg_match_all('/(\d{1,2})(?:er)?\s+([a-zéûôîâ]+)\.?\s*(\d{4})?/ui', $text, $matches, PREG_SET_ORDER)) {
+            $dates = array_filter(array_map(
+                fn (array $match) => $this->parseSingleFrenchDate(trim($match[0])),
+                $matches
+            ));
+
+            if ($dates) {
+                return [min($dates), max($dates)];
+            }
+        }
+
+        return [null, null];
     }
 }

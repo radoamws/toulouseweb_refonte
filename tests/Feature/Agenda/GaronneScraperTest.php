@@ -38,13 +38,24 @@ class GaronneScraperTest extends TestCase
         ]);
     }
 
+    /**
+     * Reproduit la VRAIE structure constatée en direct le 19/09/2026 : le
+     * titre du spectacle est dans un `h3`, le(s) nom(s) d'artiste(s)/compagnie
+     * dans un `h2` FRÈRE (voir bug corrigé, docblock de GaronneDriver) — les
+     * deux sont systématiquement présents (29/29 cartes réelles).
+     */
     protected function listingHtml(string $class, string $title, string $href): string
     {
         return <<<HTML
             <html><body>
                 <article class="carte {$class}">
                     <div class="carte--spectacle__visuel"><img src="/img/poster.jpg"></div>
-                    <div class="carte--spectacle__title"><h2>{$title}</h2><a href="{$href}"></a></div>
+                    <div class="carte--spectacle__title">
+                        <a href="{$href}" rel="bookmark">
+                            <h3>{$title}</h3>
+                            <h2><span class="artiste__title">Olivier Martin-Salvan</span></h2>
+                        </a>
+                    </div>
                 </article>
             </body></html>
         HTML;
@@ -67,6 +78,29 @@ class GaronneScraperTest extends TestCase
         $this->assertNotNull($event);
         $this->assertSame('Celui qui voit', $event->title);
         $this->assertTrue($event->categories->contains('slug', 'theatre'));
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (19/09/2026, demande client : "Les
+     * Gaulois... n'y sont pas") — voir docblock de GaronneDriver.
+     */
+    public function test_title_is_read_from_h3_not_the_artist_byline_h2(): void
+    {
+        $source = $this->makeSource();
+
+        Http::fake([
+            'theatregaronne.com/saison' => Http::response($this->listingHtml('carte--theatre', 'Les Gaulois', '/spectacle/2026-2027/les-gaulois')),
+            'theatregaronne.com/spectacle/2026-2027/les-gaulois' => Http::response(
+                '<html><body><div class="delta--dates"><time>07</time><time>15 Oct</time></div></body></html>'
+            ),
+        ]);
+
+        $this->artisan('scrape:events', ['--source' => $source->id])->run();
+
+        $event = Event::where('external_ref', 'les-gaulois')->first();
+        $this->assertNotNull($event);
+        $this->assertSame('Les Gaulois', $event->title);
+        $this->assertStringNotContainsString('Martin-Salvan', $event->title);
     }
 
     public function test_two_date_nodes_share_the_month_of_the_second_node(): void

@@ -38,6 +38,16 @@ use Symfony\Component\DomCrawler\Crawler;
  *
  * area_slug par défaut résolu via `areas.legacy_id = 6` : "Théâtre Garonne"
  * (slug `theatre-garonne`).
+ *
+ * ⚠️ Bug réel trouvé et corrigé (19/09/2026, signalé par le client : "Les
+ * Gaulois... n'y sont pas") : le titre était lu sur `.carte--spectacle__title
+ * h2`, qui contient en réalité le(s) nom(s) d'artiste(s)/compagnie (ex.
+ * "Olivier Martin-Salvan Thomas Blanchard"), pas le titre du spectacle — le
+ * vrai titre ("Les Gaulois") est dans un `h3` FRÈRE, jamais lu jusqu'ici.
+ * Constaté en direct le 19/09/2026 sur les 29 cartes de la page (100% ont les
+ * deux balises) : TOUS les événements de cette salle avaient donc un titre
+ * erroné, pas seulement "Les Gaulois" — ce n'était pas un événement manquant
+ * mais un événement mal titré, indiscernable en recherche/liste.
  */
 class GaronneDriver implements ScraperDriver
 {
@@ -70,7 +80,7 @@ class GaronneDriver implements ScraperDriver
             $card = new Crawler($node);
             $stats['found']++;
 
-            $titleNode = $card->filter('.carte--spectacle__title h2');
+            $titleNode = $card->filter('.carte--spectacle__title h3');
             $linkNode = $card->filter('.carte--spectacle__title a');
 
             if ($titleNode->count() === 0 || $linkNode->count() === 0) {
