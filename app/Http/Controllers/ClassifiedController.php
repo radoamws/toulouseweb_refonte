@@ -121,7 +121,7 @@ class ClassifiedController extends Controller
             // Honeypot anti-spam (brief §18) : champ invisible, un vrai
             // visiteur ne le remplit jamais.
             'website' => ['size:0'],
-            'recaptcha_token' => [new Recaptcha('annonce')],
+            'recaptcha_token' => Recaptcha::rules('annonce'),
         ]);
 
         // Le slug est généré automatiquement depuis `title` par HasSlug

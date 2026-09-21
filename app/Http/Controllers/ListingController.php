@@ -164,7 +164,7 @@ class ListingController extends Controller
             // ClassifiedController/ContactController pour ne pas entrer en
             // collision avec le vrai champ `website` de Listing.
             'url_verification' => ['size:0'],
-            'recaptcha_token' => [new Recaptcha('annuaire')],
+            'recaptcha_token' => Recaptcha::rules('annuaire'),
         ]);
 
         $listing = Listing::create([

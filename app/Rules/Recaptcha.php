@@ -30,10 +30,35 @@ use Throwable;
  * `grecaptcha.execute(siteKey, {action})` côté JS (attribut
  * `data-recaptcha-action` sur le `<form>`) — une action différente indique
  * un jeton généré pour un AUTRE formulaire, rejeté.
+ *
+ * ⚠️ Bug réel trouvé et corrigé (21/09/2026, en vérifiant le fonctionnement
+ * en production juste après activation) : par défaut, Laravel n'appelle
+ * `validate()` d'une règle QUE si le champ est présent dans la requête (sauf
+ * règle "implicite", ex. `required`) — un bot qui soumet le formulaire SANS
+ * envoyer `recaptcha_token` du tout (encore plus basique que remplir le
+ * honeypot) passait donc intégralement à travers le contrôle. Constaté en
+ * direct sur toulouseweb.com/contact juste après le premier déploiement.
+ * `ImplicitRule` (l'interface prévue pour ce cas) est liée à l'ancien
+ * contrat `Rule` (passes/message), incompatible avec `ValidationRule`
+ * (validate/Closure) utilisé ici — la solution retenue est donc `rules()`
+ * : ajoute `'required'` (règle native de Laravel, elle-même implicite) AU
+ * TABLEAU DE RÈGLES seulement quand reCAPTCHA est configuré, ce qui suffit
+ * à faire échouer la validation sur un champ absent — utiliser CETTE
+ * méthode dans chaque contrôleur plutôt que `new Recaptcha($action)`
+ * directement.
  */
 class Recaptcha implements ValidationRule
 {
     public function __construct(private readonly string $action) {}
+
+    /** @return array<int, string|self> */
+    public static function rules(string $action): array
+    {
+        return array_values(array_filter([
+            config('services.recaptcha.secret_key') ? 'required' : null,
+            new self($action),
+        ]));
+    }
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {

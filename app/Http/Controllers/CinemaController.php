@@ -130,7 +130,7 @@ class CinemaController extends Controller
             // Honeypot anti-spam (même convention que les autres formulaires
             // publics, voir ClassifiedController::store()).
             'website' => ['size:0'],
-            'recaptcha_token' => [new Recaptcha('movie_comment')],
+            'recaptcha_token' => Recaptcha::rules('movie_comment'),
         ]);
 
         $comment = $movie->comments()->create([

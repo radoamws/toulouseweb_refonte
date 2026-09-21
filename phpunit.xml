@@ -39,6 +39,15 @@
         même si une future config locale renseignait ces clés par erreur. -->
         <env name="CLOUDFLARE_CACHE_PURGE_ENABLED" value="false"/>
         <env name="GOOGLE_INDEXING_ENABLED" value="false"/>
+        <!-- Même remarque que ci-dessus pour reCAPTCHA (App\Rules\Recaptcha) :
+        vide ici garantit le comportement fail-open dans toute la suite, même
+        si le .env LOCAL renseigne de vraies clés (ce qui a fait échouer 21
+        tests le 21/09/2026, juste après l'ajout des clés en local — la
+        règle exigeait alors le champ recaptcha_token pour TOUS les
+        formulaires testés, pas seulement RecaptchaTest, qui configure
+        explicitement une clé pour ses propres cas). -->
+        <env name="RECAPTCHA_SITE_KEY" value=""/>
+        <env name="RECAPTCHA_SECRET_KEY" value=""/>
         <!-- Valeur fixe connue des tests uniquement (voir WebCronTest) — pas un
         vrai secret, jamais utilisée hors de cet environnement de test. -->
         <env name="WEBCRON_SECRET" value="test-webcron-secret-value"/>

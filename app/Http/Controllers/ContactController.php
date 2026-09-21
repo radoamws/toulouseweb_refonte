@@ -32,7 +32,7 @@ class ContactController extends Controller
             'subject' => ['nullable', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:5000'],
             'website' => ['size:0'], // honeypot anti-spam
-            'recaptcha_token' => [new Recaptcha('contact')],
+            'recaptcha_token' => Recaptcha::rules('contact'),
         ]);
 
         $contactMessage = ContactMessage::create(collect($validated)->except(['website', 'recaptcha_token'])->all());

@@ -26,7 +26,7 @@ class RecaptchaTest extends TestCase
     {
         return Validator::make(
             ['recaptcha_token' => $token],
-            ['recaptcha_token' => [new Recaptcha('contact')]]
+            ['recaptcha_token' => Recaptcha::rules('contact')]
         );
     }
 
@@ -42,6 +42,34 @@ class RecaptchaTest extends TestCase
         config(['services.recaptcha.secret_key' => 'test-secret']);
 
         $this->assertTrue($this->validate(null)->fails());
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (21/09/2026, vérifié en direct en prod
+     * juste après activation) : un `Validator::make(['recaptcha_token' =>
+     * null], ...)` (test ci-dessus) fait toujours tourner la règle (la clé
+     * EXISTE, valeur null), alors qu'une vraie requête HTTP où le champ est
+     * ENTIÈREMENT ABSENT du corps POST (aucune clé du tout — exactement ce
+     * qu'envoie un bot basique, ou un `curl` sans le champ) est un cas
+     * DIFFÉRENT : sans le `'required'` conditionnel de `Recaptcha::rules()`,
+     * Laravel n'appelait même pas `validate()`. Voir docblock de la classe.
+     */
+    public function test_fails_when_the_field_is_entirely_absent_from_the_request(): void
+    {
+        config(['services.recaptcha.secret_key' => 'test-secret']);
+
+        $validator = Validator::make([], ['recaptcha_token' => Recaptcha::rules('contact')]);
+
+        $this->assertTrue($validator->fails());
+    }
+
+    public function test_does_not_require_the_field_when_not_configured(): void
+    {
+        config(['services.recaptcha.secret_key' => null]);
+
+        $validator = Validator::make([], ['recaptcha_token' => Recaptcha::rules('contact')]);
+
+        $this->assertTrue($validator->passes());
     }
 
     public function test_passes_with_a_valid_high_score_response(): void
@@ -97,6 +125,19 @@ class RecaptchaTest extends TestCase
         ])->assertSessionHasErrors('recaptcha_token');
 
         $this->assertDatabaseMissing('contact_messages', ['email' => 'bot@example.test']);
+    }
+
+    public function test_contact_form_is_rejected_when_the_token_field_is_omitted_entirely(): void
+    {
+        config(['services.recaptcha.secret_key' => 'test-secret']);
+
+        // Ni "recaptcha_token" ni "recaptcha_token => null" : le champ n'est
+        // pas envoyé du tout, comme le ferait un bot basique.
+        $this->post('/contact', [
+            'name' => 'Bot', 'email' => 'bot-no-field@example.test', 'message' => 'spam', 'website' => '',
+        ])->assertSessionHasErrors('recaptcha_token');
+
+        $this->assertDatabaseMissing('contact_messages', ['email' => 'bot-no-field@example.test']);
     }
 
     public function test_contact_form_succeeds_with_a_high_score(): void

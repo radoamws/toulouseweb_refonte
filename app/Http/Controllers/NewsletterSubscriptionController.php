@@ -24,7 +24,7 @@ class NewsletterSubscriptionController
             // Honeypot anti-spam (même pattern que les autres formulaires
             // publics du site, voir brief §18).
             'website' => ['size:0'],
-            'recaptcha_token' => [new Recaptcha('newsletter')],
+            'recaptcha_token' => Recaptcha::rules('newsletter'),
         ]);
 
         $subscriber = NewsletterSubscriber::subscribeEmail($validated['email'], $validated['name'] ?? null, 'homepage');
