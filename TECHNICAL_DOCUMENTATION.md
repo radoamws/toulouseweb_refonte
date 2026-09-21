@@ -1755,3 +1755,25 @@ Deux schémas legacy trouvés : `t_category` (structure niveau 0/1/2, reprise te
 3. **Libellé "restaurant spectacle"** : la sous-catégorie migrée s'appelait littéralement `diner_spectacle` (valeur technique `site_client.cat` jamais retraduite) — nouvelle commande `content:normalize-restaurant-subcategories` (scopée au parent Restaurants, slugs jamais modifiés) qui corrige ce libellé en "Restaurant spectacle" et au passage les 4 autres libellés bruts du même import (`ambiance`→Ambiance, `gastronomie`→Gastronomie, `specialites`→Spécialités, `traditionnel`→Traditionnel).
 
 Tests : `tests/Feature/AnnuaireSubcategoriesTest.php` (7 tests — pastilles affichées sur la rubrique top et sur une sous-rubrique, filtrage effectif par sous-catégorie, sidebar active sur le parent, fil d'ariane complet, absence de pastilles sur `/annuaire` et sur une rubrique sans enfants), `tests/Feature/NormalizeRestaurantSubcategoryNamesTest.php` (5 tests).
+
+## 51. Chevauchement admin /admin/events + reCAPTCHA v3 sur tous les formulaires publics (21/09/2026, demande client)
+
+### 1. Titre d'événement qui déborde sur la colonne suivante
+
+Capture client : un titre long ("MOUSQUETAIRE, UNE CREATION DU PUY DU FOU...", "Johnny Symphonique Tour") s'affichait sur une seule ligne non coupée, chevauchant visuellement la colonne "Catégories". `EventResource` est le seul admin resource du site à combiner un `TextColumn::make('title')` avec un `->description()` (sous-titre) SANS `->wrap()` — les autres (`ClassifiedResource`, `ListingResource`, `MovieResource`, `NewsResource`) ont des titres simples, moins exposés au même risque. Fix : `->wrap()` ajouté à la colonne `title`.
+
+⚠️ Le 2e élément de la capture (chevauchement dans la colonne date, un "✓" superposé à l'heure) n'a pas pu être reproduit ni expliqué avec certitude par le code (`created_at` est une colonne `dateTime()` toute simple, sans sous-ligne ni icône) — a priori soit un artefact transitoire (indicateur "enregistré" de Filament après un changement de statut en ligne, §45, mal positionné dans un tableau large nécessitant un défilement horizontal), soit un cache navigateur/CDN obsolète. À reconfirmer par le client après un rechargement forcé (Ctrl+Maj+R) ; si le problème persiste, fournir une nouvelle capture ou préciser si ça arrive systématiquement ou seulement juste après avoir changé un statut.
+
+Tests : `tests/Feature/AdminEventsTableLayoutTest.php` (1 test — un titre long produit bien la classe CSS `whitespace-normal`, pas de débordement non coupé).
+
+### 2. reCAPTCHA v3 sur tous les formulaires publics
+
+Demande client : clés reCAPTCHA ajoutées en local, "à mettre en place [...] pour tous les formulaires dans le front". Version confirmée par le client : **v3 invisible** (score 0-1, pas de case à cocher) — en COMPLÉMENT du honeypot déjà présent partout, jamais en remplacement.
+
+- `config/services.php` : bloc `recaptcha` (`site_key`, `secret_key`, `min_score` — 0.5 par défaut).
+- Nouvelle règle `App\Rules\Recaptcha(action)` : appelle `siteverify` de Google (`Http::asForm()`), vérifie `success` + `action` (doit correspondre exactement à celui envoyé côté JS) + `score >= min_score`. **Fail-open sur 2 cas volontaires** (jamais bloquer un vrai visiteur) : `secret_key` non configurée (dev local, CI) → no-op silencieux ; API Google injoignable (timeout, panne) → journalisé mais accepté quand même — même philosophie que `AdminNotifier` (une dépendance externe optionnelle ne doit jamais faire perdre une vraie soumission).
+- `resources/js/recaptcha.js` (nouveau, même style que `track-click.js`) : délégation d'événement sur tout `<form data-recaptcha-action="...">` — charge `recaptcha/api.js` à la demande (une seule fois), récupère un jeton via `grecaptcha.execute()`, l'injecte dans un champ caché `recaptcha_token`, puis soumet réellement le formulaire. Absent de clé publique (meta `recaptcha-site-key`, injectée dans `<head>` seulement si `services.recaptcha.site_key` est configuré) = formulaires soumis normalement, sans jeton.
+- Appliqué aux **7 formulaires publics** du site (tous les `Route::post` sauf `/track-click`, qui n'est pas un formulaire) : contact (`action=contact`), annonces (`annonce`), agenda proposé (`agenda`), actualités proposées (`actualite`), annuaire déposé (`annuaire`), avis film (`movie_comment`, §49), newsletter (`newsletter`). Chaque contrôleur exclut `recaptcha_token` de son `except(...)`/tableau `create()` comme il le fait déjà pour `website` (honeypot) — jamais persisté en base.
+- ⚠️ Clés reCAPTCHA ajoutées par le client dans le `.env` LOCAL uniquement pour l'instant — à ajouter aussi dans le `.env` de PRODUCTION (Infomaniak) pour activer la protection en ligne ; tant que `RECAPTCHA_SECRET_KEY` n'y est pas définie, tout reste fail-open (comportement actuel inchangé, aucune régression si l'ajout tarde).
+
+Tests : `tests/Feature/RecaptchaTest.php` (9 tests — no-op sans configuration, jeton manquant, score haut/bas, action différente, échec Google, panne réseau, intégration bout-en-bout sur `/contact`).

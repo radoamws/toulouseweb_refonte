@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\NewsletterSubscriber;
+use App\Rules\Recaptcha;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -23,6 +24,7 @@ class NewsletterSubscriptionController
             // Honeypot anti-spam (même pattern que les autres formulaires
             // publics du site, voir brief §18).
             'website' => ['size:0'],
+            'recaptcha_token' => [new Recaptcha('newsletter')],
         ]);
 
         $subscriber = NewsletterSubscriber::subscribeEmail($validated['email'], $validated['name'] ?? null, 'homepage');

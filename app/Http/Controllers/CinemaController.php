@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Cinema;
 use App\Models\Movie;
 use App\Models\Page;
+use App\Rules\Recaptcha;
 use App\Support\AdminNotifier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -129,6 +130,7 @@ class CinemaController extends Controller
             // Honeypot anti-spam (même convention que les autres formulaires
             // publics, voir ClassifiedController::store()).
             'website' => ['size:0'],
+            'recaptcha_token' => [new Recaptcha('movie_comment')],
         ]);
 
         $comment = $movie->comments()->create([

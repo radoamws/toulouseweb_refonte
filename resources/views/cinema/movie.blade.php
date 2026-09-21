@@ -134,7 +134,7 @@
         layout via session('status'), voir components/layouts/app.blade.php. --}}
         <div class="mt-8 rounded-2xl border border-ink-100 bg-white p-5 shadow-sm">
             <h3 class="font-heading text-lg font-semibold text-ink-900">Laisser un avis</h3>
-            <form method="POST" action="{{ route('cinema.movie.comment', $movie->slug) }}" class="mt-4 space-y-4">
+            <form method="POST" action="{{ route('cinema.movie.comment', $movie->slug) }}" data-recaptcha-action="movie_comment" class="mt-4 space-y-4">
                 @csrf
 
                 {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}

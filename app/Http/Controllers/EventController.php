@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\EventCategory;
 use App\Models\Page;
 use App\Rules\GenuineImage;
+use App\Rules\Recaptcha;
 use App\Services\Uploads\ImageSanitizer;
 use App\Support\AdminNotifier;
 use Carbon\Carbon;
@@ -212,6 +213,7 @@ class EventController extends Controller
             // Honeypot anti-spam (brief §18) : champ invisible, un vrai
             // visiteur ne le remplit jamais.
             'website' => ['size:0'],
+            'recaptcha_token' => [new Recaptcha('agenda')],
         ]);
 
         $area = Area::firstOrCreate(

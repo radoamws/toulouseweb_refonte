@@ -120,6 +120,16 @@ class EventResource extends Resource
                     ->label('Titre')
                     ->searchable()
                     ->sortable()
+                    // Bug réel trouvé et corrigé (21/09/2026, capture
+                    // client) : un titre long (ex. "MOUSQUETAIRE, UNE
+                    // CREATION DU PUY DU FOU") débordait sur une seule ligne
+                    // non coupée par-dessus la colonne "Catégories" — sans
+                    // wrap(), Filament ne limite la largeur du texte
+                    // qu'avec `overflow: hidden` sur la CELLULE, pas sur le
+                    // <table> entier, donc un texte assez long "pousse" la
+                    // largeur réelle de la colonne bien au-delà de ce que
+                    // l'en-tête laisse penser.
+                    ->wrap()
                     ->description(fn (Event $record) => $record->subtitle),
                 Tables\Columns\TextColumn::make('area.name')
                     ->label('Lieu')

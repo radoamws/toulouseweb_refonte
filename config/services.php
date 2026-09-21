@@ -89,6 +89,21 @@ return [
     ],
 
     /*
+     * reCAPTCHA v3 (demande client, 19/09/2026 : "à mettre en place [...]
+     * pour tous les formulaires dans le front") — voir App\Rules\Recaptcha.
+     * v3 est INVISIBLE (pas de case à cocher, score 0-1 en fond), en
+     * complément du honeypot déjà présent sur chaque formulaire, pas en
+     * remplacement. `secret_key` vide (pas encore configuré en prod, ou
+     * environnement de test/CI) = vérification désactivée SANS bloquer les
+     * visiteurs (fail-open), voir docblock de la classe.
+     */
+    'recaptcha' => [
+        'site_key' => env('RECAPTCHA_SITE_KEY'),
+        'secret_key' => env('RECAPTCHA_SECRET_KEY'),
+        'min_score' => (float) env('RECAPTCHA_MIN_SCORE', 0.5),
+    ],
+
+    /*
      * Newsletter (demande client, 12/09/2026, voir
      * App\Services\Newsletter\NewsletterSender et
      * TECHNICAL_DOCUMENTATION.md §36).

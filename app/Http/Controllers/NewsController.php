@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\News;
 use App\Models\NewsCategory;
 use App\Models\Page;
+use App\Rules\Recaptcha;
 use App\Support\AdminNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -159,12 +160,13 @@ class NewsController extends Controller
             // Honeypot anti-spam (brief §18) : champ invisible, un vrai
             // visiteur ne le remplit jamais.
             'website' => ['size:0'],
+            'recaptcha_token' => [new Recaptcha('actualite')],
         ]);
 
         // Le slug est généré automatiquement depuis `title` par HasSlug
         // (voir App\Models\News) — pas besoin de le fournir ici.
         $news = News::create([
-            ...collect($validated)->except(['website'])->all(),
+            ...collect($validated)->except(['website', 'recaptcha_token'])->all(),
             'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
         ]);
 

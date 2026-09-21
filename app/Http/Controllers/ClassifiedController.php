@@ -6,6 +6,7 @@ use App\Models\Classified;
 use App\Models\ClassifiedCategory;
 use App\Models\Page;
 use App\Rules\GenuineImage;
+use App\Rules\Recaptcha;
 use App\Services\Uploads\ImageSanitizer;
 use App\Support\AdminNotifier;
 use Illuminate\Http\RedirectResponse;
@@ -120,12 +121,13 @@ class ClassifiedController extends Controller
             // Honeypot anti-spam (brief §18) : champ invisible, un vrai
             // visiteur ne le remplit jamais.
             'website' => ['size:0'],
+            'recaptcha_token' => [new Recaptcha('annonce')],
         ]);
 
         // Le slug est généré automatiquement depuis `title` par HasSlug
         // (voir App\Models\Classified) — pas besoin de le fournir ici.
         $classified = Classified::create([
-            ...collect($validated)->except(['website', 'photo'])->all(),
+            ...collect($validated)->except(['website', 'photo', 'recaptcha_token'])->all(),
             'status' => 'pending', // jamais autre chose ici, voir docblock de la classe
         ]);
 

@@ -158,7 +158,7 @@
                     <p class="mt-4 rounded-lg bg-green-100 px-4 py-2 text-sm font-medium text-green-800">{{ session('status') }}</p>
                 @endif
 
-                <form method="POST" action="{{ route('newsletter.subscribe') }}" class="mx-auto mt-6 flex max-w-md flex-col gap-3 sm:flex-row">
+                <form method="POST" action="{{ route('newsletter.subscribe') }}" data-recaptcha-action="newsletter" class="mx-auto mt-6 flex max-w-md flex-col gap-3 sm:flex-row">
                     @csrf
                     <div class="absolute -left-[9999px]" aria-hidden="true">
                         <label for="newsletter-website">Laisser vide</label>

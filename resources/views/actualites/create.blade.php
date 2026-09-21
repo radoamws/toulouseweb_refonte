@@ -7,7 +7,7 @@
             Votre proposition sera vérifiée par notre équipe avant publication — comptez généralement moins de 24h.
         </p>
 
-        <form method="POST" action="{{ route('actualites.store') }}" class="mt-8 space-y-5">
+        <form method="POST" action="{{ route('actualites.store') }}" data-recaptcha-action="actualite" class="mt-8 space-y-5">
             @csrf
 
             {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}

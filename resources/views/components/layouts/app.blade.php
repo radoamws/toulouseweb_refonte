@@ -44,6 +44,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {{-- reCAPTCHA v3 (demande client, 19/09/2026) — voir resources/js/recaptcha.js
+    et App\Rules\Recaptcha. Absent si non configuré (dev local sans clé). --}}
+    @if (config('services.recaptcha.site_key'))
+        <meta name="recaptcha-site-key" content="{{ config('services.recaptcha.site_key') }}">
+    @endif
 
     {{-- Favicon réel ToulouseWeb (la coccinelle de la marque, voir
     TECHNICAL_DOCUMENTATION.md §13) — remplace `public/favicon.ico`

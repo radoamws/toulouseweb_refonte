@@ -8,7 +8,7 @@
             quelle que soit la formule choisie ci-dessous.
         </p>
 
-        <form method="POST" action="{{ route('annuaire.store') }}" class="mt-8 space-y-5"
+        <form method="POST" action="{{ route('annuaire.store') }}" data-recaptcha-action="annuaire" class="mt-8 space-y-5"
             x-data="{ tier: '{{ old('tier', 'free') }}' }">
             @csrf
 

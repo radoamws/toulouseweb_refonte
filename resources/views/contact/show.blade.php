@@ -7,7 +7,7 @@
             Une question, une suggestion, une envie de collaborer ? Écrivez-nous, nous vous répondons rapidement.
         </p>
 
-        <form method="POST" action="{{ route('contact.store') }}" class="mt-8 space-y-5">
+        <form method="POST" action="{{ route('contact.store') }}" data-recaptcha-action="contact" class="mt-8 space-y-5">
             @csrf
 
             <div class="absolute -left-[9999px]" aria-hidden="true">

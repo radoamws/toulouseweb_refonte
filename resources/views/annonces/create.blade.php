@@ -7,7 +7,7 @@
             Votre annonce sera vérifiée par notre équipe avant publication — comptez généralement moins de 24h.
         </p>
 
-        <form method="POST" action="{{ route('annonces.store') }}" enctype="multipart/form-data" class="mt-8 space-y-5">
+        <form method="POST" action="{{ route('annonces.store') }}" enctype="multipart/form-data" data-recaptcha-action="annonce" class="mt-8 space-y-5">
             @csrf
 
             {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}

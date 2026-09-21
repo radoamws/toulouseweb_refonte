@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ContactMessage;
 use App\Models\NewsletterSubscriber;
 use App\Models\Page;
+use App\Rules\Recaptcha;
 use App\Support\AdminNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,9 +32,10 @@ class ContactController extends Controller
             'subject' => ['nullable', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:5000'],
             'website' => ['size:0'], // honeypot anti-spam
+            'recaptcha_token' => [new Recaptcha('contact')],
         ]);
 
-        $contactMessage = ContactMessage::create(collect($validated)->except('website')->all());
+        $contactMessage = ContactMessage::create(collect($validated)->except(['website', 'recaptcha_token'])->all());
 
         // Demande client (12/09/2026, voir TECHNICAL_DOCUMENTATION.md §36) :
         // "toute personne s'inscrivant dans la page contact s'inscrit

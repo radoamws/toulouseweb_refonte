@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\Listing;
 use App\Models\Page;
+use App\Rules\Recaptcha;
 use App\Support\AdminNotifier;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -163,10 +164,11 @@ class ListingController extends Controller
             // ClassifiedController/ContactController pour ne pas entrer en
             // collision avec le vrai champ `website` de Listing.
             'url_verification' => ['size:0'],
+            'recaptcha_token' => [new Recaptcha('annuaire')],
         ]);
 
         $listing = Listing::create([
-            ...collect($validated)->except(['category_id', 'url_verification'])->all(),
+            ...collect($validated)->except(['category_id', 'url_verification', 'recaptcha_token'])->all(),
             'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
         ]);
         $listing->categories()->attach($validated['category_id']);
