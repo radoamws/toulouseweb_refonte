@@ -114,6 +114,60 @@ class DedupeDuplicateEventsTest extends TestCase
         $this->assertNotSoftDeleted($b);
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (22/09/2026, vérifié en production après
+     * le premier passage) : OpenAgenda a reposté le même événement avec une
+     * casse différente ("Les Voyages..." / "Les voyages...") — une
+     * comparaison stricte des titres ratait ce doublon.
+     */
+    public function test_titles_differing_only_by_case_are_treated_as_duplicates(): void
+    {
+        $area = Area::create(['name' => 'Toulouse Métropole', 'slug' => 'toulouse-metropole-case']);
+
+        $canonical = Event::create([
+            'title' => "Les voyages de l'Aéroflorale II", 'slug' => 'aeroflorale-canonical',
+            'area_id' => $area->id, 'status' => 'published', 'source' => 'scraped',
+            'external_ref' => 'les-voyages-de-laeroflorale-ii', 'start_date' => '2026-09-22 10:00:00',
+        ]);
+        $differentCase = Event::create([
+            'title' => "Les Voyages de l'Aéroflorale II", 'slug' => 'aeroflorale-different-case',
+            'area_id' => $area->id, 'status' => 'published', 'source' => 'scraped',
+            'external_ref' => 'les-voyages-de-laeroflorale-ii-5786005', 'start_date' => '2026-09-22 10:00:00',
+        ]);
+
+        Artisan::call('content:dedupe-duplicate-events');
+
+        $this->assertNotSoftDeleted($canonical);
+        $this->assertSoftDeleted($differentCase);
+    }
+
+    /**
+     * ⚠️ Même découverte : OpenAgenda utilise parfois une espace fine
+     * insécable (U+202F, convention typographique française avant "?")
+     * plutôt qu'une espace normale — invisible à l'oeil, mais une
+     * comparaison stricte de chaînes ratait ce doublon aussi.
+     */
+    public function test_titles_differing_only_by_a_unicode_space_variant_are_treated_as_duplicates(): void
+    {
+        $area = Area::create(['name' => 'Toulouse Métropole', 'slug' => 'toulouse-metropole-space']);
+
+        $canonical = Event::create([
+            'title' => "Comment écrit-on une histoire ?", 'slug' => 'histoire-canonical',
+            'area_id' => $area->id, 'status' => 'published', 'source' => 'scraped',
+            'external_ref' => 'comment-ecrit-on-une-histoire-149484', 'start_date' => '2026-09-26 10:00:00',
+        ]);
+        $narrowNoBreakSpace = Event::create([
+            'title' => "Comment écrit-on une histoire\u{202F}?", 'slug' => 'histoire-narrow-space',
+            'area_id' => $area->id, 'status' => 'published', 'source' => 'scraped',
+            'external_ref' => 'comment-ecrit-on-une-histoire-6651312', 'start_date' => '2026-09-26 10:00:00',
+        ]);
+
+        Artisan::call('content:dedupe-duplicate-events');
+
+        $this->assertNotSoftDeleted($canonical);
+        $this->assertSoftDeleted($narrowNoBreakSpace);
+    }
+
     public function test_dry_run_reports_but_does_not_delete(): void
     {
         $area = Area::create(['name' => 'Toulouse Métropole', 'slug' => 'toulouse-metropole-dry']);

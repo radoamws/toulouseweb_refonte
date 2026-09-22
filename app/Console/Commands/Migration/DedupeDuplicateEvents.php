@@ -29,6 +29,16 @@ use Illuminate\Console\Command;
  *   2. `external_ref` le plus COURT (heuristique : le slug "canonique" sans
  *      suffixe numérique parasite est généralement le plus court).
  *   3. À égalité, l'id le plus bas (la plus ancienne).
+ *
+ * ⚠️ Élargi (22/09/2026, vérifié en production après le premier passage) :
+ * le titre est comparé APRÈS normalisation (minuscules + espaces Unicode
+ * variés réduits à une espace simple), PAS par égalité stricte — trouvé en
+ * production même un "même titre" scrapé deux fois par OpenAgenda peut en
+ * réalité différer par la casse ("Les Voyages..." / "Les voyages...") ou
+ * par le type d'espace utilisé (espace normale vs espace fine insécable
+ * U+202F avant un "?", une convention typographique française appliquée de
+ * façon incohérente d'un poste à l'autre côté OpenAgenda). Le TITRE STOCKÉ
+ * n'est jamais modifié, seule la clé de regroupement l'est.
  */
 class DedupeDuplicateEvents extends Command
 {
@@ -46,7 +56,7 @@ class DedupeDuplicateEvents extends Command
             ->whereNotNull('area_id')
             ->whereNotNull('start_date')
             ->get()
-            ->groupBy(fn (Event $event) => $event->area_id.'|'.$event->title.'|'.$event->start_date->toDateString())
+            ->groupBy(fn (Event $event) => $event->area_id.'|'.$this->normalizeTitle($event->title).'|'.$event->start_date->toDateString())
             ->filter(fn ($group) => $group->count() > 1);
 
         $deleted = 0;
@@ -88,5 +98,19 @@ class DedupeDuplicateEvents extends Command
         $this->info($log->summary());
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Minuscules + toutes les espaces Unicode (espace normale, insécable,
+     * fine insécable U+202F...) réduites à une espace simple — voir
+     * docblock de classe. Comparaison uniquement, ne modifie jamais le
+     * titre stocké.
+     */
+    protected function normalizeTitle(string $title): string
+    {
+        $normalized = mb_strtolower(trim($title));
+        $normalized = preg_replace('/[\p{Z}\s]+/u', ' ', $normalized) ?? $normalized;
+
+        return trim($normalized);
     }
 }
