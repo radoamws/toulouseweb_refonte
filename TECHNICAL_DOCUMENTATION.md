@@ -1813,3 +1813,29 @@ Tests : `tests/Feature/Agenda/EscaleScraperTest.php` (+1, nettoyage HTML), `test
 ### 6. Description de catégorie annuaire cachée
 
 `annuaire/index.blade.php` affichait `$category->description` en pleine page entre le H1 et les pastilles de sous-catégories — un champ qui contient en réalité du bourrage de mots-clés SEO hérité du legacy (ex. "a emporter toulouse, a emporter, toulouse a emporter..."), jamais pensé pour être lu par un visiteur. Retiré de l'affichage ; le champ reste utilisé tel quel pour le `<meta name="description">` (`SeoResolverService::generateDescription()`), qui en a besoin. Test : `AnnuaireSubcategoriesTest::test_category_description_is_not_displayed_on_the_page_but_still_feeds_seo_meta`.
+
+## 53. 6 nouvelles corrections front (23/09/2026, demande client)
+
+### 1. Bandeau : ne jamais recadrer les images
+
+`resources/views/components/site/hero-slider.blade.php` — les visuels administrés sont des affiches ("brochures") avec du texte/des informations imprimées jusque dans les bords ; `object-cover` recadrait l'image pour remplir la boîte, coupant potentiellement ce contenu. Le conteneur était déjà pleine largeur (aucun `max-w-*` ne l'encadre dans `home.blade.php` — vérifié), donc "full width" faisait ici référence à l'affichage complet et non coupé de l'image, pas à la largeur du bloc. `object-contain` remplace `object-cover` (l'image entière est toujours visible, quitte à laisser apparaître le fond sur les côtés si le ratio ne correspond pas) ; `opacity-80` retirée sur l'image elle-même pour la même raison (ne plus l'assombrir), le dégradé existant suffit à garder la légende lisible. Test : `HomepageTest::test_hero_slider_never_crops_the_image`.
+
+### 2. Fond des encadrés agenda teinté par catégorie
+
+`resources/views/agenda/index.blade.php` — le fond de chaque fiche événement restait `bg-white` quelle que soit sa catégorie (seuls la bordure gauche et le badge étaient colorés, §46/§52). Même formule `color-mix()` que le badge, appliquée au fond de la carte entière (8% au lieu de 15%, la surface étant bien plus grande — le texte reste lisible quelle que soit la couleur). Un événement sans catégorie garde un fond blanc classique. Tests : `AgendaFrontRedesignTest::test_event_card_background_is_tinted_with_the_category_color` / `test_event_card_without_a_category_keeps_a_plain_white_background`.
+
+### 3. Théâtre/Musique/Spectacles en tête du menu agenda
+
+`EventCategory.order` existait déjà et pilotait déjà le tri (`orderBy('order')->orderBy('name')`, code inchangé) — "Agenda du jour"/Enfants/Rugby avaient déjà `order=0` (choix admin antérieur), le reste `order=1` (alphabétique). Théâtre/Musique/Spectacles passés à `order=-1` (dans cet ordre précis, celui donné par le client) pour les faire apparaître strictement avant tout le reste, y compris "Agenda du jour" — changement de DONNÉE en production uniquement, aucun code touché.
+
+### 4. Recherche agenda élargie au lieu et à la catégorie
+
+`EventController::renderIndex()` — la recherche libre (`?q=`) ne portait que sur `events.title` ; "escale" ne remontait donc aucun événement de la salle L'Escale si son nom n'apparaissait pas littéralement dans le titre. Élargie via `orWhereHas('area', ...)` / `orWhereHas('categories', ...)`, le tout groupé dans un `where()` imbriqué pour ne pas casser la combinaison AND avec les filtres catégorie/lieu/date déjà actifs. Tests : `AgendaFrontRedesignTest::test_search_also_matches_the_venue_name` / `test_search_also_matches_the_category_name` / `test_search_combines_with_the_active_category_filter`.
+
+### 5. Taille de police relevée sur tout le site public
+
+`resources/css/app.css` — `html { font-size: 112.5%; }` (18px au lieu de 16px par défaut). Toutes les classes Tailwind (`text-sm`, `text-base`...) étant en `rem`, ce changement s'applique uniformément à tout le texte du site public en un seul endroit, sans toucher chaque classe individuellement. N'affecte pas l'admin Filament, qui utilise son propre CSS compilé séparément.
+
+### 6. Marges latérales réduites
+
+`max-w-7xl` (1280px) élargi à `max-w-[96rem]` (1536px) sur les 8 endroits où ce conteneur se répète (header, footer, accueil, agenda, cinéma, annuaire, annonces, actualités) — laissait beaucoup d'espace inutilisé sur les grands écrans. `lg:px-8` réduit à `lg:px-6` au passage sur les mêmes conteneurs. Test : `HomepageTest::test_homepage_container_uses_the_widened_max_width`.

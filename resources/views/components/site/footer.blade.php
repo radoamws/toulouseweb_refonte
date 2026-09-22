@@ -7,7 +7,7 @@
     ];
 @endphp
 <footer class="mt-16 border-t border-ink-100 bg-ink-900 text-ink-200">
-    <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-[96rem] px-4 py-12 sm:px-6 lg:px-6">
         <div class="grid gap-10 md:grid-cols-4">
             <div>
                 @if ($siteSettings->logo_url)

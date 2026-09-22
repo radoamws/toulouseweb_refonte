@@ -113,6 +113,34 @@ class AgendaFrontRedesignTest extends TestCase
         $response->assertSee('background-color: color-mix(in srgb, #1d6fa5 15%, white); color: #1d6fa5;', false);
     }
 
+    /**
+     * Demande client, 23/09/2026 : "le fond blanc de chaque encadré ait la
+     * même couleur que la catégorie correspondante pour plus de mise en
+     * valeur" — jusqu'ici le fond de la carte restait `bg-white` quelle que
+     * soit sa catégorie (seuls la bordure gauche et le badge étaient
+     * colorés).
+     */
+    public function test_event_card_background_is_tinted_with_the_category_color(): void
+    {
+        $theatre = EventCategory::create(['name' => 'Théâtre Fond', 'slug' => 'theatre-fond', 'color' => '#3a9973']);
+        $event = Event::create(['title' => 'Pièce au fond teinté', 'slug' => 'piece-fond-teinte', 'status' => 'published', 'start_date' => now()->addDay()]);
+        $event->categories()->attach($theatre);
+
+        $response = $this->get('/agenda')->assertOk();
+
+        $response->assertSee('background-color: color-mix(in srgb, #3a9973 8%, white)', false);
+    }
+
+    /** Un événement SANS catégorie garde un fond blanc classique (pas de couleur à en tirer). */
+    public function test_event_card_without_a_category_keeps_a_plain_white_background(): void
+    {
+        Event::create(['title' => 'Sans catégorie', 'slug' => 'sans-categorie-fond', 'status' => 'published', 'start_date' => now()->addDay()]);
+
+        $html = $this->get('/agenda')->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression('/href="\/agenda\/sans-categorie-fond"[^>]*class="[^"]*bg-white/s', $html);
+    }
+
     public function test_area_filter_narrows_the_list(): void
     {
         $areaA = Area::create(['name' => 'Zénith de Toulouse', 'slug' => 'zenith-toulouse-redesign']);
@@ -158,5 +186,56 @@ class AgendaFrontRedesignTest extends TestCase
         $response->assertSee('onchange="this.form.submit()"', false);
         $response->assertSee('onkeydown="if (event.key === \'Enter\')', false);
         $response->assertSee('<select name="area" id="area" onchange="this.form.submit()"', false);
+    }
+
+    /**
+     * Demande client, 23/09/2026 : "permettre aussi dans la zone de
+     * recherche libre pour rechercher les catégories : 'escale' doit
+     * inclure [...] les encadrés de l'escale" — jusqu'ici la recherche ne
+     * portait que sur le titre de l'événement.
+     */
+    public function test_search_also_matches_the_venue_name(): void
+    {
+        $escale = Area::create(['name' => "L'Escale", 'slug' => 'lescale-search']);
+        $other = Area::create(['name' => 'Le Zénith', 'slug' => 'le-zenith-search']);
+
+        $atEscale = Event::create(['title' => 'Spectacle du soir', 'slug' => 'spectacle-du-soir-search', 'status' => 'published', 'area_id' => $escale->id, 'start_date' => now()->addDay()]);
+        $elsewhere = Event::create(['title' => 'Concert ailleurs', 'slug' => 'concert-ailleurs-search', 'status' => 'published', 'area_id' => $other->id, 'start_date' => now()->addDay()]);
+
+        $response = $this->get('/agenda?q=escale')->assertOk();
+
+        $response->assertSee('Spectacle du soir')->assertDontSee('Concert ailleurs');
+    }
+
+    public function test_search_also_matches_the_category_name(): void
+    {
+        $theatre = EventCategory::create(['name' => 'Théâtre Recherche', 'slug' => 'theatre-recherche', 'color' => '#3a9973']);
+        $sport = EventCategory::create(['name' => 'Sports Recherche', 'slug' => 'sports-recherche', 'color' => '#a63f23']);
+
+        $play = Event::create(['title' => 'Pièce sans le mot-clé', 'slug' => 'piece-sans-mot-cle', 'status' => 'published', 'start_date' => now()->addDay()]);
+        $play->categories()->attach($theatre);
+        $match = Event::create(['title' => 'Match sans le mot-clé', 'slug' => 'match-sans-mot-cle', 'status' => 'published', 'start_date' => now()->addDay()]);
+        $match->categories()->attach($sport);
+
+        $response = $this->get('/agenda?q=Théâtre+Recherche')->assertOk();
+
+        $response->assertSee('Pièce sans le mot-clé')->assertDontSee('Match sans le mot-clé');
+    }
+
+    /** La recherche élargie doit rester compatible avec le filtre catégorie déjà actif (combinaison AND, pas OR global). */
+    public function test_search_combines_with_the_active_category_filter(): void
+    {
+        $theatre = EventCategory::create(['name' => 'Théâtre Combiné', 'slug' => 'theatre-combine', 'color' => '#3a9973']);
+        $sport = EventCategory::create(['name' => 'Sports Combiné', 'slug' => 'sports-combine', 'color' => '#a63f23']);
+        $escale = Area::create(['name' => "L'Escale", 'slug' => 'lescale-combine']);
+
+        $matches = Event::create(['title' => 'Théâtre à L\'Escale', 'slug' => 'theatre-escale-combine', 'status' => 'published', 'area_id' => $escale->id, 'start_date' => now()->addDay()]);
+        $matches->categories()->attach($theatre);
+        $wrongCategory = Event::create(['title' => 'Sport à L\'Escale', 'slug' => 'sport-escale-combine', 'status' => 'published', 'area_id' => $escale->id, 'start_date' => now()->addDay()]);
+        $wrongCategory->categories()->attach($sport);
+
+        $response = $this->get('/agenda/'.$theatre->slug.'?q=escale')->assertOk();
+
+        $response->assertSee('Théâtre à L\'Escale')->assertDontSee('Sport à L\'Escale');
     }
 }

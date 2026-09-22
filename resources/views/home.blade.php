@@ -10,7 +10,12 @@
 
     <x-site.hero-slider :slides="$slides" />
 
-    <div class="mx-auto max-w-7xl space-y-16 px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+    {{-- Largeur/marges (demande client, 23/09/2026 : "réduire les marges
+    blancs à droite et gauche du site") — max-w-7xl (1280px) laissait
+    beaucoup d'espace inutilisé sur les grands écrans ; élargi à 96rem
+    (1536px), même changement appliqué partout où ce conteneur se répète
+    (header, footer, agenda/cinéma/annuaire/annonces/actualités). --}}
+    <div class="mx-auto max-w-[96rem] space-y-16 px-4 py-12 sm:px-6 lg:px-6 lg:py-16">
 
         {{-- Catégories importantes de l'annuaire --}}
         @if ($topCategories->isNotEmpty())

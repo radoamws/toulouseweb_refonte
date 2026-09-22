@@ -31,6 +31,15 @@ class HomepageTest extends TestCase
         $this->get('/')->assertOk()->assertSee('ToulouseWeb');
     }
 
+    /** Demande client, 23/09/2026 : "réduire les marges blancs à droite et gauche du site" — max-w-7xl (1280px) élargi à 96rem (1536px). */
+    public function test_homepage_container_uses_the_widened_max_width(): void
+    {
+        $response = $this->get('/')->assertOk();
+
+        $response->assertSee('max-w-[96rem]', false);
+        $response->assertDontSee('max-w-7xl', false);
+    }
+
     /** Section d'inscription newsletter (demande client, 12/09/2026) — voir tests/Feature/NewsletterTest.php pour le comportement du formulaire lui-même. */
     public function test_homepage_shows_the_newsletter_signup_form(): void
     {
@@ -197,6 +206,22 @@ class HomepageTest extends TestCase
 
         $response = $this->get('/')->assertOk();
         $response->assertSee('line-clamp-2', false);
+    }
+
+    /**
+     * Demande client, 23/09/2026 : "ce sont des brochures... ne doivent
+     * jamais couper les informations" — object-cover recadrait l'image
+     * pour remplir la boîte, ce qui pouvait couper du texte imprimé
+     * jusque dans les bords de l'affiche.
+     */
+    public function test_hero_slider_never_crops_the_image(): void
+    {
+        $slide = Slider::create(['title' => 'Brochure', 'image' => 'https://example.test/brochure.jpg', 'is_active' => true]);
+        $slide->placements()->create(['page' => 'home']);
+
+        $response = $this->get('/')->assertOk();
+        $response->assertSee('object-contain', false);
+        $response->assertDontSee('object-cover', false);
     }
 
     /** Flèches précédent/suivant du slider (demande client) — voir components/site/hero-slider.blade.php. */

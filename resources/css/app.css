@@ -50,3 +50,18 @@
 [x-cloak] {
     display: none !important;
 }
+
+/*
+ * Taille de police de base relevée (demande client, 23/09/2026 : "agrandir
+ * la police des texte sur tout le site complet car trop difficile à lire").
+ * Toutes les classes Tailwind (text-sm, text-base, text-lg...) sont en
+ * `rem`, donc relatives à cette valeur — la relever ici l'applique
+ * uniformément à TOUT le site public en un seul endroit, sans avoir à
+ * changer la classe de chaque texte individuellement. 112.5% = 18px (au
+ * lieu des 16px par défaut du navigateur) : n'affecte QUE le site public
+ * (Tailwind, ce fichier) — l'admin Filament utilise son propre CSS compilé
+ * séparément, jamais concerné.
+ */
+html {
+    font-size: 112.5%;
+}

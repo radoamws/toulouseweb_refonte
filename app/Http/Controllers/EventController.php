@@ -66,7 +66,20 @@ class EventController extends Controller
                 $q2->whereDate('end_date', '>=', $date)->orWhereNull('end_date');
             }))
             ->when(! $date, fn ($q) => $q->upcoming())
-            ->when($request->filled('q'), fn ($q) => $q->where('title', 'like', '%'.$request->string('q').'%'))
+            // Recherche élargie au lieu et à la catégorie (demande client,
+            // 23/09/2026 : "escale" doit remonter les événements DE L'Escale,
+            // pas seulement un titre contenant littéralement "escale") — pas
+            // seulement le titre. Groupé dans un where() imbriqué : un
+            // orWhereHas() posé directement à la racine casserait la
+            // combinaison AND avec les autres filtres (catégorie/lieu/date).
+            ->when($request->filled('q'), function ($q) use ($request) {
+                $term = '%'.$request->string('q').'%';
+                $q->where(function ($q2) use ($term) {
+                    $q2->where('title', 'like', $term)
+                        ->orWhereHas('area', fn ($q3) => $q3->where('name', 'like', $term))
+                        ->orWhereHas('categories', fn ($q3) => $q3->where('name', 'like', $term));
+                });
+            })
             ->orderBy('start_date')
             ->paginate(24)
             ->withQueryString();

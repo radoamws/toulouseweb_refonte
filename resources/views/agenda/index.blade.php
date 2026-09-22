@@ -1,5 +1,5 @@
 <x-layouts.app :seo="$seo">
-    <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-[96rem] px-4 py-10 sm:px-6 lg:px-6">
         <x-ui.breadcrumb :items="$category
             ? [['label' => 'Agenda', 'href' => '/agenda'], ['label' => $category->name]]
             : [['label' => 'Agenda']]" />
@@ -103,14 +103,26 @@
                     <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
                         @foreach ($events as $event)
                             @php $eventCategory = $event->categories->first(); @endphp
-                            {{-- Bordure gauche colorée + point de couleur (demande
-                            client, 18/09/2026) : identifie la rubrique d'un coup
-                            d'œil, cohérent avec la couleur des pastilles ci-dessus. --}}
+                            {{-- Fond de l'encadré teinté de la couleur de la
+                            catégorie (demande client, 23/09/2026 : "le fond
+                            [...] de chaque encadré ait la même couleur que
+                            la catégorie correspondante pour plus de mise en
+                            valeur") — même formule color-mix que le badge
+                            (juste plus légère, 8% au lieu de 15%, vu la
+                            surface bien plus grande d'un fond de carte
+                            entière : le texte reste lisible quelle que soit
+                            la couleur). Bordure gauche + point de couleur
+                            déjà en place (18/09/2026) conservés. --}}
                             <a
                                 href="/agenda/{{ $event->slug }}"
                                 data-track="event:{{ $event->id }}:agenda_listing"
-                                class="group flex flex-col overflow-hidden rounded-2xl border border-l-4 border-ink-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                                @style(["border-left-color: {$eventCategory?->color}" => $eventCategory])
+                                @class([
+                                    'group flex flex-col overflow-hidden rounded-2xl border border-l-4 border-ink-100 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
+                                    'bg-white' => ! $eventCategory,
+                                ])
+                                @style([
+                                    "border-left-color: {$eventCategory?->color}; background-color: color-mix(in srgb, {$eventCategory?->color} 8%, white);" => $eventCategory,
+                                ])
                             >
                                 <div class="aspect-[4/3] w-full overflow-hidden bg-ink-100">
                                     @if ($event->image_url)

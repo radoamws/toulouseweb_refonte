@@ -1,5 +1,5 @@
 <x-layouts.app :seo="$seo">
-    <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-[96rem] px-4 py-10 sm:px-6 lg:px-6">
         <x-ui.breadcrumb :items="$category
             ? [['label' => 'Annonces', 'href' => '/annonces'], ['label' => $category->name]]
             : [['label' => 'Annonces']]" />

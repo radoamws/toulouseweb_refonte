@@ -37,7 +37,7 @@
     ];
 @endphp
 <header x-data="{ mobileOpen: false, annuaireOpen: false, publishOpen: false }" class="sticky top-0 z-40 border-b border-ink-100 bg-white/95 backdrop-blur">
-    <div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto flex h-16 max-w-[96rem] items-center justify-between gap-4 px-4 sm:px-6 lg:px-6">
         <a href="{{ url('/') }}" class="flex shrink-0 items-stretch self-stretch gap-2 font-heading text-xl font-bold text-brand-600">
             @if ($siteSettings->logo_url)
                 {{-- Logo réel ToulouseWeb : texte blanc sur fond transparent

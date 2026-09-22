@@ -41,12 +41,23 @@
                 class="absolute inset-0 block"
                 aria-label="{{ $slide->title }}"
             >
+                {{-- object-contain, PAS object-cover (demande client,
+                23/09/2026 : "ce sont des brochures... ne doivent jamais
+                couper les informations") : ces visuels sont des affiches
+                administrées avec du texte/des informations imprimées
+                jusque dans les bords — object-cover recadrait l'image pour
+                remplir la boîte, coupant potentiellement ce contenu.
+                object-contain affiche l'image entière, quitte à laisser
+                apparaître le fond (bg-ink-900) sur les côtés si le ratio ne
+                correspond pas exactement à la boîte. Opacité retirée pour
+                la même raison (ne plus assombrir l'affiche elle-même) — le
+                dégradé ci-dessous suffit à garder la légende lisible. --}}
                 <img
                     src="{{ $slide->image_url }}"
                     alt="{{ $slide->title }}"
                     loading="{{ $i === 0 ? 'eager' : 'lazy' }}"
                     fetchpriority="{{ $i === 0 ? 'high' : 'auto' }}"
-                    class="h-full w-full object-cover opacity-80"
+                    class="h-full w-full object-contain"
                 >
                 <div class="absolute inset-0 bg-gradient-to-t from-ink-900/80 via-ink-900/10 to-transparent"></div>
                 {{-- Légende bornée (bug réel corrigé, 22/09/2026) : un titre

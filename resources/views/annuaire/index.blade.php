@@ -1,5 +1,5 @@
 <x-layouts.app :seo="$seo">
-    <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-[96rem] px-4 py-10 sm:px-6 lg:px-6">
         @php
             // Fil d'ariane complet (demande client, 19/09/2026) : jusqu'ici
             // limité à "Annuaire > {catégorie}" même pour une sous-rubrique à
