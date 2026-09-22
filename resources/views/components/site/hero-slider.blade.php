@@ -21,7 +21,13 @@
     aria-roledescription="carrousel"
     aria-label="Mises en avant ToulouseWeb"
 >
-    <div class="relative h-[320px] sm:h-[420px] lg:h-[480px]">
+    {{-- Bandeau responsive (bug réel corrigé, 22/09/2026, demande client :
+    "tronqué sur certaine résolution") : un palier md: manquant faisait
+    sauter la hauteur directement de 320px (mobile) à 480px (desktop, à
+    partir de 1024px) — tout ce qui est entre les deux (tablette, petit
+    laptop) héritait de la hauteur mobile, trop courte pour l'image et le
+    texte à cette largeur. --}}
+    <div class="relative h-[320px] sm:h-[380px] md:h-[420px] lg:h-[480px]">
         @foreach ($slides as $i => $slide)
             <a
                 href="{{ $slide->link_url ?? '#' }}"
@@ -43,10 +49,18 @@
                     class="h-full w-full object-cover opacity-80"
                 >
                 <div class="absolute inset-0 bg-gradient-to-t from-ink-900/80 via-ink-900/10 to-transparent"></div>
-                <div class="absolute inset-x-0 bottom-0 p-6 sm:p-10">
-                    <p class="font-heading text-xl font-bold text-white sm:text-3xl">{{ $slide->title }}</p>
+                {{-- Légende bornée (bug réel corrigé, 22/09/2026) : un titre
+                admin long n'avait ni limite de lignes ni troncature — ancré
+                en bas d'une boîte à hauteur fixe et coupée par
+                overflow-hidden (voir <section> ci-dessus), il pouvait
+                déborder par le HAUT et donner l'impression que le bandeau
+                est "tronqué" sur les résolutions où la boîte est la plus
+                courte (mobile). `line-clamp` garantit une hauteur de légende
+                prévisible quelle que soit la longueur du texte saisi. --}}
+                <div class="absolute inset-x-0 bottom-0 max-h-full overflow-hidden p-4 sm:p-6 lg:p-10">
+                    <p class="font-heading text-lg font-bold leading-tight text-white line-clamp-2 sm:text-2xl lg:text-3xl">{{ $slide->title }}</p>
                     @if ($slide->client_name)
-                        <p class="mt-1 text-sm text-white/80">{{ $slide->client_name }}</p>
+                        <p class="mt-1 truncate text-sm text-white/80">{{ $slide->client_name }}</p>
                     @endif
                 </div>
             </a>

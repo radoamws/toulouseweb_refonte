@@ -77,6 +77,55 @@ class DedupeManualAgendaEntriesTest extends TestCase
         $this->assertNotSoftDeleted($manual);
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (22/09/2026, capture client) : le
+     * scraper de L'Escale (Ardei-Soft/VEL) ajoute parfois un suffixe au
+     * titre ("- (Hors-les-murs)") — une correspondance de titre EXACTE
+     * ratait ces doublons. Le titre manuel doit désormais seulement être un
+     * PRÉFIXE du titre scrapé.
+     */
+    public function test_manual_entry_is_deleted_when_scraped_title_has_a_suffix(): void
+    {
+        $area = Area::create(['name' => "L'Escale", 'slug' => 'lescale-dedupe']);
+
+        $manual = Event::create([
+            'title' => 'Camera Obscura', 'slug' => 'camera-obscura-manual',
+            'area_id' => $area->id, 'status' => 'published', 'source' => 'manual',
+            'start_date' => '2026-10-03 00:00:00',
+        ]);
+        $scraped = Event::create([
+            'title' => 'Camera Obscura - (Hors-les-murs)', 'slug' => 'camera-obscura-scraped',
+            'area_id' => $area->id, 'status' => 'published', 'source' => 'scraped',
+            'external_ref' => 'Camera Obscura', 'start_date' => '2026-10-03 14:30:00',
+        ]);
+
+        Artisan::call('content:dedupe-agenda-manual-entries');
+
+        $this->assertSoftDeleted($manual);
+        $this->assertNotSoftDeleted($scraped);
+    }
+
+    /** Le scraped title doit COMMENCER par le titre manuel, pas juste le contenir n'importe où. */
+    public function test_manual_entry_is_not_deleted_when_title_is_only_a_substring_not_a_prefix(): void
+    {
+        $area = Area::create(['name' => 'Salle Test', 'slug' => 'salle-test-substring']);
+
+        $manual = Event::create([
+            'title' => 'Obscura', 'slug' => 'obscura-manual',
+            'area_id' => $area->id, 'status' => 'published', 'source' => 'manual',
+            'start_date' => '2026-10-03 00:00:00',
+        ]);
+        Event::create([
+            'title' => 'Camera Obscura', 'slug' => 'camera-obscura-scraped-2',
+            'area_id' => $area->id, 'status' => 'published', 'source' => 'scraped',
+            'external_ref' => 'camera-obscura-2', 'start_date' => '2026-10-03 14:30:00',
+        ]);
+
+        Artisan::call('content:dedupe-agenda-manual-entries');
+
+        $this->assertNotSoftDeleted($manual);
+    }
+
     public function test_dry_run_reports_but_does_not_delete(): void
     {
         $area = Area::create(['name' => 'Le Bijou', 'slug' => 'le-bijou-dry-run']);

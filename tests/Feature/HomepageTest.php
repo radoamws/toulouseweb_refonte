@@ -182,6 +182,23 @@ class HomepageTest extends TestCase
         $this->get('/')->assertOk()->assertSee($news->fresh()->event_date_range);
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (22/09/2026, demande client : "le
+     * bandeau carousel dans l'en-tête est tronqué sur certaine résolution") :
+     * un titre de slide long, ancré en bas d'une boîte à hauteur fixe et
+     * coupée par overflow-hidden, débordait par le HAUT sans aucune limite
+     * de lignes — surtout visible sur la hauteur mobile (la plus courte).
+     * `line-clamp-2` garantit une hauteur de légende prévisible.
+     */
+    public function test_hero_slider_caption_is_clamped_to_prevent_overflow(): void
+    {
+        $slide = Slider::create(['title' => 'Un titre de slide vraiment très long qui pourrait déborder de la boîte du bandeau sur mobile', 'image' => 'https://example.test/img.jpg', 'is_active' => true]);
+        $slide->placements()->create(['page' => 'home']);
+
+        $response = $this->get('/')->assertOk();
+        $response->assertSee('line-clamp-2', false);
+    }
+
     /** Flèches précédent/suivant du slider (demande client) — voir components/site/hero-slider.blade.php. */
     public function test_slider_shows_chevron_arrows_only_with_multiple_slides(): void
     {

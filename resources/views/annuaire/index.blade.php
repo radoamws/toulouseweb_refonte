@@ -75,9 +75,15 @@
                     </form>
                 </div>
 
-                @if ($category?->description)
-                    <p class="mt-4 max-w-3xl text-ink-600">{{ $category->description }}</p>
-                @endif
+                {{-- `$category->description` (demande client, 22/09/2026 :
+                "cacher les descriptions longues entre le titre de la
+                catégorie et le sous-menu") volontairement PAS affichée ici :
+                c'est du texte de bourrage de mots-clés SEO hérité du legacy
+                (ex. "a emporter toulouse, a emporter, toulouse a emporter,
+                emporter toulouse..."), jamais pensé pour être lu par un
+                visiteur. Le champ reste utilisé tel quel pour le <meta
+                name="description"> (voir SeoResolverService::generateDescription()),
+                seul son affichage en corps de page est retiré ici. --}}
 
                 {{-- Sous-rubriques (demande client, 19/09/2026) — ex.
                 Restaurants : Restaurant spectacle, Guinguettes,

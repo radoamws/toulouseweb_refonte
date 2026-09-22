@@ -97,6 +97,22 @@ class AgendaFrontRedesignTest extends TestCase
         $response->assertSee('border-left-color: #3a9973', false);
     }
 
+    /**
+     * Demande client, 22/09/2026 : "le menu des agenda doivent avoir des
+     * couleurs de fond comme les pastilles dans les encadrés" — le fond
+     * teinté (color-mix) n'était jusqu'ici QUE sur le badge des fiches
+     * événement, pas sur les pastilles du menu (qui n'avaient qu'un petit
+     * point de couleur + une bordure).
+     */
+    public function test_category_menu_pill_has_a_tinted_background_like_the_card_badge(): void
+    {
+        EventCategory::create(['name' => 'Exposition', 'slug' => 'exposition-fond', 'color' => '#1d6fa5']);
+
+        $response = $this->get('/agenda')->assertOk();
+
+        $response->assertSee('background-color: color-mix(in srgb, #1d6fa5 15%, white); color: #1d6fa5;', false);
+    }
+
     public function test_area_filter_narrows_the_list(): void
     {
         $areaA = Area::create(['name' => 'Zénith de Toulouse', 'slug' => 'zenith-toulouse-redesign']);
@@ -122,5 +138,25 @@ class AgendaFrontRedesignTest extends TestCase
         $response = $this->get('/agenda')->assertOk();
 
         $response->assertDontSee('Lieu Sans Événement');
+    }
+
+    /**
+     * Demande client, 22/09/2026 : "faire une recherche par on-change +
+     * appui sur entrée et non avec un bouton Filtrer. Faire en on-change
+     * aussi le filtre par Lieu" — le formulaire se soumet désormais tout
+     * seul, plus de bouton "Filtrer" visible.
+     */
+    public function test_search_and_area_filter_submit_automatically_without_a_filter_button(): void
+    {
+        $area = Area::create(['name' => 'Zénith Auto Submit', 'slug' => 'zenith-auto-submit']);
+        Event::create(['title' => 'Concert test', 'slug' => 'concert-test-auto', 'status' => 'published', 'area_id' => $area->id, 'start_date' => now()->addDay()]);
+
+        $response = $this->get('/agenda')->assertOk();
+
+        $response->assertDontSeeText('Filtrer');
+        $response->assertSee('id="q"', false);
+        $response->assertSee('onchange="this.form.submit()"', false);
+        $response->assertSee('onkeydown="if (event.key === \'Enter\')', false);
+        $response->assertSee('<select name="area" id="area" onchange="this.form.submit()"', false);
     }
 }

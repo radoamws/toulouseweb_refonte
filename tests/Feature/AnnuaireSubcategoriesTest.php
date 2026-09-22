@@ -102,4 +102,33 @@ class AnnuaireSubcategoriesTest extends TestCase
 
         $this->get('/annuaire/'.$sports->slug)->assertOk()->assertDontSee('annuaire_subcategory');
     }
+
+    /**
+     * Demande client, 22/09/2026 : "cacher les descriptions longues entre le
+     * titre de la catégorie et le sous-menu" — capture montrant du texte de
+     * bourrage de mots-clés SEO ("a emporter toulouse, a emporter, toulouse
+     * a emporter...") affiché en pleine page sur /annuaire/a-emporter. Le
+     * champ reste utilisé pour le <meta name="description"> (SeoResolverService),
+     * seul l'affichage visible en corps de page est retiré.
+     */
+    public function test_category_description_is_not_displayed_on_the_page_but_still_feeds_seo_meta(): void
+    {
+        $category = Category::create([
+            'name' => 'A emporter', 'slug' => 'a-emporter-desc',
+            'description' => 'a emporter toulouse, a emporter, toulouse a emporter, emporter toulouse',
+        ]);
+
+        $html = $this->get('/annuaire/'.$category->slug)->assertOk()->getContent();
+
+        // Toujours dans le <meta name="description"> (SEO)...
+        $this->assertStringContainsString(
+            '<meta name="description" content="a emporter toulouse, a emporter, toulouse a emporter, emporter toulouse">',
+            $html
+        );
+        // ...mais plus dans un <p> visible du corps de page (l'ancien rendu).
+        $this->assertStringNotContainsString(
+            '<p class="mt-4 max-w-3xl text-ink-600">a emporter toulouse',
+            $html
+        );
+    }
 }

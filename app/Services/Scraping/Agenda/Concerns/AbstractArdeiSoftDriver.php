@@ -133,7 +133,7 @@ abstract class AbstractArdeiSoftDriver implements ScraperDriver
                 array_filter([
                     'area_id' => $area->id,
                     'title' => $title,
-                    'description' => $spectacle['txt'] ?? null,
+                    'description' => $this->cleanRichText($spectacle['txt'] ?? null),
                     'price' => $price,
                     'schedule' => $this->computeSchedule($spectacle),
                     'image' => "https://www.ardei-soft.com/{$town}/img/{$spectacle['fmm1']}",
@@ -154,6 +154,36 @@ abstract class AbstractArdeiSoftDriver implements ScraperDriver
         }
 
         return $stats;
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (22/09/2026, capture client) : `txt`
+     * renvoyé par l'API VEL est du HTML BRUT (`<div>`, `<b>`, `<font>`...),
+     * jamais nettoyé jusqu'ici — stocké tel quel dans `description`, puis
+     * affiché via `{{ }}` (échappement Blade) côté public : les balises
+     * s'affichaient donc littéralement en texte visible ("<div><br></div>...")
+     * au lieu d'un texte lisible. Convertit les sauts de bloc/ligne en retours
+     * à la ligne AVANT de retirer les balises (sinon tout le texte se
+     * retrouve collé sur une seule ligne), puis décode les entités HTML
+     * restantes (`&eacute;`...). Résultat : texte brut propre, cohérent avec
+     * le reste du site où `description` n'est jamais du HTML de confiance
+     * (voir aussi TheatreDeLaCiteDriver/GaronneDriver, qui utilisent
+     * DomCrawler::text() — intrinsèquement sûr, cette API JSON ne passe pas
+     * par DomCrawler).
+     */
+    protected function cleanRichText(?string $html): ?string
+    {
+        if (! $html) {
+            return null;
+        }
+
+        $text = preg_replace('#<(br|/div|/p|/li)\s*/?>#i', "\n", $html);
+        $text = strip_tags($text);
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/[ \t]+/u', ' ', $text);
+        $text = preg_replace('/\n{3,}/u', "\n\n", trim($text));
+
+        return $text !== '' ? $text : null;
     }
 
     /** @param array{0?:int,1?:int,2?:int,3?:int,4?:int}|null $parts [année, mois, jour, heure, minute] */

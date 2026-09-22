@@ -4,7 +4,9 @@
     // (`$startsAt->dayOfWeek`) et par `ScreeningsRelationManager::WEEKDAYS`
     // dans l'admin — voir le correctif du 01/09/2026 documenté dans
     // resources/views/cinema/movie.blade.php et TECHNICAL_DOCUMENTATION.md.
-    $weekdays = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+    // Le tableau des jours vit désormais dans
+    // resources/views/components/cinema/screening-time.blade.php (partagé
+    // avec cinema/movie.blade.php).
 
     // ⚠️ Bug réel trouvé et corrigé (08/09/2026, audit SEO final,
     // TECHNICAL_DOCUMENTATION.md §24) : `external_url` n'est pas une URL
@@ -64,25 +66,14 @@
                             <div class="sm:order-1 sm:flex-1">
                                 @foreach ($screenings as $screening)
                                     <div class="flex flex-wrap gap-2 text-sm">
+                                        {{-- Horaire cliquable vers la réservation sur le vrai site source
+                                        (demande client — "2e scraping" du legacy, autoUpdateCinemaAllocineLiens/Liens2,
+                                        voir docblock d'AllocineDriver::extractBookingUrl()) quand un lien a
+                                        été capturé ET que la séance a encore une occurrence future
+                                        (demande client, 22/09/2026 — voir x-cinema.screening-time) ;
+                                        simple badge non cliquable sinon. --}}
                                         @foreach ($screening->times as $time)
-                                            {{-- Horaire cliquable vers la réservation sur le vrai site source
-                                            (demande client — "2e scraping" du legacy, autoUpdateCinemaAllocineLiens/Liens2,
-                                            voir docblock d'AllocineDriver::extractBookingUrl()) quand un lien a
-                                            été capturé ; simple badge non cliquable sinon. --}}
-                                            @if ($time->booking_url)
-                                                <a
-                                                    href="{{ $time->booking_url }}"
-                                                    target="_blank"
-                                                    rel="noopener"
-                                                    data-track="screening_time:{{ $time->id }}:cinema_booking_click"
-                                                    title="Réserver — {{ $weekdays[$time->weekday] ?? '' }}"
-                                                    class="rounded-lg bg-ink-50 px-2 py-1 text-ink-700 underline decoration-dotted underline-offset-2 transition hover:bg-brand-50 hover:text-brand-700"
-                                                >{{ $weekdays[$time->weekday] ?? '' }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}</a>
-                                            @else
-                                                <span class="rounded-lg bg-ink-50 px-2 py-1 text-ink-700">
-                                                    {{ $weekdays[$time->weekday] ?? '' }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}
-                                                </span>
-                                            @endif
+                                            <x-cinema.screening-time :screening="$screening" :time="$time" />
                                         @endforeach
                                     </div>
                                 @endforeach

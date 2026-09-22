@@ -1781,3 +1781,35 @@ Demande client : clés reCAPTCHA ajoutées en local, "à mettre en place [...] p
 ⚠️ **2e piège trouvé en corrigeant le premier** : dès que le client a ajouté de VRAIES clés dans son `.env` LOCAL (pas encore en `phpunit.xml`), 21 tests ont commencé à échouer d'un coup partout dans la suite (annonces, agenda, actualités...) — `phpunit.xml` ne bloquait explicitement QUE `CLOUDFLARE_CACHE_PURGE_ENABLED`/`GOOGLE_INDEXING_ENABLED`, pas reCAPTCHA, donc les tests héritaient silencieusement de la vraie config locale dès qu'elle existait. Fix : `RECAPTCHA_SITE_KEY`/`RECAPTCHA_SECRET_KEY` vides explicitement ajoutées à `phpunit.xml`, même garde-fou que pour Cloudflare/Google Indexing (documenté juste au-dessus dans le même fichier) — garantit un comportement fail-open dans toute la suite quelle que soit la config locale, sauf dans `RecaptchaTest` qui configure explicitement une clé pour ses propres cas.
 
 Tests : `tests/Feature/RecaptchaTest.php` (12 tests — no-op sans configuration, jeton manquant, **champ entièrement absent de la requête** (le vrai bug), score haut/bas, action différente, échec Google, panne réseau, intégration bout-en-bout sur `/contact` dans les 2 sens).
+
+## 52. 6 corrections front (22/09/2026, demande client, 4 captures)
+
+### 1. Bandeau carousel tronqué sur certaines résolutions
+
+`resources/views/components/site/hero-slider.blade.php` — deux causes cumulées : (a) hauteur fixe en px avec un seul palier entre mobile (320px) et desktop (1024px, 480px) — rien entre les deux, ajout d'un palier `md:` (420px) ; (b) surtout, la légende (titre + nom client) ancrée en bas de boîte n'avait NI limite de lignes NI troncature — un titre admin long débordait par le haut d'une boîte à hauteur fixe coupée par `overflow-hidden`, visible surtout sur la hauteur la plus courte (mobile). Fix : `line-clamp-2` sur le titre, `truncate` sur le nom client, padding réduit sur mobile. Test : `tests/Feature/HomepageTest.php::test_hero_slider_caption_is_clamped_to_prevent_overflow`.
+
+### 2. Pastilles du menu agenda sans fond coloré
+
+`resources/views/agenda/index.blade.php` — le fond teinté (`color-mix(in srgb, {couleur} 15%, white)`) n'existait jusqu'ici QUE sur le badge de chaque fiche événement ; les pastilles du menu n'avaient qu'un petit point de couleur + une bordure. Même formule appliquée aux pastilles du menu (état inactif — l'état actif reste en fond plein comme avant). Test : `AgendaFrontRedesignTest::test_category_menu_pill_has_a_tinted_background_like_the_card_badge`.
+
+### 3. Recherche agenda instantanée (plus de bouton "Filtrer")
+
+Même fichier — `onchange="this.form.submit()"` sur le champ texte ET le `<select>` Lieu, `onkeydown` pour la touche Entrée sur le texte. Bouton "Filtrer" retiré (pas de CSP en place empêchant les attributs `onchange`/`onkeydown` inline — vérifié dans `SecurityHeaders`). Test : `AgendaFrontRedesignTest::test_search_and_area_filter_submit_automatically_without_a_filter_button`.
+
+### 4. Doublons d'agenda + HTML brut affiché en texte
+
+Deux bugs distincts trouvés en creusant la capture ("Camera Obscura" / "Camera Obscura - (Hors-les-murs)", tags `<div>` visibles en texte) :
+
+- **HTML brut non nettoyé** — `AbstractArdeiSoftDriver` (base commune à `EscaleDriver`/`ArdeiDriver`) stockait `$spectacle['txt']` (champ riche de l'API VEL) tel quel dans `description` — jamais un problème pour les AUTRES drivers agenda, qui utilisent tous `DomCrawler::text()` (extraction de texte intrinsèquement sûre), mais cette API JSON ne passe pas par DomCrawler. Affiché ensuite via `{{ }}` (échappement Blade côté `agenda/show.blade.php`, déjà correct/sûr) : les balises s'affichaient donc littéralement en texte visible ("<div><br></div>..."). Nouvelle méthode `cleanRichText()` : convertit les frontières de bloc (`<br>`, `</div>`, `</p>`, `</li>`) en retours à la ligne AVANT de retirer les balises, puis décode les entités HTML restantes. 72 événements de L'Escale + 18 d'Aria concernés en production — un ré-scraping (`updateOrCreate` sur le même `external_ref`) corrige automatiquement les descriptions déjà en base.
+- **Doublons manuel/scrapé ratés par correspondance exacte** — `content:dedupe-agenda-manual-entries` (créée le 19/09) ne détectait QUE les titres identiques ; le scraper de L'Escale ajoute parfois un suffixe ("- (Hors-les-murs)") ou tronque différemment. Élargi à une correspondance par PRÉFIXE (`LIKE '{titre}%'`, métacaractères LIKE échappés).
+- **Doublons scrapé/scrapé, nouveau cas** — trouvé en creusant "partout" : sur "Toulouse Métropole" (agrégateur OpenAgenda), un même événement est parfois posté plusieurs fois par l'organisateur sous des slugs différents (ex. `cafe-lire-le-petit-cercle-litteraire` ET `...-2972161`) — 16 groupes / 18 lignes en trop en production. Nouvelle commande `content:dedupe-duplicate-events` : regroupe par (titre, lieu, jour), conserve la ligne avec le `external_ref` le plus court (heuristique : le slug "canonique" sans suffixe numérique), supprime le reste.
+
+Tests : `tests/Feature/Agenda/EscaleScraperTest.php` (+1, nettoyage HTML), `tests/Feature/DedupeManualAgendaEntriesTest.php` (+2, correspondance par préfixe), `tests/Feature/DedupeDuplicateEventsTest.php` (nouveau, 6 tests).
+
+### 5. Liens de réservation cinéma désactivés pour les horaires sans occurrence future
+
+`ScreeningTime.weekday` est un jour RÉCURRENT (0-6), pas une date calendaire — "passé" ne peut donc pas se déduire d'une simple comparaison de date, il faut calculer la PROCHAINE occurrence de ce jour et vérifier si elle tombe encore dans la fenêtre de la `Screening` (`end_date`). Nouveau composant partagé `x-cinema.screening-time` (`resources/views/components/cinema/screening-time.blade.php`), utilisé par `cinema/movie.blade.php` ET `cinema/salle.blade.php` (logique dupliquée avant, une seule source maintenant) : lien actif tant qu'une occurrence future existe dans la fenêtre, sinon simple badge non cliquable (grisé). Un horaire déjà passé CETTE semaine mais qui revient la semaine prochaine (toujours dans la fenêtre) reste actif — seule compte la fin de fenêtre, pas l'heure exacte du jour même. Tests : `tests/Feature/CinemaPastScreeningLinksTest.php` (5 tests).
+
+### 6. Description de catégorie annuaire cachée
+
+`annuaire/index.blade.php` affichait `$category->description` en pleine page entre le H1 et les pastilles de sous-catégories — un champ qui contient en réalité du bourrage de mots-clés SEO hérité du legacy (ex. "a emporter toulouse, a emporter, toulouse a emporter..."), jamais pensé pour être lu par un visiteur. Retiré de l'affichage ; le champ reste utilisé tel quel pour le `<meta name="description">` (`SeoResolverService::generateDescription()`), qui en a besoin. Test : `AnnuaireSubcategoriesTest::test_category_description_is_not_displayed_on_the_page_but_still_feeds_seo_meta`.

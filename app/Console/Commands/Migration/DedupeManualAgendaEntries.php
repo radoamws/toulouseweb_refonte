@@ -25,10 +25,21 @@ use Illuminate\Console\Command;
  * Critère volontairement CONSERVATEUR pour ne jamais supprimer un
  * événement manuel légitime (créé à la main dans l'admin pour un lieu SANS
  * scraper) : une ligne `external_ref IS NULL` n'est supprimée QUE s'il
- * existe une AUTRE ligne (même titre, même lieu, même JOUR — pas la même
- * heure, volontairement, vu l'écart minuit/heure réelle ci-dessus) avec un
+ * existe une AUTRE ligne (même lieu, même JOUR — pas la même heure,
+ * volontairement, vu l'écart minuit/heure réelle ci-dessus) avec un
  * `external_ref` renseigné. Sans ce jumeau scrapé, la ligne manuelle est
  * laissée intacte, quelle que soit sa date.
+ *
+ * ⚠️ Élargi (22/09/2026, capture client — nouveaux doublons trouvés type
+ * "Camera Obscura" / "Camera Obscura - (Hors-les-murs)") : le titre scrapé
+ * PAR L'ESCALE (plateforme Ardei-Soft/VEL) ajoute parfois un suffixe au nom
+ * de base ("- (Hors-les-murs)", un même intitulé générique tronqué...) —
+ * une correspondance EXACTE de titre ratait donc ces paires. Le titre
+ * manuel doit désormais seulement être un PRÉFIXE du titre scrapé (même
+ * lieu/jour) — sûr en pratique : deux événements RÉELLEMENT différents
+ * dans le MÊME lieu le MÊME jour, dont l'un est un préfixe exact de
+ * l'autre, n'a jamais été observé, contrairement au cas générique
+ * "même titre".
  */
 class DedupeManualAgendaEntries extends Command
 {
@@ -59,9 +70,15 @@ class DedupeManualAgendaEntries extends Command
                     continue;
                 }
 
+                // LIKE "{titre}%" — le titre manuel doit être un PRÉFIXE du
+                // titre scrapé (voir docblock de classe) ; on échappe les
+                // métacaractères LIKE (%, _) au cas où le titre manuel en
+                // contienne littéralement.
+                $titlePrefix = addcslashes($manual->title, '%_');
+
                 $hasScrapedTwin = Event::query()
                     ->whereNotNull('external_ref')
-                    ->where('title', $manual->title)
+                    ->where('title', 'like', "{$titlePrefix}%")
                     ->where('area_id', $manual->area_id)
                     ->whereDate('start_date', $manual->start_date->toDateString())
                     ->where('id', '!=', $manual->id)

@@ -72,6 +72,46 @@ class EscaleScraperTest extends TestCase
         $this->assertSame(1, $run->items_created);
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (22/09/2026, capture client) : `txt`
+     * renvoyé par l'API VEL est du HTML brut — stocké tel quel jusqu'ici,
+     * les balises s'affichaient littéralement en texte visible côté public
+     * ("<div><br></div>..."). Voir AbstractArdeiSoftDriver::cleanRichText().
+     */
+    public function test_html_in_txt_field_is_cleaned_to_plain_text(): void
+    {
+        Area::create(['name' => "L'Escale", 'slug' => 'lescale-2', 'legacy_id' => 3563]);
+        EventCategory::create(['name' => 'Spectacles', 'slug' => 'spectacles', 'legacy_id' => 7]);
+
+        $source = ScraperSource::create([
+            'name' => "L'Escale (Tournefeuille)",
+            'type' => 'agenda',
+            'driver_class' => EscaleDriver::class,
+            'config' => ['town_slug' => 'tournefeuille', 'area_slug' => 'lescale-2', 'tarifs_group' => 3],
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'www.ardei-soft.com/tournefeuille/SenousritPGI*' => Http::response([
+                'spectacles' => [[
+                    's' => 'camera-obscura',
+                    'txt' => '<div><br></div><div><b>Tarifs : D</b></div><div><b>tarif plein</b> 16&euro; </div>',
+                    'fmm1' => 'camera-obscura.jpg',
+                    'dateD' => [2026, 10, 3, 14, 30],
+                ]],
+            ]),
+        ]);
+
+        $this->artisan('scrape:events', ['--source' => $source->id])->run();
+
+        $event = Event::where('external_ref', 'camera-obscura')->first();
+        $this->assertNotNull($event);
+        $this->assertStringNotContainsString('<div>', $event->description);
+        $this->assertStringNotContainsString('<b>', $event->description);
+        $this->assertStringContainsString('Tarifs : D', $event->description);
+        $this->assertStringContainsString('tarif plein 16€', $event->description);
+    }
+
     public function test_entries_without_visual_are_skipped(): void
     {
         Area::create(['name' => "L'Escale", 'slug' => 'lescale-2', 'legacy_id' => 3563]);

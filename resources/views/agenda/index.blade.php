@@ -15,10 +15,12 @@
 
         {{-- Catégories — chaque rubrique a sa propre couleur (demande client,
         18/09/2026), reprise sur les fiches ci-dessous pour les distinguer
-        d'un coup d'œil. Couleur portée par un point + une bordure à l'état
-        actif, jamais par tout le fond du bouton (texte toujours lisible,
-        quelle que soit la couleur — certaines catégories ont des couleurs
-        très claires). --}}
+        d'un coup d'œil. Fond teinté (color-mix 15%, même formule que le
+        badge des fiches) sur CHAQUE pastille, pas seulement à l'état actif
+        (demande client, 22/09/2026 — "le menu doit avoir des couleurs de
+        fond comme les pastilles dans les encadrés") : texte toujours dans
+        la couleur de la catégorie (jamais blanc sur fond clair), reste donc
+        lisible quelle que soit la teinte. --}}
         @php
             // `category` est un SEGMENT de route (/agenda/{slug}), pas un
             // paramètre de requête — impossible d'utiliser fullUrlWithQuery()
@@ -33,16 +35,13 @@
                 class="rounded-full border px-3 py-1.5 text-sm font-medium {{ ! $category ? 'border-brand-600 bg-brand-600 text-white' : 'border-ink-200 bg-white text-ink-700 hover:bg-ink-50' }}"
             >Toutes</a>
             @foreach ($categories as $cat)
+                @php $catIsActive = $category?->id === $cat->id; @endphp
                 <a
                     href="/agenda/{{ $cat->slug }}{{ $preservedQuery ? '?'.$preservedQuery : '' }}"
-                    class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition
-                        {{ $category?->id === $cat->id ? 'text-white' : 'border-ink-200 bg-white text-ink-700 hover:bg-ink-50' }}"
-                    @style([
-                        "border-color: {$cat->color}",
-                        "background-color: {$cat->color}" => $category?->id === $cat->id,
-                    ])
+                    class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition {{ $catIsActive ? 'text-white' : '' }}"
+                    style="border-color: {{ $cat->color }}; {{ $catIsActive ? "background-color: {$cat->color};" : "background-color: color-mix(in srgb, {$cat->color} 15%, white); color: {$cat->color};" }}"
                 >
-                    <span class="h-2 w-2 shrink-0 rounded-full {{ $category?->id === $cat->id ? 'bg-white/80' : '' }}" @style(["background-color: {$cat->color}" => $category?->id !== $cat->id])></span>
+                    <span class="h-2 w-2 shrink-0 rounded-full {{ $catIsActive ? 'bg-white/80' : '' }}" @style(["background-color: {$cat->color}" => ! $catIsActive])></span>
                     {{ $cat->name }}
                 </a>
             @endforeach
@@ -55,11 +54,17 @@
             <aside class="space-y-4 lg:sticky lg:top-4 lg:self-start">
                 @include('agenda.partials.calendar')
 
+                {{-- Recherche instantanée (demande client, 22/09/2026) : plus
+                de bouton "Filtrer" — soumission au changement (blur) et à la
+                touche Entrée pour le texte libre, au changement pour le
+                lieu (comportement natif d'un <select>, immédiat). --}}
                 <form method="GET" class="space-y-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-sm">
                     <input type="hidden" name="date" value="{{ $date?->format('Y-m-d') }}">
                     <div>
                         <label for="q" class="block text-xs font-semibold uppercase tracking-wide text-ink-400">Rechercher</label>
                         <input type="search" name="q" id="q" value="{{ request('q') }}" placeholder="Nom de l'événement…"
+                            onchange="this.form.submit()"
+                            onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.form.submit(); }"
                             class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
                     </div>
                     {{-- Filtre par lieu (demande client, 18/09/2026) — seuls
@@ -68,7 +73,7 @@
                     @if ($areas->isNotEmpty())
                         <div>
                             <label for="area" class="block text-xs font-semibold uppercase tracking-wide text-ink-400">Lieu</label>
-                            <select name="area" id="area" class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                            <select name="area" id="area" onchange="this.form.submit()" class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
                                 <option value="">Tous les lieux</option>
                                 @foreach ($areas as $item)
                                     <option value="{{ $item->id }}" @selected($area?->id === $item->id)>{{ $item->name }}</option>
@@ -76,7 +81,6 @@
                             </select>
                         </div>
                     @endif
-                    <x-ui.button type="submit" variant="outline" size="sm" class="w-full !justify-center">Filtrer</x-ui.button>
                     @if ($date || $area || request('q'))
                         <x-ui.button :href="$category ? '/agenda/'.$category->slug : '/agenda'" variant="ghost" size="sm" class="w-full !justify-center">Réinitialiser</x-ui.button>
                     @endif
