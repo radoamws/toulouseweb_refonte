@@ -39,7 +39,11 @@
                 <a
                     href="/agenda/{{ $cat->slug }}{{ $preservedQuery ? '?'.$preservedQuery : '' }}"
                     class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition {{ $catIsActive ? 'text-white' : '' }}"
-                    style="border-color: {{ $cat->color }}; {{ $catIsActive ? "background-color: {$cat->color};" : "background-color: color-mix(in srgb, {$cat->color} 15%, white); color: {$cat->color};" }}"
+                    {{-- Teinte relevée de 15% à 28% (demande client,
+                    23/09/2026 : "ce n'est pas trop distinct" — moins de
+                    blanc dilué, couleur plus prononcée d'une catégorie à
+                    l'autre). --}}
+                    style="border-color: {{ $cat->color }}; {{ $catIsActive ? "background-color: {$cat->color};" : "background-color: color-mix(in srgb, {$cat->color} 28%, white); color: {$cat->color};" }}"
                 >
                     <span class="h-2 w-2 shrink-0 rounded-full {{ $catIsActive ? 'bg-white/80' : '' }}" @style(["background-color: {$cat->color}" => ! $catIsActive])></span>
                     {{ $cat->name }}
@@ -104,15 +108,11 @@
                         @foreach ($events as $event)
                             @php $eventCategory = $event->categories->first(); @endphp
                             {{-- Fond de l'encadré teinté de la couleur de la
-                            catégorie (demande client, 23/09/2026 : "le fond
-                            [...] de chaque encadré ait la même couleur que
-                            la catégorie correspondante pour plus de mise en
-                            valeur") — même formule color-mix que le badge
-                            (juste plus légère, 8% au lieu de 15%, vu la
-                            surface bien plus grande d'un fond de carte
-                            entière : le texte reste lisible quelle que soit
-                            la couleur). Bordure gauche + point de couleur
-                            déjà en place (18/09/2026) conservés. --}}
+                            catégorie (demande client, 23/09/2026) — teinte
+                            relevée de 8% à 22% (demande client, même jour :
+                            "ce n'est pas trop distinct" — moins de blanc
+                            dilué). Bordure gauche + point de couleur déjà
+                            en place (18/09/2026) conservés. --}}
                             <a
                                 href="/agenda/{{ $event->slug }}"
                                 data-track="event:{{ $event->id }}:agenda_listing"
@@ -121,7 +121,7 @@
                                     'bg-white' => ! $eventCategory,
                                 ])
                                 @style([
-                                    "border-left-color: {$eventCategory?->color}; background-color: color-mix(in srgb, {$eventCategory?->color} 8%, white);" => $eventCategory,
+                                    "border-left-color: {$eventCategory?->color}; background-color: color-mix(in srgb, {$eventCategory?->color} 22%, white);" => $eventCategory,
                                 ])
                             >
                                 <div class="aspect-[4/3] w-full overflow-hidden bg-ink-100">
@@ -137,9 +137,14 @@
                                 </div>
                                 <div class="flex flex-1 flex-col gap-2 p-4">
                                     @if ($eventCategory)
+                                        {{-- Badge relevé à 35% (le fond de
+                                        la carte est passé à 22%, voir
+                                        ci-dessus) pour rester visiblement
+                                        plus saturé que le fond qui
+                                        l'entoure. --}}
                                         <span
                                             class="inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide"
-                                            style="background-color: color-mix(in srgb, {{ $eventCategory->color }} 15%, white); color: {{ $eventCategory->color }};"
+                                            style="background-color: color-mix(in srgb, {{ $eventCategory->color }} 35%, white); color: {{ $eventCategory->color }};"
                                         >
                                             <span class="h-1.5 w-1.5 rounded-full" style="background-color: {{ $eventCategory->color }};"></span>
                                             {{ $eventCategory->name }}

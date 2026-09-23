@@ -1839,3 +1839,12 @@ Tests : `tests/Feature/Agenda/EscaleScraperTest.php` (+1, nettoyage HTML), `test
 ### 6. Marges latérales réduites
 
 `max-w-7xl` (1280px) élargi à `max-w-[96rem]` (1536px) sur les 8 endroits où ce conteneur se répète (header, footer, accueil, agenda, cinéma, annuaire, annonces, actualités) — laissait beaucoup d'espace inutilisé sur les grands écrans. `lg:px-8` réduit à `lg:px-6` au passage sur les mêmes conteneurs. Test : `HomepageTest::test_homepage_container_uses_the_widened_max_width`.
+
+## 54. Teinte des encadrés agenda relevée (23/09/2026, demande client)
+
+Retour immédiat après le §53/2 : "ce n'est pas trop distinct" — la teinte `color-mix()` ajoutée la veille (8% pour le fond de carte, 15% pour le menu catégorie et le badge) était trop diluée dans le blanc pour bien distinguer une catégorie d'une autre. Confirmé avec le client (le sens littéral de "réduire l'opacité" était ambigu — ça pouvait vouloir dire encore plus proche du blanc) : le besoin réel est moins de blanc dilué, une couleur plus prononcée. Pourcentages relevés dans `resources/views/agenda/index.blade.php` :
+- Fond de carte événement : 8% → 22%.
+- Menu catégorie (pastilles inactives) : 15% → 28%.
+- Badge catégorie sur la fiche : 15% → 35% (relevé aussi, pour rester visiblement plus saturé que le fond de carte qui l'entoure, maintenant à 22%).
+
+Tests `AgendaFrontRedesignTest::test_category_menu_pill_has_a_tinted_background_like_the_card_badge` / `test_event_card_background_is_tinted_with_the_category_color` mis à jour avec les nouveaux pourcentages.

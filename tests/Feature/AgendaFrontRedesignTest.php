@@ -102,7 +102,8 @@ class AgendaFrontRedesignTest extends TestCase
      * couleurs de fond comme les pastilles dans les encadrés" — le fond
      * teinté (color-mix) n'était jusqu'ici QUE sur le badge des fiches
      * événement, pas sur les pastilles du menu (qui n'avaient qu'un petit
-     * point de couleur + une bordure).
+     * point de couleur + une bordure). Teinte relevée à 28% le 23/09/2026
+     * ("ce n'est pas trop distinct").
      */
     public function test_category_menu_pill_has_a_tinted_background_like_the_card_badge(): void
     {
@@ -110,7 +111,7 @@ class AgendaFrontRedesignTest extends TestCase
 
         $response = $this->get('/agenda')->assertOk();
 
-        $response->assertSee('background-color: color-mix(in srgb, #1d6fa5 15%, white); color: #1d6fa5;', false);
+        $response->assertSee('background-color: color-mix(in srgb, #1d6fa5 28%, white); color: #1d6fa5;', false);
     }
 
     /**
@@ -118,7 +119,8 @@ class AgendaFrontRedesignTest extends TestCase
      * même couleur que la catégorie correspondante pour plus de mise en
      * valeur" — jusqu'ici le fond de la carte restait `bg-white` quelle que
      * soit sa catégorie (seuls la bordure gauche et le badge étaient
-     * colorés).
+     * colorés). Teinte relevée à 22% le même jour ("ce n'est pas trop
+     * distinct").
      */
     public function test_event_card_background_is_tinted_with_the_category_color(): void
     {
@@ -128,7 +130,7 @@ class AgendaFrontRedesignTest extends TestCase
 
         $response = $this->get('/agenda')->assertOk();
 
-        $response->assertSee('background-color: color-mix(in srgb, #3a9973 8%, white)', false);
+        $response->assertSee('background-color: color-mix(in srgb, #3a9973 22%, white)', false);
     }
 
     /** Un événement SANS catégorie garde un fond blanc classique (pas de couleur à en tirer). */
