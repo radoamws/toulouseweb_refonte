@@ -42,12 +42,32 @@ trait ParsesFrenchDates
     protected function parseFrenchDateRange(string $start, ?string $end = null): array
     {
         $startParsed = $this->parseSingleFrenchDate($start);
-        $endParsed = $end ? $this->parseSingleFrenchDate($end) : $startParsed;
+
+        if ($end === null) {
+            return [$startParsed, $startParsed];
+        }
+
+        // ⚠️ Bug réel trouvé et corrigé (23/09/2026, demande client — exemple
+        // leventdessignes.fr : "19 > 24 janv" sans année pour la fin, donnait
+        // "19 janvier 2026 → 24 janvier 2027" au lieu de rester sur 2026) :
+        // la fin était résolue INDÉPENDAMMENT du début, retombant sur
+        // l'heuristique "mois déjà passé -> année suivante" comparée à la
+        // date du jour de LANCEMENT DU SCRAPER (now()), pas au début de la
+        // plage — un scraper qui tourne en septembre voyait "janvier" comme
+        // "déjà passé" et basculait la fin sur l'année suivante, alors que le
+        // début avait déjà une année explicite non ambiguë. Quand le début
+        // est résolu, on lui emprunte son année ET son mois comme référence
+        // pour la fin (mois de fin < mois de début => bascule sur l'année
+        // suivante — nécessaire pour un vrai passage d'année, ex.
+        // "28 décembre" -> "3 janvier").
+        $endParsed = $startParsed
+            ? $this->parseSingleFrenchDate($end, $startParsed->year, $startParsed->month)
+            : $this->parseSingleFrenchDate($end);
 
         return [$startParsed, $endParsed ?? $startParsed];
     }
 
-    protected function parseSingleFrenchDate(string $text): ?Carbon
+    protected function parseSingleFrenchDate(string $text, ?int $yearHint = null, ?int $referenceMonth = null): ?Carbon
     {
         $text = trim(preg_replace('/[[:^print:]]/u', '', $text) ?? $text);
         $text = str_replace(['à partir du', 'Du', 'du'], '', $text);
@@ -65,13 +85,23 @@ trait ParsesFrenchDates
             return null;
         }
 
-        $year = isset($matches[3]) && $matches[3] !== '' ? (int) $matches[3] : (int) now()->format('Y');
+        $hasExplicitYear = isset($matches[3]) && $matches[3] !== '';
 
-        if (! isset($matches[3]) && $month < (int) now()->format('n')) {
-            // Pas d'année explicite et mois déjà passé cette année : la saison
-            // vise très probablement l'année suivante (même heuristique que
-            // le legacy — `if ($ddm < $acualMonth) $ddy = $ddy + 1;`).
-            $year++;
+        if ($hasExplicitYear) {
+            $year = (int) $matches[3];
+        } else {
+            $year = $yearHint ?? (int) now()->format('Y');
+            $compareMonth = $referenceMonth ?? (int) now()->format('n');
+
+            if ($month < $compareMonth) {
+                // Pas d'année explicite et mois antérieur au mois de
+                // référence (celui de "now()" par défaut, ou celui du DÉBUT
+                // de la plage si fourni, voir parseFrenchDateRange()) : la
+                // saison/plage vise très probablement l'année suivante
+                // (même heuristique que le legacy — `if ($ddm < $acualMonth)
+                // $ddy = $ddy + 1;`).
+                $year++;
+            }
         }
 
         try {

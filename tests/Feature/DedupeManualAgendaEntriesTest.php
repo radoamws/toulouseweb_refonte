@@ -78,6 +78,34 @@ class DedupeManualAgendaEntriesTest extends TestCase
     }
 
     /**
+     * ⚠️ Bug réel trouvé et corrigé (23/09/2026, capture client — nouveaux
+     * doublons L'Escale) : le titre scrapé a parfois ENTIÈREMENT changé de
+     * formulation ("Un petit parad(i)s (studio)" → "Un petit parad(i)s -
+     * (Hors-les-murs)"), aucun préfixe commun — mais `external_ref` (VEL)
+     * correspond exactement à l'ANCIEN titre manuel.
+     */
+    public function test_manual_entry_is_deleted_when_its_title_matches_the_scraped_external_ref(): void
+    {
+        $area = Area::create(['name' => "L'Escale", 'slug' => 'lescale-external-ref-match']);
+
+        $manual = Event::create([
+            'title' => 'Un petit parad(i)s (studio)', 'slug' => 'petit-paradis-manual',
+            'area_id' => $area->id, 'status' => 'published', 'source' => 'manual',
+            'start_date' => '2027-05-02 00:00:00',
+        ]);
+        $scraped = Event::create([
+            'title' => 'Un petit parad(i)s  - (Hors-les-murs)', 'slug' => 'petit-paradis-scraped',
+            'area_id' => $area->id, 'status' => 'published', 'source' => 'scraped',
+            'external_ref' => 'Un petit parad(i)s (studio)', 'start_date' => '2027-05-02 17:00:00',
+        ]);
+
+        Artisan::call('content:dedupe-agenda-manual-entries');
+
+        $this->assertSoftDeleted($manual);
+        $this->assertNotSoftDeleted($scraped);
+    }
+
+    /**
      * ⚠️ Bug réel trouvé et corrigé (22/09/2026, capture client) : le
      * scraper de L'Escale (Ardei-Soft/VEL) ajoute parfois un suffixe au
      * titre ("- (Hors-les-murs)") — une correspondance de titre EXACTE

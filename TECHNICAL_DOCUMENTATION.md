@@ -1848,3 +1848,36 @@ Retour immédiat après le §53/2 : "ce n'est pas trop distinct" — la teinte `
 - Badge catégorie sur la fiche : 15% → 35% (relevé aussi, pour rester visiblement plus saturé que le fond de carte qui l'entoure, maintenant à 22%).
 
 Tests `AgendaFrontRedesignTest::test_category_menu_pill_has_a_tinted_background_like_the_card_badge` / `test_event_card_background_is_tinted_with_the_category_color` mis à jour avec les nouveaux pourcentages.
+
+## 55. 5 nouvelles corrections agenda (23/09/2026, demande client, capture jointe)
+
+### 1. Événements du jour manquants de `/agenda`
+
+⚠️ Bug réel trouvé et corrigé : `Event::scopeUpcoming()` (appliqué par défaut sur `/agenda` tant qu'aucun jour n'est cliqué dans le calendrier) comparait `end_date` à `now()` — un VRAI timestamp complet — alors que `end_date` vaut souvent minuit pile (`2026-09-23 00:00:00`) pour un événement scrapé/saisi sans horaire précis. Un événement se déroulant AUJOURD'HUI disparaissait donc de la liste dès la première seconde après minuit, avant même que la journée ne commence. Comparé désormais en DATE pure (`whereDate`), même convention que le filtre par jour du calendrier et que `Screening::scopeCurrentlyValid()` (bug identique déjà trouvé et corrigé côté cinéma, voir §13). Tests : `AgendaFrontRedesignTest::test_event_happening_today_remains_visible_all_day_even_late_in_the_day` / `test_multi_day_event_ending_today_remains_visible_all_day`.
+
+⚠️ Précision utile pour la suite : la pastille "Agenda du jour" visible dans le menu catégorie n'a AUCUNE logique de date — c'est une simple `EventCategory` comme "Théâtre" ou "Rugby", alimentée manuellement (voir aussi §53/3). Le bug réel remonté par le client concernait bien le filtre par défaut de `/agenda`, pas cette pastille.
+
+### 2. Scraper "Le Vent des Signes" — plage de dates sans année, bascule dans la mauvaise année
+
+⚠️ Bug réel trouvé et corrigé, `ParsesFrenchDates::parseFrenchDateRange()` (partagé par Garonne/Odyssud/Interprète/Le Vent des Signes) : la date de FIN d'une plage ("19 janvier 2026 → 24 janv", exemple client) était résolue INDÉPENDAMMENT du début — sans année explicite, elle retombait sur l'heuristique "mois déjà passé → année suivante" comparée à la date du jour de LANCEMENT DU SCRAPER (`now()`), pas à la date de DÉBUT de la plage déjà résolue sans ambiguïté. Un scraper tournant en septembre voyait "janvier" comme "déjà passé" et basculait la FIN sur l'année suivante, donnant "19 janvier 2026 → 24 janvier 2027" au lieu de rester sur 2026. Fix : quand le début est résolu, sa YEAR et son MOIS servent de référence pour résoudre la fin (la bascule d'année ne s'applique plus que si le mois de fin est réellement antérieur au mois de DÉBUT — cas légitime d'un passage d'année, ex. "28 décembre → 3 janvier"). Test : `LeventDesSignesScraperTest::test_end_date_without_a_year_inherits_the_start_dates_year_not_the_scrape_run_date`.
+
+### 3. Image par défaut avec le nom de catégorie centré
+
+Nouveau composant `x-ui.event-thumbnail` (`resources/views/components/ui/event-thumbnail.blade.php`), utilisé sur la liste agenda ET la fiche détail (qui n'avait jusqu'ici AUCUN visuel de repli, juste rien) — remplace l'icône neutre affichée quand un événement n'a pas d'image. Fond = couleur de la catégorie (cohérent avec §46/§52/§54), repli sur la couleur de marque si aucune catégorie. Tests : `AgendaFrontRedesignTest::test_event_without_an_image_shows_the_category_name_on_a_placeholder` / `test_event_without_an_image_or_category_shows_a_generic_placeholder`.
+
+### 4. Doublons d'agenda — 2 nouveaux critères
+
+Investigation sur la capture client (pagination "L'Escale", 4 fiches quasi identiques) : deux mécanismes DISTINCTS de ceux déjà corrigés au §47/§52 :
+- **`content:dedupe-agenda-manual-entries` élargi** : sur L'Escale, le titre scrapé a parfois ENTIÈREMENT changé de formulation (pas juste un suffixe ajouté, ex. "Un petit parad(i)s (studio)" → "Un petit parad(i)s - (Hors-les-murs)") — le critère par préfixe ne matchait plus. Mais `external_ref` (`$spectacle['s']` côté VEL) correspond alors EXACTEMENT à l'ANCIEN titre manuel — `external_ref` étant unique, ce critère est fiable SANS contrainte de jour. 19 cas supplémentaires trouvés en production. Test : `DedupeManualAgendaEntriesTest::test_manual_entry_is_deleted_when_its_title_matches_the_scraped_external_ref`.
+- **Nouvelle commande `content:dedupe-duplicate-events`** (§précédent, déjà en prod) : doublons SCRAPÉS DEUX FOIS avec des `external_ref` différents pour le même événement (OpenAgenda republiant un même événement sous plusieurs slugs) — conserve la ligne au `external_ref` le plus court.
+
+### 5. Adresse propre à chaque événement (pas celle, générique, du "Lieu")
+
+Exemple client : "Pause du mercredi au Parc du Bois Vert" (aire "Toulouse Métropole", agenda mutualisé OpenAgenda) affichait l'adresse générique "Toulouse Métropole" au lieu du vrai lieu ("23bis Rue Pierre de Fermat, 31270 Cugnaux"), pourtant présent dans la réponse OpenAgenda (`event.location.name`/`.address`, vérifié en direct le 23/09/2026 — schéma confirmé : `{name, address, city, latitude, longitude}`). Root cause : aucune colonne pour stocker une adresse PAR ÉVÉNEMENT n'existait (`events` n'a qu'un `area_id`, et un agenda mutualisé agrège des événements à des adresses réellement différentes sous UNE seule `Area` générique). Limité à `AbstractOpenAgendaDriver` (Zenith/Metropole) — les 5 autres drivers (TheatreDeLaCite, Garonne, Escale, Ardei, GrandRond) scrapent chacun UNE salle physique fixe, leur `Area` générique est déjà la bonne adresse, rien à changer.
+
+- Migration `2026_09_23_150000_add_venue_fields_to_events_table` : `events.venue_name`/`events.venue_address` (nullable).
+- `Event::venueDisplayName()`/`venueDisplayAddress()` (accessors) : préfèrent `venue_name`/`venue_address` s'ils sont renseignés, replient sur `area->name`/`area->address` sinon (comportement historique inchangé pour les 5 drivers single-venue).
+- `AbstractOpenAgendaDriver::run()` : extrait `$event['location']['name']`/`['address']`, absent silencieusement ignoré (`array_filter`, comme tous les autres champs optionnels).
+- `agenda/show.blade.php` : bloc "Lieu" visible + JSON-LD `location` utilisent désormais `venue_display_name`/`venue_display_address`.
+
+Tests : `MetropoleScraperTest::test_extracts_the_real_venue_location_from_openagenda` / `test_missing_location_does_not_break_scraping`, `PublicContentPagesTest::test_agenda_show_prefers_the_events_own_venue_address_over_the_area_one` / `test_agenda_show_falls_back_to_the_area_address_when_the_event_has_none`.

@@ -87,6 +87,14 @@ abstract class AbstractOpenAgendaDriver implements ScraperDriver
                 ['external_ref' => $externalRef],
                 array_filter([
                     'area_id' => $area->id,
+                    // Lieu RÉEL de CET événement (demande client, 23/09/2026
+                    // : "l'adresse de l'événement n'est pas l'adresse du
+                    // 'Lieu'") — indispensable sur un agenda mutualisé
+                    // (agrège des événements à des adresses différentes,
+                    // tous rattachés au même `$area` générique ci-dessus).
+                    // Voir Event::venueDisplayName()/venueDisplayAddress().
+                    'venue_name' => $event['location']['name'] ?? null,
+                    'venue_address' => $event['location']['address'] ?? null,
                     'title' => $title,
                     'description' => $event['description']['fr'] ?? null,
                     'image' => $this->extractImage($event),

@@ -10,10 +10,12 @@
         'eventStatus' => $event->status === 'cancelled' ? 'https://schema.org/EventCancelled' : 'https://schema.org/EventScheduled',
         'image' => $event->image_url,
         'offers' => $event->price ? ['@type' => 'Offer', 'price' => $event->price, 'priceCurrency' => 'EUR', 'url' => $event->booking_url] : null,
-        'location' => $event->area ? array_filter([
+        // Lieu RÉEL de l'événement, pas l'Area générique (demande client,
+        // 23/09/2026) — voir Event::venueDisplayName()/venueDisplayAddress().
+        'location' => $event->venue_display_name ? array_filter([
             '@type' => 'Place',
-            'name' => $event->area->name,
-            'address' => $event->area->address,
+            'name' => $event->venue_display_name,
+            'address' => $event->venue_display_address,
         ]) : null,
     ]);
 @endphp
@@ -30,9 +32,9 @@
             ['label' => $event->title],
         ]" />
 
-        @if ($event->image_url)
-            <img src="{{ $event->image_url }}" alt="{{ $event->title }}" class="mb-6 aspect-video w-full rounded-2xl object-cover">
-        @endif
+        <div class="mb-6 aspect-video w-full overflow-hidden rounded-2xl">
+            <x-ui.event-thumbnail :event="$event" class="h-full w-full object-cover" />
+        </div>
 
         <div class="flex flex-wrap gap-2">
             @foreach ($event->categories as $cat)
@@ -60,10 +62,15 @@
                     @endif
                 </dd>
             </div>
-            @if ($event->area)
+            {{-- Nom/adresse RÉELS de l'événement en priorité, pas ceux
+            (génériques) de l'Area — demande client, 23/09/2026 : "l'adresse
+            de l'événement n'est pas l'adresse du 'Lieu'" (agendas
+            mutualisés type OpenAgenda, un même Area agrège des événements à
+            des adresses différentes). Voir Event::venueDisplayName(). --}}
+            @if ($event->venue_display_name)
                 <div>
                     <dt class="text-sm font-medium text-ink-500">Lieu</dt>
-                    <dd class="text-ink-800">{{ $event->area->name }}@if($event->area->address) — {{ $event->area->address }}@endif</dd>
+                    <dd class="text-ink-800">{{ $event->venue_display_name }}@if($event->venue_display_address) — {{ $event->venue_display_address }}@endif</dd>
                 </div>
             @endif
             @if ($event->price)

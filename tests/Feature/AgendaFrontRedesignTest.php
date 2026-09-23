@@ -240,4 +240,77 @@ class AgendaFrontRedesignTest extends TestCase
 
         $response->assertSee('Théâtre à L\'Escale')->assertDontSee('Sport à L\'Escale');
     }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (23/09/2026, demande client : "n'affiche
+     * pas les agendas dont la date du jour égale à la date de l'événement")
+     * — voir Event::scopeUpcoming(). `end_date` à minuit (cas fréquent,
+     * scraper/saisie sans horaire précis) comparé à `now()` (timestamp
+     * complet) faisait disparaître un événement se déroulant AUJOURD'HUI
+     * dès la première seconde après minuit.
+     */
+    public function test_event_happening_today_remains_visible_all_day_even_late_in_the_day(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 9, 23, 23, 0));
+
+        try {
+            // Événement d'un seul jour, aujourd'hui même, end_date à minuit
+            // (pas d'horaire précis) — exactement le cas qui disparaissait.
+            Event::create([
+                'title' => 'Événement du jour même', 'slug' => 'evenement-du-jour-meme',
+                'status' => 'published', 'start_date' => '2026-09-23 00:00:00', 'end_date' => '2026-09-23 00:00:00',
+            ]);
+
+            $this->get('/agenda')->assertOk()->assertSee('Événement du jour même');
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
+    /**
+     * Demande client, 23/09/2026 : "s'il n'y a pas d'image sur les
+     * agendas, mettre l'image par défaut et le texte de la catégorie
+     * dessus centré sur l'image (Ex: Théâtre, Rugby...)" — remplace
+     * l'icône neutre affichée jusqu'ici sur la liste et la fiche détail.
+     */
+    public function test_event_without_an_image_shows_the_category_name_on_a_placeholder(): void
+    {
+        $theatre = EventCategory::create(['name' => 'Théâtre Vignette', 'slug' => 'theatre-vignette', 'color' => '#3a9973']);
+        $event = Event::create(['title' => 'Sans visuel', 'slug' => 'sans-visuel', 'status' => 'published', 'start_date' => now()->addDay()]);
+        $event->categories()->attach($theatre);
+
+        $listing = $this->get('/agenda')->assertOk();
+        $listing->assertSee('Théâtre Vignette');
+        $listing->assertSee('background-color: #3a9973', false);
+
+        $show = $this->get('/agenda/sans-visuel')->assertOk();
+        $show->assertSee('background-color: #3a9973', false);
+    }
+
+    /** Sans catégorie du tout, un repli neutre générique ("Agenda") reste affiché — jamais de case vide. */
+    public function test_event_without_an_image_or_category_shows_a_generic_placeholder(): void
+    {
+        Event::create(['title' => 'Sans rien', 'slug' => 'sans-rien', 'status' => 'published', 'start_date' => now()->addDay()]);
+
+        $response = $this->get('/agenda')->assertOk();
+        // Couleur de repli de la marque (aucune catégorie à en tirer).
+        $response->assertSee('background-color: #a63f23;', false);
+    }
+
+    /** Même bug, pour un événement multi-jours dont AUJOURD'HUI est le dernier jour. */
+    public function test_multi_day_event_ending_today_remains_visible_all_day(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 9, 23, 23, 0));
+
+        try {
+            Event::create([
+                'title' => 'Événement qui se termine aujourd\'hui', 'slug' => 'evenement-se-termine-aujourdhui',
+                'status' => 'published', 'start_date' => '2026-09-20 00:00:00', 'end_date' => '2026-09-23 00:00:00',
+            ]);
+
+            $this->get('/agenda')->assertOk()->assertSee('Événement qui se termine aujourd\'hui');
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
 }

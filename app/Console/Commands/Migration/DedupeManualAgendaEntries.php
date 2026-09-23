@@ -40,6 +40,20 @@ use Illuminate\Console\Command;
  * dans le MÊME lieu le MÊME jour, dont l'un est un préfixe exact de
  * l'autre, n'a jamais été observé, contrairement au cas générique
  * "même titre".
+ *
+ * ⚠️ 2e critère ajouté (23/09/2026, capture client — encore des doublons
+ * sur L'Escale, ex. "Un petit parad(i)s (studio)" / "Un petit parad(i)s -
+ * (Hors-les-murs)") : dans BEAUCOUP de cas sur L'Escale, le titre scrapé a
+ * ENTIÈREMENT changé de formulation (pas juste un suffixe ajouté) et le
+ * critère par préfixe ne matche plus du tout — MAIS `external_ref`
+ * (`$spectacle['s']` côté VEL, voir AbstractArdeiSoftDriver) correspond
+ * alors EXACTEMENT à l'ancien titre manuel tel quel (ex. manuel
+ * "Atelier musical + parad(i)s" / scrapé external_ref="Atelier musical +
+ * parad(i)s", titre scrapé pourtant devenu "Atelier musical en lien avec
+ * "Un petit parad(i)s""). `external_ref` étant UNIQUE, cette correspondance
+ * ne peut désigner qu'UNE seule ligne scrapée à la fois — pas besoin de
+ * contrainte de jour ici, contrairement au critère par préfixe. 19 cas
+ * supplémentaires trouvés en production avec ce seul critère.
  */
 class DedupeManualAgendaEntries extends Command
 {
@@ -78,10 +92,17 @@ class DedupeManualAgendaEntries extends Command
 
                 $hasScrapedTwin = Event::query()
                     ->whereNotNull('external_ref')
-                    ->where('title', 'like', "{$titlePrefix}%")
                     ->where('area_id', $manual->area_id)
-                    ->whereDate('start_date', $manual->start_date->toDateString())
                     ->where('id', '!=', $manual->id)
+                    ->where(function ($q) use ($titlePrefix, $manual) {
+                        // Critère 1 : préfixe de titre, même jour (voir
+                        // docblock). Critère 2 : external_ref == ancien
+                        // titre manuel, sans contrainte de jour (unique,
+                        // ne peut désigner qu'une ligne).
+                        $q->where(fn ($q2) => $q2->where('title', 'like', "{$titlePrefix}%")
+                            ->whereDate('start_date', $manual->start_date->toDateString()))
+                            ->orWhere('external_ref', $manual->title);
+                    })
                     ->exists();
 
                 if (! $hasScrapedTwin) {

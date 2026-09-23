@@ -293,6 +293,38 @@ class PublicContentPagesTest extends TestCase
     }
 
     /**
+     * Demande client, 23/09/2026 : "l'adresse de l'évenement n'est pas
+     * l'adresse du 'Lieu'" — quand l'événement a sa propre adresse
+     * (`venue_name`/`venue_address`, ex. agendas mutualisés OpenAgenda),
+     * elle doit primer sur celle (générique) de l'Area associée.
+     */
+    public function test_agenda_show_prefers_the_events_own_venue_address_over_the_area_one(): void
+    {
+        $area = Area::create(['name' => 'Toulouse Métropole', 'slug' => 'toulouse-metropole-venue-test', 'address' => 'Adresse générique métropole']);
+        Event::create([
+            'title' => 'Pause du mercredi', 'slug' => 'pause-du-mercredi-venue-test',
+            'status' => 'published', 'start_date' => now()->addDay(), 'area_id' => $area->id,
+            'venue_name' => '23bis Rue Pierre de Fermat', 'venue_address' => '23bis Rue Pierre de Fermat, 31270 Cugnaux',
+        ]);
+
+        $response = $this->get('/agenda/pause-du-mercredi-venue-test')->assertOk();
+        $response->assertSee('23bis Rue Pierre de Fermat, 31270 Cugnaux');
+        $response->assertDontSee('Adresse générique métropole');
+    }
+
+    /** Sans adresse propre à l'événement, on retombe sur celle de l'Area (comportement historique, inchangé). */
+    public function test_agenda_show_falls_back_to_the_area_address_when_the_event_has_none(): void
+    {
+        $area = Area::create(['name' => 'Salle Unique', 'slug' => 'salle-unique-venue-test', 'address' => '1 rue du Théâtre, Toulouse']);
+        Event::create([
+            'title' => 'Spectacle salle unique', 'slug' => 'spectacle-salle-unique-venue-test',
+            'status' => 'published', 'start_date' => now()->addDay(), 'area_id' => $area->id,
+        ]);
+
+        $this->get('/agenda/spectacle-salle-unique-venue-test')->assertOk()->assertSee('1 rue du Théâtre, Toulouse');
+    }
+
+    /**
      * Horaires (06/09/2026, corrigé suite à l'audit §18 de
      * TECHNICAL_DOCUMENTATION.md — champ `schedule` capturé mais jamais
      * affiché nulle part, désormais rendu quand présent).

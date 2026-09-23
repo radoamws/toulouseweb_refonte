@@ -22,7 +22,7 @@ class Event extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUr
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, ResolvesImageUrl;
 
     protected $fillable = [
-        'area_id', 'title', 'slug', 'subtitle', 'description', 'image', 'price',
+        'area_id', 'venue_name', 'venue_address', 'title', 'slug', 'subtitle', 'description', 'image', 'price',
         'start_date', 'end_date', 'schedule', 'booking_url', 'status', 'source',
         'external_ref', 'legacy_id',
     ];
@@ -67,6 +67,27 @@ class Event extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUr
         });
     }
 
+    /**
+     * Nom/adresse du lieu RÉEL de cet événement, avec repli sur ceux de
+     * l'`Area` générique associée (demande client, 23/09/2026 : "l'adresse
+     * de l'événement n'est pas l'adresse du 'Lieu'") — nécessaire pour les
+     * agendas mutualisés (OpenAgenda, ex. "Toulouse Métropole") qui
+     * agrègent des événements se déroulant chacun à un lieu physique
+     * différent, tous rattachés au même `area_id` générique. Voir
+     * AbstractOpenAgendaDriver, seul driver à renseigner `venue_name`/
+     * `venue_address` pour l'instant (les autres salles n'ont qu'un seul
+     * lieu physique réel, l'adresse de l'Area est déjà la bonne).
+     */
+    protected function venueDisplayName(): Attribute
+    {
+        return Attribute::get(fn () => $this->venue_name ?: $this->area?->name);
+    }
+
+    protected function venueDisplayAddress(): Attribute
+    {
+        return Attribute::get(fn () => $this->venue_address ?: $this->area?->address);
+    }
+
     public function area(): BelongsTo
     {
         return $this->belongsTo(Area::class);
@@ -82,12 +103,29 @@ class Event extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUr
         return $query->where('status', 'published');
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (23/09/2026, demande client : "n'affiche
+     * pas les agendas dont la date du jour égale la date de l'événement ni
+     * la date du jour est inclus entre la date de début et la date de
+     * fin") — comparait `end_date` (souvent minuit, `2026-09-23 00:00:00`,
+     * pour un événement scrapé/saisi sans horaire précis) à `now()` (un
+     * VRAI timestamp complet, ex. `2026-09-23 14:32:07`) : un événement se
+     * déroulant AUJOURD'HUI disparaissait de `/agenda` dès la première
+     * seconde après minuit, avant même que la journée ne commence. Comparé
+     * désormais en DATE pure (`whereDate`), même convention que le filtre
+     * par jour du calendrier (`renderIndex()`) et que
+     * `Screening::scopeCurrentlyValid()` (bug identique déjà corrigé côté
+     * cinéma) : un événement reste "à venir" pour toute sa journée de fin,
+     * quelle que soit l'heure actuelle.
+     */
     public function scopeUpcoming(Builder $query): Builder
     {
-        return $query->where(function (Builder $q) {
-            $q->where('end_date', '>=', now())
-                ->orWhere(function (Builder $q2) {
-                    $q2->whereNull('end_date')->where('start_date', '>=', now()->startOfDay());
+        $today = now()->toDateString();
+
+        return $query->where(function (Builder $q) use ($today) {
+            $q->whereDate('end_date', '>=', $today)
+                ->orWhere(function (Builder $q2) use ($today) {
+                    $q2->whereNull('end_date')->whereDate('start_date', '>=', $today);
                 });
         });
     }

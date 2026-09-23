@@ -62,6 +62,47 @@ class LeventDesSignesScraperTest extends TestCase
         $this->assertSame(17, $event->end_date->day);
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (23/09/2026, exemple client :
+     * leventdessignes.fr/class/soudain-une-ile_creation-2/, "19 > 24 janv"
+     * pour "19 janvier 2026 → 24 janvier 2026" mais mémorisé "→ 24 janvier
+     * 2027" sur toulouseweb.com) : la fin ("24 janv", sans année) était
+     * résolue indépendamment du début, retombant sur l'heuristique "mois
+     * déjà passé -> année suivante" comparée à la date du jour de
+     * LANCEMENT DU SCRAPER (ici simulée en septembre, après janvier) plutôt
+     * qu'au début de la plage qui avait pourtant déjà une année explicite
+     * non ambiguë. Voir ParsesFrenchDates::parseFrenchDateRange().
+     */
+    public function test_end_date_without_a_year_inherits_the_start_dates_year_not_the_scrape_run_date(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 9, 23));
+
+        try {
+            $source = $this->makeSource();
+
+            Http::fake([
+                'leventdessignes.fr' => Http::response(
+                    '<html><body><article><a href="https://www.leventdessignes.fr/class/soudain-une-ile_creation-2/"></a></article></body></html>'
+                ),
+                'leventdessignes.fr/class/soudain-une-ile_creation-2/' => Http::response(<<<'HTML'
+                    <html><body>
+                        <h1 class="single-title">Soudain une île</h1>
+                        <div class="single-dates">19 janvier 2026 > 24 janv</div>
+                    </body></html>
+                HTML),
+            ]);
+
+            $this->artisan('scrape:events', ['--source' => $source->id])->run();
+
+            $event = Event::where('external_ref', 'soudain-une-ile_creation-2')->first();
+            $this->assertNotNull($event);
+            $this->assertSame('2026-01-19', $event->start_date->toDateString());
+            $this->assertSame('2026-01-24', $event->end_date->toDateString());
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
     public function test_editorial_page_without_a_real_date_is_skipped(): void
     {
         $source = $this->makeSource();
