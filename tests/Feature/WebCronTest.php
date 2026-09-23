@@ -82,6 +82,22 @@ class WebCronTest extends TestCase
      * est vide (le cas ici, base de test fraîche) — ce message sert de
      * marqueur observable pour vérifier si la sous-commande a bien tourné.
      */
+    /**
+     * Demande client, 23/09/2026 : OpenAgenda republie RÉELLEMENT le même
+     * événement sous un nouveau slug d'un jour sur l'autre (pas un artefact
+     * ponctuel de migration) — le nettoyage des doublons doit donc tourner
+     * à CHAQUE exécution du WebCron, juste après scrape:events, pas
+     * seulement en ponctuel via SSH. Voir TECHNICAL_DOCUMENTATION.md §55.
+     */
+    public function test_webcron_run_cleans_up_agenda_duplicates_on_every_run(): void
+    {
+        Artisan::call('webcron:run');
+
+        $output = Artisan::output();
+        $this->assertStringContainsString('agenda-manual-dupes', $output);
+        $this->assertStringContainsString('agenda-duplicate-events', $output);
+    }
+
     public function test_redirects_audit_only_runs_on_sunday(): void
     {
         $this->travelTo(now()->next(\Carbon\Carbon::MONDAY));

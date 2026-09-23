@@ -46,6 +46,17 @@ class RunWebCron extends Command
         $this->call('sitemap:generate');
         $this->call('scrape:cinema');
         $this->call('scrape:events');
+        // Doublons agenda (demande client, 19-23/09/2026, voir
+        // TECHNICAL_DOCUMENTATION.md §47/§55) — trouvé le 23/09/2026 : ce
+        // n'est PAS un artefact ponctuel de migration, OpenAgenda republie
+        // RÉELLEMENT le même événement sous un nouveau slug d'un jour sur
+        // l'autre (nouveaux doublons apparus depuis le dernier nettoyage
+        // manuel, quelques heures plus tôt) — doit donc tourner à CHAQUE
+        // exécution du WebCron, juste après scrape:events, pas seulement en
+        // ponctuel. Les deux commandes sont idempotentes (voir leur
+        // docblock respectif).
+        $this->call('content:dedupe-agenda-manual-entries');
+        $this->call('content:dedupe-duplicate-events');
         $this->call('content:mark-expired');
 
         // Hebdomadaire (brief §15) : `Schedule::weekly()` ne peut plus matcher
