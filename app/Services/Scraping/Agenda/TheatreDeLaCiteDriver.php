@@ -154,6 +154,7 @@ class TheatreDeLaCiteDriver implements ScraperDriver
                     'end_date' => $startDate,
                     'booking_url' => $detail['booking_url'] ?? null,
                     'price' => $detail['price_text'] ?? null,
+                    'venue_name' => $detail['venue_name'] ?? null,
                     'status' => 'published',
                     'source' => 'scraped',
                 ], fn ($value) => $value !== null)
@@ -204,7 +205,7 @@ class TheatreDeLaCiteDriver implements ScraperDriver
         return $date;
     }
 
-    /** @return array{booking_url: ?string, price_text: ?string}|null */
+    /** @return array{booking_url: ?string, price_text: ?string, venue_name: ?string}|null */
     protected function fetchDetail(string $url): ?array
     {
         $html = $this->fetch($url);
@@ -224,6 +225,7 @@ class TheatreDeLaCiteDriver implements ScraperDriver
         }
 
         $priceText = null;
+        $venueName = null;
         $infoLines = $crawler->filter('.spectacle__informations__content__line');
         if ($infoLines->count()) {
             // La première ligne mélange date/lieu/durée/tarif en texte libre
@@ -233,7 +235,26 @@ class TheatreDeLaCiteDriver implements ScraperDriver
             $priceText = mb_substr($priceText, 0, 255) ?: null;
         }
 
-        return ['booking_url' => $bookingUrl, 'price_text' => $priceText];
+        // Demande client, 24/09/2026 : le Théâtre de la Cité programme dans
+        // PLUSIEURS salles distinctes du même bâtiment ("La Salle", "Le CUB"
+        // — constaté en direct le 24/09/2026 sur 5 fiches "spectacle"
+        // réelles : "Cirque | Cirque | La Salle Durée 1h40 | Saison
+        // 2026-2027 | ...") — jamais reporté jusqu'ici. La position de cette
+        // ligne parmi `.spectacle__informations__content__line` varie (3e
+        // ligne ici, mais les fiches "evenement" mélangent tout sur UNE
+        // seule ligne, voir `detailHtml()` dans ScrapeEventsTest) : on
+        // cherche donc la ligne par son CONTENU (commence par "La "/"Le ",
+        // seul motif stable constaté) plutôt que par position.
+        foreach ($infoLines as $lineNode) {
+            $lineText = trim(preg_replace('/\s+/u', ' ', (new Crawler($lineNode))->text('')) ?? '');
+            if (preg_match('/^(?:La|Le)\s+\S/u', $lineText)) {
+                $venueName = trim(preg_replace('/\s*Durée.*/ui', '', $lineText) ?? '') ?: null;
+
+                break;
+            }
+        }
+
+        return ['booking_url' => $bookingUrl, 'price_text' => $priceText, 'venue_name' => $venueName];
     }
 
     protected function fetch(string $url): ?string

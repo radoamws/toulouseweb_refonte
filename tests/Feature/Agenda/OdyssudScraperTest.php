@@ -123,4 +123,35 @@ class OdyssudScraperTest extends TestCase
         $this->assertNotNull($event);
         $this->assertSame(['Vendredi 12 décembre: 20h30', 'Samedi 13 décembre: 18h00'], $event->schedule);
     }
+
+    /**
+     * Demande client, 24/09/2026 : Odyssud programme aussi hors les murs, dans
+     * des lieux partenaires de villes différentes (constaté en direct :
+     * "Basilique Notre-Dame de la Daurade, Toulouse" pour un spectacle réel,
+     * contre "Parc d'Odyssud, Blagnac" pour un autre) — l'Area générique ne
+     * convient pas pour ces événements, voir docblock de
+     * OdyssudDriver::fetchDetail().
+     */
+    public function test_extracts_off_site_venue_name_and_city(): void
+    {
+        $source = $this->makeSource();
+
+        Http::fake([
+            'odyssud.com/spectacles/normal' => Http::response($this->listingHtml('/spectacles/musiques/leglise')),
+            'odyssud.com/spectacles/musiques/leglise' => Http::response(
+                '<html><body><div class="duration"><div class="duration-day"><span>12 décembre</span></div></div>'
+                .'<div class="spectacle--lieu"><div class="field field--name-lieu"><div class="term">'
+                .'<div class="term--content"><a class="term--title"><div class="field field--name-name">Basilique Notre-Dame de la Daurade</div></a>'
+                .'<div class="field field--name-description"><p>Toulouse</p><p><a href="https://maps.example">S\'y rendre</a></p></div>'
+                .'</div></div></div></div></body></html>'
+            ),
+        ]);
+
+        $this->artisan('scrape:events', ['--source' => $source->id])->run();
+
+        $event = Event::where('external_ref', 'leglise')->first();
+        $this->assertNotNull($event);
+        $this->assertSame('Basilique Notre-Dame de la Daurade', $event->venue_name);
+        $this->assertSame('Toulouse', $event->venue_address);
+    }
 }

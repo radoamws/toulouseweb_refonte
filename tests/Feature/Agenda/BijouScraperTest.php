@@ -45,6 +45,12 @@ class BijouScraperTest extends TestCase
                         ['range' => ['title' => '15/20/25'], 'start_date' => 1790086400, 'time_zone' => 'Europe/Paris'],
                     ],
                     'picture' => ['src' => 'https://le-bijou.soticket.net/img/show.jpg'],
+                    'location' => [
+                        'title' => 'Le Bijou',
+                        'address' => '123 avenue de Muret',
+                        'city' => 'TOULOUSE',
+                        'postal_code' => '31300',
+                    ],
                     'start_date' => 1790000000,
                     'end_date' => 0,
                 ]],
@@ -66,6 +72,10 @@ class BijouScraperTest extends TestCase
         // reproduit ici en tableau — silencieusement jamais reporté avant ce correctif).
         $this->assertSame(['2026-09-21 16:13:20', '2026-09-22 16:13:20'], $event->schedule);
         $this->assertTrue($event->categories->contains('slug', 'spectacles'));
+        // Demande client, 24/09/2026 : adresse réelle par événement plutôt que
+        // toujours l'adresse de l'Area (voir BijouDriver::formatVenueAddress()).
+        $this->assertSame('Le Bijou', $event->venue_name);
+        $this->assertSame('123 avenue de Muret, 31300 TOULOUSE', $event->venue_address);
 
         $run = ScraperRun::where('source_id', $source->id)->first();
         $this->assertSame('success', $run->status);

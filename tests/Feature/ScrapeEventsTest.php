@@ -255,6 +255,42 @@ class ScrapeEventsTest extends TestCase
         $this->assertSame(2, $run->items_created);
     }
 
+    /**
+     * Demande client, 24/09/2026 : le Théâtre de la Cité programme dans
+     * plusieurs salles distinctes du même bâtiment (constaté en direct le
+     * 24/09/2026 sur les vraies fiches "spectacle" : "La Salle", "Le CUB",
+     * chacune dans sa PROPRE ligne `.spectacle__informations__content__line`
+     * — contrairement au fixture `detailHtml()` ci-dessus qui reproduit le
+     * format des fiches "evenement", où tout est mélangé sur une seule
+     * ligne). Voir TheatreDeLaCiteDriver::fetchDetail().
+     */
+    public function test_extracts_room_name_from_real_spectacle_detail_page(): void
+    {
+        Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);
+        EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $this->makeSource();
+
+        Http::fake([
+            'theatre-cite.com/programmation' => Http::response($this->listingHtml([
+                $this->card('le-silence', 'Le Silence', '3 octobre 2026', type: 'spectacles'),
+            ])),
+            'theatre-cite.com/programmation/2026-2027/spectacle/le-silence/' => Http::response(
+                '<html><body>'
+                .'<div class="spectacle__informations__content__line">Théâtre</div>'
+                .'<div class="spectacle__informations__content__line">Théâtre</div>'
+                .'<div class="spectacle__informations__content__line">Le CUB Durée 1h45</div>'
+                .'<div class="spectacle__informations__content__line">Saison 2026-2027</div>'
+                .'</body></html>'
+            ),
+        ]);
+
+        $this->artisan('scrape:events')->run();
+
+        $event = Event::where('external_ref', 'le-silence')->first();
+        $this->assertNotNull($event);
+        $this->assertSame('Le CUB', $event->venue_name);
+    }
+
     public function test_inactive_source_is_not_run(): void
     {
         Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);

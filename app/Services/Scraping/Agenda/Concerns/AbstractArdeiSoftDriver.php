@@ -126,6 +126,8 @@ abstract class AbstractArdeiSoftDriver implements ScraperDriver
                 ? "de {$spectacle['prixMin']} € à {$spectacle['prixMax']} €"
                 : null;
 
+            $description = $this->cleanRichText($spectacle['txt'] ?? null);
+
             $existing = Event::where('external_ref', $externalRef)->exists();
 
             $ev = Event::updateOrCreate(
@@ -133,13 +135,14 @@ abstract class AbstractArdeiSoftDriver implements ScraperDriver
                 array_filter([
                     'area_id' => $area->id,
                     'title' => $title,
-                    'description' => $this->cleanRichText($spectacle['txt'] ?? null),
+                    'description' => $description,
                     'price' => $price,
                     'schedule' => $this->computeSchedule($spectacle),
                     'image' => "https://www.ardei-soft.com/{$town}/img/{$spectacle['fmm1']}",
                     'start_date' => $start,
                     'end_date' => $end,
                     'booking_url' => "https://www.ardei-soft.com/{$town}/spectacle.html?spectacle={$externalRef}",
+                    'venue_address' => $this->extractVenueAddress($description),
                     'status' => 'published',
                     'source' => 'scraped',
                 ], fn ($value) => $value !== null)
@@ -184,6 +187,37 @@ abstract class AbstractArdeiSoftDriver implements ScraperDriver
         $text = preg_replace('/\n{3,}/u', "\n\n", trim($text));
 
         return $text !== '' ? $text : null;
+    }
+
+    /**
+     * Demande client, 24/09/2026 : extraire l'adresse RÉELLE de chaque
+     * événement plutôt que de toujours retomber sur l'adresse générique de
+     * l'Area (voir TECHNICAL_DOCUMENTATION.md §55/§56). La plupart des
+     * spectacles de cette plateforme ont bien lieu dans la salle elle-même
+     * (pas de mention "Lieu :" dans `txt`, repli normal sur l'adresse de
+     * l'Area via `Event::venueDisplayAddress()`), MAIS une minorité RÉELLE
+     * (constatée en direct le 24/09/2026 : 1 spectacle sur 73 pour L'Escale,
+     * "Maison de Quartier de Quéfets, 1 Boulevard Alain Savary 31170
+     * Tournefeuille") se déroule dans un lieu satellite explicitement indiqué
+     * par l'API elle-même sous un label "Lieu :" à l'intérieur du HTML riche
+     * de `txt` — jamais lu jusqu'ici. Fonctionne sur le texte déjà nettoyé par
+     * `cleanRichText()` (structure en blocs séparés par des lignes vides,
+     * plus fiable qu'une regex sur le HTML brut).
+     */
+    protected function extractVenueAddress(?string $cleanedDescription): ?string
+    {
+        if (! $cleanedDescription) {
+            return null;
+        }
+
+        if (! preg_match('/Lieu\s*:\s*\n?(.+?)(?:\n\n[A-ZÉÈÀÎÔÛ][^\n]{0,30}:|\z)/su', $cleanedDescription, $matches)) {
+            return null;
+        }
+
+        $address = preg_replace('/\s*\n\s*/u', ' ', trim($matches[1]));
+        $address = trim(preg_replace('/\s{2,}/u', ' ', (string) $address) ?? '');
+
+        return $address !== '' ? $address : null;
     }
 
     /** @param array{0?:int,1?:int,2?:int,3?:int,4?:int}|null $parts [année, mois, jour, heure, minute] */

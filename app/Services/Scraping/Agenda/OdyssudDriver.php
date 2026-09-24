@@ -111,6 +111,8 @@ class OdyssudDriver implements ScraperDriver
                     'start_date' => $detail['start_date'],
                     'end_date' => $detail['end_date'],
                     'booking_url' => $detail['booking_url'],
+                    'venue_name' => $detail['venue_name'],
+                    'venue_address' => $detail['venue_address'],
                     'status' => 'published',
                     'source' => 'scraped',
                 ], fn ($value) => $value !== null)
@@ -130,7 +132,7 @@ class OdyssudDriver implements ScraperDriver
         return $stats;
     }
 
-    /** @return array{subtitle:?string,description:?string,price:?string,schedule:string[],start_date:?\Carbon\Carbon,end_date:?\Carbon\Carbon,booking_url:?string,discipline:?string}|null */
+    /** @return array{subtitle:?string,description:?string,price:?string,schedule:string[],start_date:?\Carbon\Carbon,end_date:?\Carbon\Carbon,booking_url:?string,discipline:?string,venue_name:?string,venue_address:?string}|null */
     protected function fetchDetail(string $url): ?array
     {
         $html = $this->fetchHtml($url);
@@ -192,6 +194,27 @@ class OdyssudDriver implements ScraperDriver
             ? trim($crawler->filter('.field.field--name-discipline')->text(''))
             : null;
 
+        // Demande client, 24/09/2026 : Odyssud programme aussi des spectacles
+        // hors les murs, dans des lieux partenaires DE VILLES DIFFÉRENTES
+        // (constaté en direct le 24/09/2026 : "Basilique Notre-Dame de la
+        // Daurade, Toulouse" pour un spectacle, contre "Parc d'Odyssud,
+        // Blagnac" pour un autre) — jamais lu jusqu'ici, alors que l'Area
+        // "Odyssud Blagnac" ne convient pas du tout pour ces événements hors
+        // les murs. `.field--name-description` contient la ville dans un 1er
+        // `<p>` puis un lien "S'y rendre" dans un 2e `<p>` (non pertinent,
+        // exclu en ne prenant que le 1er `<p>`).
+        $venueName = null;
+        $venueAddress = null;
+        $lieuBlock = $crawler->filter('.spectacle--lieu');
+        if ($lieuBlock->count()) {
+            $venueName = $lieuBlock->filter('.field--name-name')->count()
+                ? trim($lieuBlock->filter('.field--name-name')->text('')) ?: null
+                : null;
+
+            $cityParagraph = $lieuBlock->filter('.field--name-description p')->first();
+            $venueAddress = $cityParagraph->count() ? trim($cityParagraph->text('')) ?: null : null;
+        }
+
         // Horaire(s) par représentation (06/09/2026, corrigé suite à l'audit
         // §18) : le legacy construit un tableau "jour: heure" par nœud
         // `.date-field-item` (une entrée par représentation) — silencieusement
@@ -214,6 +237,8 @@ class OdyssudDriver implements ScraperDriver
             'end_date' => $end,
             'booking_url' => $bookingUrl,
             'discipline' => $discipline,
+            'venue_name' => $venueName,
+            'venue_address' => $venueAddress,
         ];
     }
 }

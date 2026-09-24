@@ -112,6 +112,49 @@ class EscaleScraperTest extends TestCase
         $this->assertStringContainsString('tarif plein 16€', $event->description);
     }
 
+    /**
+     * Demande client, 24/09/2026 : extraire l'adresse réelle de chaque
+     * événement (voir TECHNICAL_DOCUMENTATION.md §55/§56). La plupart des
+     * spectacles de L'Escale se déroulent dans la salle elle-même (pas de
+     * label "Lieu :" dans `txt`, repli normal sur l'Area), mais une minorité
+     * réelle (constaté en direct le 24/09/2026 : 1 spectacle sur 73) a lieu
+     * dans un lieu satellite explicitement indiqué par l'API — voir
+     * AbstractArdeiSoftDriver::extractVenueAddress().
+     */
+    public function test_extracts_satellite_venue_address_from_lieu_label(): void
+    {
+        Area::create(['name' => "L'Escale", 'slug' => 'lescale-2', 'legacy_id' => 3563]);
+        EventCategory::create(['name' => 'Spectacles', 'slug' => 'spectacles', 'legacy_id' => 7]);
+
+        $source = ScraperSource::create([
+            'name' => "L'Escale (Tournefeuille)",
+            'type' => 'agenda',
+            'driver_class' => EscaleDriver::class,
+            'config' => ['town_slug' => 'tournefeuille', 'area_slug' => 'lescale-2', 'tarifs_group' => 3],
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'www.ardei-soft.com/tournefeuille/SenousritPGI*' => Http::response([
+                'spectacles' => [[
+                    's' => 'recital-lyrique',
+                    'txt' => '<p><b>Tarifs :</b> Gratuit</p><p><b>Lieu :</b> Maison de Quartier de Quéfets,<br>1 Boulevard Alain Savary 31170 Tournefeuille</p>',
+                    'fmm1' => 'recital.jpg',
+                    'dateD' => [2026, 11, 5, 20, 0],
+                ]],
+            ]),
+        ]);
+
+        $this->artisan('scrape:events', ['--source' => $source->id])->run();
+
+        $event = Event::where('external_ref', 'recital-lyrique')->first();
+        $this->assertNotNull($event);
+        $this->assertSame(
+            'Maison de Quartier de Quéfets, 1 Boulevard Alain Savary 31170 Tournefeuille',
+            $event->venue_address
+        );
+    }
+
     public function test_entries_without_visual_are_skipped(): void
     {
         Area::create(['name' => "L'Escale", 'slug' => 'lescale-2', 'legacy_id' => 3563]);

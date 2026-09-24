@@ -102,6 +102,8 @@ class BijouDriver implements ScraperDriver
                     'start_date' => Carbon::createFromTimestamp($startTimestamp),
                     'end_date' => Carbon::createFromTimestamp($endTimestamp),
                     'booking_url' => "https://le-bijou.soticket.net/agenda/{$slug}",
+                    'venue_name' => $show['location']['title'] ?? null,
+                    'venue_address' => $this->formatVenueAddress($show['location'] ?? []),
                     'status' => 'published',
                     'source' => 'scraped',
                 ], fn ($value) => $value !== null)
@@ -115,6 +117,28 @@ class BijouDriver implements ScraperDriver
         }
 
         return $stats;
+    }
+
+    /**
+     * Demande client, 24/09/2026 : extraire l'adresse réelle de chaque
+     * événement plutôt que de systématiquement retomber sur l'adresse de
+     * l'Area (voir TECHNICAL_DOCUMENTATION.md §55/§56). L'API Soticket
+     * fournit un objet `location` complet par spectacle (adresse, ville, code
+     * postal) — constaté en direct le 24/09/2026, identique sur les 44
+     * spectacles courants (Le Bijou n'a qu'une seule salle), mais lu
+     * directement depuis l'API plutôt que supposé égal à l'Area, au cas où
+     * la programmation utiliserait un jour un lieu partenaire différent.
+     *
+     * @param array{address?:?string,city?:?string,postal_code?:?string} $location
+     */
+    protected function formatVenueAddress(array $location): ?string
+    {
+        $parts = array_filter([
+            $location['address'] ?? null,
+            trim(($location['postal_code'] ?? '').' '.($location['city'] ?? '')) ?: null,
+        ]);
+
+        return $parts ? implode(', ', $parts) : null;
     }
 
     /** @return array{0: ?string, 1: ?string} [subtitle, description] */
