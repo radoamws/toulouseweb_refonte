@@ -1925,3 +1925,21 @@ Exécution en production le 25/09/2026 : `content:reset-scraped-agenda-events` a
 ### 3. Concerts et Exposition réordonnés dans le menu agenda
 
 Demande : insérer "Concerts" et "Exposition" entre "Spectacles" et "Agenda du jour" dans le menu catégorie de `/agenda`. Changement de DONNÉES uniquement (`event_categories.order`), pas de code — exécuté directement en production : Theatre=0, Musique=1, Spectacles=2, **Concerts=3, Exposition=4**, Agenda du jour/Enfants/Rugby=5 (inchangés entre eux), reste des catégories=6 (toutes decalées de +2 depuis l'ancien niveau 4).
+
+## 58. Découverte majeure : ~9857 événements "manual" sont en réalité de vieilles données de scraping mal étiquetées (25/09/2026, demande client)
+
+3 exemples concrets fournis par le client (adresse générique au lieu de l'adresse réelle, dates aberrantes en 2027, deux fiches distinctes redirigeant vers le MÊME événement source) se sont tous révélés être des lignes `events.source = 'manual'` — donc jamais concernées par `content:reset-scraped-agenda-events` (§56), qui ne cible QUE `source = 'scraped'` comme explicitement demandé le 24/09/2026 ("NE TOUCHE PAS... LES AGENDAS SAISIS MANUELLEMENT").
+
+Investigation chiffrée sur les 18773 lignes `manual` :
+- 6385 ont un slug à suffixe numérique (`...-2`, `...-3`...) — signe de collision de titre, donc de doublon probable (`HasSlug` ne suffixe que si un AUTRE enregistrement porte déjà ce slug).
+- ~9857 ont une `booking_url` pointant DIRECTEMENT vers un des 12 sites activement scrapés aujourd'hui : 7929 openagenda.com, 574 ardei-soft.com, 406 grand-rond.org, 292 soticket.net (Le Bijou), 257 casinosbarriere.com, 188 leventdessignes.fr, 159 theatre-cite.com, 33 theatregaronne.com, 18 grandsinterpretes, 1 odyssud.com.
+
+Conclusion : ces ~9857 lignes sont quasi certainement d'ANCIENNES données de scraping, migrées depuis l'ancien site — `source` valant `manual` par défaut dans le schéma migré, faute de distinction côté legacy — et non de vraies saisies manuelles par un administrateur. Elles portent les mêmes bugs que l'ancien scraper (adresse générique, dates mal calculées) sans jamais bénéficier des correctifs apportés au scraper ACTUEL (§55/§56), puisqu'elles ne sont jamais retouchées par lui.
+
+Exemple concret vérifié (`slug=soudain-une-ile-creation` / `soudain-une-ile-creation-2`) : 2 lignes `source=manual`, `external_ref=NULL`, `created_at=2026-09-06` (date de la migration initiale) — l'une avec `booking_url=.../soudain-une-ile_creation/`, l'autre `.../soudain-une-ile_creation-2/` (le site source a changé l'URL de la fiche depuis, l'ancienne redirige désormais vers la nouvelle) — 2 fiches distinctes sur ToulouseWeb pour un seul et même spectacle réel, chacune avec une plage de dates différente et fausse.
+
+Décision client (options présentées : supprimer+re-scraper / dédupliquer seulement / échantillon plus large avant décision) : **supprimer et re-scraper**, comme pour le §56.
+
+Nouvelle commande `content:reset-legacy-manual-scraped-events` (`App\Console\Commands\Migration\ResetLegacyManualScrapedEvents`) — portée stricte : `source = 'manual'` ET `booking_url LIKE '%domaine%'` pour un des 10 domaines listés ci-dessus. Ne touche JAMAIS un `manual` sans booking_url reconnu (vraie saisie manuelle probable), ni `scraped`/`user_submitted`, ni le cinéma. Suppression DÉFINITIVE, même raisonnement qu'au §56 (contrainte unique sur `slug`, éviter les suffixes "-2" parasites au re-scraping). Test : `ResetLegacyManualScrapedEventsTest`.
+
+Les événements encore d'actualité sur leur site source seront recréés propres (adresse/date correctes) par `scrape:events` juste après ; un événement disparu du site source (comme "Soudain, une île", dont la plage 2026 est bien passée) ne revient pas — normal, ce n'est plus d'actualité.
