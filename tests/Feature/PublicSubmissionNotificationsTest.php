@@ -175,6 +175,45 @@ class PublicSubmissionNotificationsTest extends TestCase
             && $mail->lines['Formule'] === 'Payante');
     }
 
+    /**
+     * Demande client, 25/09/2026 : permettre l'upload d'un logo/photo sur la
+     * fiche annuaire payante — même garde-fou sécurité que les annonces
+     * (GenuineImage/ImageSanitizer), voir ListingController::store().
+     */
+    public function test_listing_submission_with_a_genuine_logo_is_accepted(): void
+    {
+        Storage::fake('public');
+        Mail::fake();
+
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants-logo', 'level' => 0, 'is_active' => true]);
+
+        $this->post('/annuaire/deposer', [
+            'category_id' => $category->id,
+            'tier' => 'paid',
+            'title' => 'Le Bon Restaurant',
+            'logo' => UploadedFile::fake()->image('logo.jpg', 400, 300),
+            'url_verification' => '',
+        ])->assertRedirect(route('annuaire.index'));
+
+        $listing = Listing::firstOrFail();
+        $this->assertCount(1, $listing->getMedia('logo'));
+    }
+
+    public function test_listing_submission_rejects_a_fake_image_disguised_as_a_logo(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants-fake-logo', 'level' => 0, 'is_active' => true]);
+
+        $this->post('/annuaire/deposer', [
+            'category_id' => $category->id,
+            'tier' => 'paid',
+            'title' => 'Le Bon Restaurant',
+            'logo' => UploadedFile::fake()->create('malware.jpg', 10, 'image/jpeg'),
+            'url_verification' => '',
+        ])->assertSessionHasErrors('logo');
+
+        $this->assertDatabaseCount('listings', 0);
+    }
+
     public function test_listing_submission_rejects_an_invalid_tier_value(): void
     {
         $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);

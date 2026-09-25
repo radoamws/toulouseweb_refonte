@@ -1909,3 +1909,19 @@ Demande client : "Supprime tous les scrapings des agendas (NE TOUCHE PAS CELUI D
 Exécuté en production le 24/09/2026 : reset puis `php artisan scrape:events` (sans `--source`, les 12 sources actives). Voir le suivi d'exécution ci-dessous pour les chiffres réels.
 
 ⚠️ Non résolu / accepté tel quel : l'exemple précis donné par le client pour le bug §2 (`soudain-une-ile_creation-2`) n'a pas de ligne correspondante en base — cette page n'est plus liée depuis la page de listing actuelle de leventdessignes.fr (elle a disparu du "class" mais reste accessible en URL directe), et son texte actuel ("19 > 24 jan", SANS année du tout sur aucune des deux dates) ne peut de toute façon pas produire le décalage d'année décrit puisque `parseFrenchDateRange()` applique la MÊME référence aux deux dates dans ce cas précis (déjà le comportement avant correctif). Le bug général (une date de fin sans année réglée sur l'année suivante alors que le début a déjà une année explicite) est, lui, confirmé par relecture de code et par test de non-régression — juste pas reproductible sur CET exemple précis avec le contenu actuellement en ligne.
+
+Exécution en production le 25/09/2026 : `content:reset-scraped-agenda-events` a supprimé définitivement 1216 événements `source=scraped`, suivi d'un `scrape:events` complet (12 sources actives, sans `--source`) qui a repeuplé l'agenda avec des données fraîches — plus aucun des doublons/incohérences de date accumulés précédemment.
+
+## 57. 3 nouvelles demandes ponctuelles (25/09/2026, demande client)
+
+### 1. Upload d'image sur la fiche annuaire payante
+
+`ListingController::store()` accepte désormais un champ `logo` optionnel (`resources/views/annuaire/create.blade.php`, visible uniquement pour la formule payante) — même garde-fou sécurité que `ClassifiedController::store()`/`EventController::store()` : `App\Rules\GenuineImage` (inspection réelle du contenu du fichier, pas seulement l'extension déclarée) + `App\Services\Uploads\ImageSanitizer::sanitizeToTempFile()` avant stockage dans la collection média `logo` (déjà déclarée côté modèle, déjà utilisée côté admin — seul le formulaire public n'exposait pas encore ce champ). Un échec de sanitisation ne fait jamais échouer la soumission elle-même (la fiche reste enregistrée sans logo, à ajouter par l'admin lors de la modération). Tests : `PublicSubmissionNotificationsTest::test_listing_submission_with_a_genuine_logo_is_accepted` / `test_listing_submission_rejects_a_fake_image_disguised_as_a_logo`.
+
+### 2. Tarif et référencement Google expliqués sur la fiche payante
+
+`annuaire/create.blade.php` : la formule payante affiche maintenant "100€" dès le sélecteur de formule, et un encadré dédié dans la section "fiche complète" explique en langage simple (a) que le tarif de 100€ est réglé une fois la fiche validée par l'équipe et (b) que la fiche est ensuite soumise à Google pour un référencement rapide. Formulation volontairement engageante côté ToulouseWeb ("nous soumettons votre fiche à Google") plutôt qu'une garantie absolue sur le comportement de Google lui-même (que personne ne contrôle) — reste honnête tout en répondant à la demande "facile à comprendre pour tous les utilisateurs".
+
+### 3. Concerts et Exposition réordonnés dans le menu agenda
+
+Demande : insérer "Concerts" et "Exposition" entre "Spectacles" et "Agenda du jour" dans le menu catégorie de `/agenda`. Changement de DONNÉES uniquement (`event_categories.order`), pas de code — exécuté directement en production : Theatre=0, Musique=1, Spectacles=2, **Concerts=3, Exposition=4**, Agenda du jour/Enfants/Rugby=5 (inchangés entre eux), reste des catégories=6 (toutes decalées de +2 depuis l'ancien niveau 4).

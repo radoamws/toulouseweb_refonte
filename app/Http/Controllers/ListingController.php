@@ -5,10 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\Listing;
 use App\Models\Page;
+use App\Rules\GenuineImage;
 use App\Rules\Recaptcha;
+use App\Services\Uploads\ImageSanitizer;
 use App\Support\AdminNotifier;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * Annuaire (brief §5) : listing par catégorie avec recherche, fiche
@@ -159,6 +163,13 @@ class ListingController extends Controller
             'description' => ['nullable', 'string', 'max:5000'],
             'website' => ['nullable', 'url', 'max:255'],
             'reservation_url' => ['nullable', 'url', 'max:255'],
+            // Upload d'image sécurisé (demande client, 25/09/2026 : logo de
+            // l'établissement pour la fiche payante) — même garde-fou que
+            // ClassifiedController::store() (voir App\Rules\GenuineImage et
+            // App\Services\Uploads\ImageSanitizer) : `image`/`mimes:...`
+            // inspectent déjà le contenu réel (pas que l'extension déclarée),
+            // GenuineImage ajoute un contrôle explicite supplémentaire.
+            'logo' => ['nullable', 'file', 'image', 'mimes:jpeg,png,webp', 'max:4096', new GenuineImage()],
             // Honeypot anti-spam (brief §18) : champ invisible, un vrai
             // visiteur ne le remplit jamais. Nommé différemment de
             // ClassifiedController/ContactController pour ne pas entrer en
@@ -168,10 +179,23 @@ class ListingController extends Controller
         ]);
 
         $listing = Listing::create([
-            ...collect($validated)->except(['category_id', 'url_verification', 'recaptcha_token'])->all(),
+            ...collect($validated)->except(['category_id', 'logo', 'url_verification', 'recaptcha_token'])->all(),
             'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
         ]);
         $listing->categories()->attach($validated['category_id']);
+
+        if ($request->hasFile('logo')) {
+            // Le logo ne doit jamais faire échouer la soumission elle-même
+            // (la fiche est déjà enregistrée à ce stade) — un échec de
+            // sanitisation est journalisé et la fiche reste simplement sans
+            // logo, à ajouter par l'admin si besoin lors de la modération.
+            try {
+                $tempPath = ImageSanitizer::sanitizeToTempFile($request->file('logo'));
+                $listing->addMedia($tempPath)->toMediaCollection('logo');
+            } catch (Throwable $e) {
+                Log::warning('Logo fiche annuaire rejeté après validation', ['exception' => $e->getMessage()]);
+            }
+        }
 
         // Notification admin (demande client, voir App\Support\AdminNotifier
         // et TECHNICAL_DOCUMENTATION.md §28).

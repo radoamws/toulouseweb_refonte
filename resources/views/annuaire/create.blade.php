@@ -8,7 +8,7 @@
             quelle que soit la formule choisie ci-dessous.
         </p>
 
-        <form method="POST" action="{{ route('annuaire.store') }}" data-recaptcha-action="annuaire" class="mt-8 space-y-5"
+        <form method="POST" action="{{ route('annuaire.store') }}" enctype="multipart/form-data" data-recaptcha-action="annuaire" class="mt-8 space-y-5"
             x-data="{ tier: '{{ old('tier', 'free') }}' }">
             @csrf
 
@@ -31,8 +31,8 @@
                     <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-ink-200 p-4 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50">
                         <input type="radio" name="tier" value="paid" x-model="tier" class="mt-1" @checked(old('tier') === 'paid')>
                         <span>
-                            <span class="block text-sm font-medium text-ink-900">Payante</span>
-                            <span class="block text-xs text-ink-500">Fiche complète : description, site web, réservation… — soumise à validation comme la fiche gratuite.</span>
+                            <span class="block text-sm font-medium text-ink-900">Payante — 100€</span>
+                            <span class="block text-xs text-ink-500">Fiche complète : description, photo, site web, réservation… — soumise à validation comme la fiche gratuite.</span>
                         </span>
                     </label>
                 </div>
@@ -101,6 +101,25 @@
             toujours envoyés/acceptés même si masqués (voir ListingController::store()). --}}
             <div x-show="tier === 'paid'" x-cloak class="space-y-5 rounded-lg border border-brand-100 bg-brand-50/40 p-4">
                 <p class="text-sm font-medium text-ink-700">Contenu de la fiche complète</p>
+
+                <div class="rounded-lg border border-brand-200 bg-white p-4 text-sm text-ink-700">
+                    <p>
+                        <strong>Tarif : 100€</strong>, à régler une fois votre fiche validée par notre équipe — c'est ce
+                        qui rend votre établissement visible sur cette page.
+                    </p>
+                    <p class="mt-2">
+                        Une fois publiée, nous soumettons votre fiche à Google pour qu'elle apparaisse rapidement dans
+                        ses résultats de recherche — vos clients pourront ainsi vous trouver facilement.
+                    </p>
+                </div>
+
+                <div>
+                    <label for="logo" class="block text-sm font-medium text-ink-700">Photo / logo de l'établissement (facultatif)</label>
+                    <input type="file" name="logo" id="logo" accept="image/jpeg,image/png,image/webp"
+                        class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                    <p class="mt-1 text-xs text-ink-500">JPEG, PNG ou WEBP, 4 Mo maximum.</p>
+                    <x-ui.field-error name="logo" />
+                </div>
 
                 <div>
                     <label for="short_description" class="block text-sm font-medium text-ink-700">Accroche</label>
