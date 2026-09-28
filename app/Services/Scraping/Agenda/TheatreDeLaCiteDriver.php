@@ -128,19 +128,17 @@ class TheatreDeLaCiteDriver implements ScraperDriver
                 continue;
             }
 
-            $startDate = $this->extractDate($card);
-            if (! $startDate) {
-                Log::channel('single')->warning("scrape:events (Théâtre de la Cité) — date illisible pour \"{$title}\" ({$href}), ignoré.");
-                $stats['skipped']++;
-
-                continue;
-            }
-
             $image = $card->filter('img.desktop-image')->count()
                 ? $card->filter('img.desktop-image')->attr('data-original')
                 : null;
 
             $detail = $this->fetchDetail($href);
+            if (! $detail || ! $detail['start_date']) {
+                Log::channel('single')->warning("scrape:events (Théâtre de la Cité) — date illisible pour \"{$title}\" ({$href}), ignoré.");
+                $stats['skipped']++;
+
+                continue;
+            }
 
             $existing = Event::where('external_ref', $externalRef)->exists();
 
@@ -150,11 +148,11 @@ class TheatreDeLaCiteDriver implements ScraperDriver
                     'area_id' => $area->id,
                     'title' => $title,
                     'image' => $image,
-                    'start_date' => $startDate,
-                    'end_date' => $startDate,
-                    'booking_url' => $detail['booking_url'] ?? null,
-                    'price' => $detail['price_text'] ?? null,
-                    'venue_name' => $detail['venue_name'] ?? null,
+                    'start_date' => $detail['start_date'],
+                    'end_date' => $detail['end_date'],
+                    'booking_url' => $detail['booking_url'],
+                    'price' => $detail['price_text'],
+                    'venue_name' => $detail['venue_name'],
                     'status' => 'published',
                     'source' => 'scraped',
                 ], fn ($value) => $value !== null)
@@ -167,23 +165,64 @@ class TheatreDeLaCiteDriver implements ScraperDriver
         return $stats;
     }
 
-    protected function extractDate(Crawler $card): ?Carbon
+    /**
+     * Demande client, 28/09/2026 : la date affichée sur la LISTING
+     * (`.programmation-grid__item__date`, une seule date, jamais une plage)
+     * ne reflète pas la vraie durée d'un spectacle — la fiche détail, elle,
+     * affiche la plage réelle dans `.spectacle__period`. Formats réels
+     * vérifiés en direct le 28/09/2026 sur 8 fiches :
+     *   - Une seule date : "8 octobre 2026".
+     *   - Plage même mois : "7 – 8 octobre 2026" (le DÉBUT n'a NI mois NI
+     *     année, seulement le jour).
+     *   - Plage entre mois différents : "23 septembre – 3 octobre 2026" (le
+     *     DÉBUT a un mois mais pas d'année, empruntée à la fin).
+     * Séparateur réel : un tiret cadratin "–" (U+2013), pas un tiret simple
+     * (les deux sont acceptés par prudence). Espaces réelles dans le DOM :
+     * des espaces insécables U+00A0 (`&nbsp;`), PAS des espaces ASCII —
+     * `\s` de PCRE ne les reconnaît pas nativement, converties explicitement
+     * avant tout parsing.
+     *
+     * @return array{0: ?Carbon, 1: ?Carbon}
+     */
+    protected function parsePeriod(string $rawText, ?string $timeText = null): array
     {
-        $dateNode = $card->filter('.programmation-grid__item__date');
-        if ($dateNode->count() === 0) {
-            return null;
+        $text = str_replace("\u{00A0}", ' ', $rawText);
+        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+
+        $parts = preg_split('/\s*[-–]\s*/u', $text, 2);
+
+        if (count($parts) < 2 || trim($parts[1]) === '') {
+            $single = $this->parseFrenchDayMonthYear($text);
+
+            return [$this->applyTime($single, $timeText), $single];
         }
 
-        $timeText = null;
-        $timeNode = $dateNode->filter('.period-heure');
-        if ($timeNode->count()) {
-            $timeText = trim($timeNode->text(''));
+        [$startRaw, $endRaw] = $parts;
+        $end = $this->parseFrenchDayMonthYear($endRaw);
+
+        if (! $end) {
+            return [null, null];
         }
 
-        $fullText = preg_replace('/\s+/u', ' ', trim($dateNode->text('')));
-        $dateOnlyText = $timeText ? trim(str_replace($timeText, '', $fullText)) : $fullText;
+        if (! preg_match('/[a-zA-Zéûôîâ]/u', $startRaw)) {
+            // "7 – 8 octobre 2026" : le début n'a ni mois ni année, on lui
+            // emprunte le "mois année" de la fin avant de reparser.
+            $monthYear = trim(preg_replace('/^\d+\s*/', '', $endRaw) ?? '');
+            $startRaw = trim($startRaw.' '.$monthYear);
+        } elseif (! preg_match('/\d{4}/', $startRaw)) {
+            // "23 septembre – 3 octobre 2026" : le début a un mois mais pas
+            // d'année, on lui emprunte celle de la fin.
+            $startRaw = trim($startRaw.' '.$end->year);
+        }
 
-        if (! preg_match('/(\d{1,2})\s+([a-zéû]+)\s+(\d{4})/ui', $dateOnlyText, $matches)) {
+        $start = $this->parseFrenchDayMonthYear($startRaw) ?? $end;
+
+        return [$this->applyTime($start, $timeText), $end];
+    }
+
+    protected function parseFrenchDayMonthYear(string $text): ?Carbon
+    {
+        if (! preg_match('/(\d{1,2})\s+([a-zA-Zéûôîâ]+)\s+(\d{4})/ui', trim($text), $matches)) {
             return null;
         }
 
@@ -193,19 +232,22 @@ class TheatreDeLaCiteDriver implements ScraperDriver
         }
 
         try {
-            $date = Carbon::create((int) $matches[3], $month, (int) $matches[1]);
+            return Carbon::create((int) $matches[3], $month, (int) $matches[1]);
         } catch (\Throwable) {
             return null;
         }
+    }
 
-        if ($timeText && preg_match('/(\d{1,2}):(\d{2})/', $timeText, $timeMatches)) {
-            $date->setTime((int) $timeMatches[1], (int) $timeMatches[2]);
+    protected function applyTime(?Carbon $date, ?string $timeText): ?Carbon
+    {
+        if ($date && $timeText && preg_match('/(\d{1,2})[:h](\d{2})/', $timeText, $matches)) {
+            $date->setTime((int) $matches[1], (int) $matches[2]);
         }
 
         return $date;
     }
 
-    /** @return array{booking_url: ?string, price_text: ?string, venue_name: ?string}|null */
+    /** @return array{start_date: ?Carbon, end_date: ?Carbon, booking_url: ?string, price_text: ?string, venue_name: ?string}|null */
     protected function fetchDetail(string $url): ?array
     {
         $html = $this->fetch($url);
@@ -215,13 +257,22 @@ class TheatreDeLaCiteDriver implements ScraperDriver
 
         $crawler = new Crawler($html);
 
-        $bookingUrl = null;
-        foreach ($crawler->filter('a') as $node) {
-            if (str_contains((new Crawler($node))->text(''), 'Réserver')) {
-                $bookingUrl = $node->getAttribute('href') ?: null;
+        $periodNode = $crawler->filter('.spectacle__period')->first();
+        $startDate = $endDate = null;
+        if ($periodNode->count()) {
+            $timeNode = $periodNode->filter('.period-heure')->first();
+            $timeText = $timeNode->count() ? trim($timeNode->text('')) : null;
+            [$startDate, $endDate] = $this->parsePeriod($periodNode->text(''), $timeText);
+        }
 
-                break;
-            }
+        // Demande client, 28/09/2026 : lien de réservation uniquement quand
+        // le bloc `.is-billeterie` existe (repli explicite sur AUCUN lien
+        // sinon — remplace la recherche par texte "Réserver", plus fragile
+        // face à un changement de libellé côté site source).
+        $bookingUrl = null;
+        $billetterieNode = $crawler->filter('.is-billeterie a')->first();
+        if ($billetterieNode->count()) {
+            $bookingUrl = $billetterieNode->attr('href') ?: null;
         }
 
         $priceText = null;
@@ -254,7 +305,13 @@ class TheatreDeLaCiteDriver implements ScraperDriver
             }
         }
 
-        return ['booking_url' => $bookingUrl, 'price_text' => $priceText, 'venue_name' => $venueName];
+        return [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'booking_url' => $bookingUrl,
+            'price_text' => $priceText,
+            'venue_name' => $venueName,
+        ];
     }
 
     protected function fetch(string $url): ?string

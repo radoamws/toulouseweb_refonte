@@ -18,9 +18,17 @@ use Tests\TestCase;
  * legacy fonctionnel retrouvé, reconstruit contre le vrai site). Les
  * fragments HTML ci-dessous reprennent fidèlement les classes CSS réelles
  * vérifiées en direct (`programmation-grid__item--evenements`,
- * `spectacle__informations__content__line`...), pas une supposition —
- * confirmé aussi par une exécution réelle (30/30 événements importés sans
- * erreur, voir TECHNICAL_DOCUMENTATION.md §13).
+ * `spectacle__informations__content__line`, `spectacle__period`,
+ * `is-billeterie`...), pas une supposition — confirmé aussi par une
+ * exécution réelle, voir TECHNICAL_DOCUMENTATION.md §13/§59.
+ *
+ * ⚠️ Demande client, 28/09/2026 : la date faisait foi jusqu'ici via la carte
+ * de LISTING (`.programmation-grid__item__date`, jamais une plage) — elle
+ * vient désormais de la fiche DÉTAIL (`.spectacle__period`), seule à
+ * afficher la vraie plage de dates (voir TheatreDeLaCiteDriver::parsePeriod()).
+ * `detailHtml()` reflète donc ce nouveau champ, `card()` garde son
+ * `$dateText`/`$timeText` pour la fidélité du fixture de listing mais ces
+ * valeurs n'influencent plus `start_date`/`end_date`.
  */
 class ScrapeEventsTest extends TestCase
 {
@@ -72,14 +80,18 @@ class ScrapeEventsTest extends TestCase
         HTML;
     }
 
-    protected function detailHtml(?string $bookingUrl = 'https://theatre-cite.notre-billetterie.com/billets?&seance=1971'): string
+    protected function detailHtml(string $periodText = '26 septembre 2026', ?string $timeText = '10h00', ?string $bookingUrl = 'https://theatre-cite.notre-billetterie.com/billets?&seance=1971'): string
     {
-        $bookingLink = $bookingUrl ? "<a href=\"{$bookingUrl}\">Réserver</a>" : '';
+        $bookingBlock = $bookingUrl
+            ? "<div class=\"spectacle__representations__item is-billeterie\"><a href=\"{$bookingUrl}\" target=\"_blank\">Réserver une place</a></div>"
+            : '';
+        $timeSpan = $timeText ? "<span class=\"period-heure\">{$timeText}</span>" : '';
 
         return <<<HTML
             <html><body>
+                <div class="spectacle__period">{$periodText}{$timeSpan}</div>
                 <div class="spectacle__informations__content__line">Samedi 26 septembre à 14h Le CUB Durée 1h10 Gratuit sur réservation</div>
-                {$bookingLink}
+                {$bookingBlock}
             </body></html>
         HTML;
     }
@@ -151,6 +163,9 @@ class ScrapeEventsTest extends TestCase
             'theatre-cite.com/programmation' => Http::response($this->listingHtml([
                 $this->card('date-illisible', 'Événement sans date', 'Dates à venir', null),
             ])),
+            'theatre-cite.com/programmation/2026-2027/evenement/date-illisible/' => Http::response(
+                $this->detailHtml(periodText: 'Dates à venir', timeText: null)
+            ),
         ]);
 
         $this->artisan('scrape:events')->run();
@@ -276,6 +291,7 @@ class ScrapeEventsTest extends TestCase
             ])),
             'theatre-cite.com/programmation/2026-2027/spectacle/le-silence/' => Http::response(
                 '<html><body>'
+                .'<div class="spectacle__period">3 novembre 2026</div>'
                 .'<div class="spectacle__informations__content__line">Théâtre</div>'
                 .'<div class="spectacle__informations__content__line">Théâtre</div>'
                 .'<div class="spectacle__informations__content__line">Le CUB Durée 1h45</div>'
@@ -289,6 +305,119 @@ class ScrapeEventsTest extends TestCase
         $event = Event::where('external_ref', 'le-silence')->first();
         $this->assertNotNull($event);
         $this->assertSame('Le CUB', $event->venue_name);
+    }
+
+    /**
+     * Demande client, 28/09/2026 : la date d'un spectacle vient de la fiche
+     * détail (`.spectacle__period`), pas de la carte de listing — seule la
+     * fiche détail affiche la vraie plage. Cas réel vérifié en direct :
+     * une seule date, sans plage ("8 octobre 2026").
+     */
+    public function test_single_date_period_sets_the_same_start_and_end_date(): void
+    {
+        Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);
+        EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $this->makeSource();
+
+        Http::fake([
+            'theatre-cite.com/programmation' => Http::response($this->listingHtml([
+                $this->card('bord-de-scene', 'Bord de scène', '8 octobre 2026', type: 'evenements'),
+            ])),
+            'theatre-cite.com/programmation/2026-2027/evenement/bord-de-scene/' => Http::response(
+                $this->detailHtml(periodText: '8 octobre 2026', timeText: null)
+            ),
+        ]);
+
+        $this->artisan('scrape:events')->run();
+
+        $event = Event::where('external_ref', 'bord-de-scene')->first();
+        $this->assertNotNull($event);
+        $this->assertSame('2026-10-08', $event->start_date->format('Y-m-d'));
+        $this->assertSame('2026-10-08', $event->end_date->format('Y-m-d'));
+    }
+
+    /**
+     * Cas réel vérifié en direct : plage dans le MÊME mois, "7 – 8 octobre
+     * 2026" (tiret cadratin U+2013, espaces insécables U+00A0) — le DÉBUT
+     * ("7") n'a ni mois ni année dans le DOM, empruntés à la fin.
+     */
+    public function test_same_month_range_borrows_month_and_year_for_the_start_date(): void
+    {
+        Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);
+        EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $this->makeSource();
+
+        Http::fake([
+            'theatre-cite.com/programmation' => Http::response($this->listingHtml([
+                $this->card('karaoke', 'Karaoké', '7 octobre 2026', type: 'spectacles'),
+            ])),
+            'theatre-cite.com/programmation/2026-2027/spectacle/karaoke/' => Http::response(
+                $this->detailHtml(periodText: "7\u{a0}–\u{a0}8\u{a0}octobre\u{a0}2026", timeText: null)
+            ),
+        ]);
+
+        $this->artisan('scrape:events')->run();
+
+        $event = Event::where('external_ref', 'karaoke')->first();
+        $this->assertNotNull($event);
+        $this->assertSame('2026-10-07', $event->start_date->format('Y-m-d'));
+        $this->assertSame('2026-10-08', $event->end_date->format('Y-m-d'));
+    }
+
+    /**
+     * Cas réel vérifié en direct : plage entre deux mois DIFFÉRENTS, "23
+     * septembre – 3 octobre 2026" — le DÉBUT a un mois mais pas d'année,
+     * empruntée à la fin (sans quoi il retomberait sur l'année du scraper).
+     */
+    public function test_cross_month_range_borrows_only_the_year_for_the_start_date(): void
+    {
+        Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);
+        EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $this->makeSource();
+
+        Http::fake([
+            'theatre-cite.com/programmation' => Http::response($this->listingHtml([
+                $this->card('qui-som', 'Qui som?', '23 septembre 2026', type: 'spectacles'),
+            ])),
+            'theatre-cite.com/programmation/2026-2027/spectacle/qui-som/' => Http::response(
+                $this->detailHtml(periodText: "23\u{a0}septembre –\u{a0}3\u{a0}octobre\u{a0}2026", timeText: null)
+            ),
+        ]);
+
+        $this->artisan('scrape:events')->run();
+
+        $event = Event::where('external_ref', 'qui-som')->first();
+        $this->assertNotNull($event);
+        $this->assertSame('2026-09-23', $event->start_date->format('Y-m-d'));
+        $this->assertSame('2026-10-03', $event->end_date->format('Y-m-d'));
+    }
+
+    /**
+     * Demande client, 28/09/2026 : lien de réservation UNIQUEMENT si le bloc
+     * `.is-billeterie` existe sur la fiche détail — sinon aucun lien (une
+     * "evenement" gratuite comme un bord-de-scène ou une visite du théâtre
+     * n'a réellement aucune billetterie, vérifié en direct).
+     */
+    public function test_no_billeterie_block_means_no_booking_url(): void
+    {
+        Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);
+        EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $this->makeSource();
+
+        Http::fake([
+            'theatre-cite.com/programmation' => Http::response($this->listingHtml([
+                $this->card('cote-coulisses', 'Côté coulisses', '8 octobre 2026'),
+            ])),
+            'theatre-cite.com/programmation/2026-2027/evenement/cote-coulisses/' => Http::response(
+                $this->detailHtml(periodText: '8 octobre 2026', timeText: null, bookingUrl: null)
+            ),
+        ]);
+
+        $this->artisan('scrape:events')->run();
+
+        $event = Event::where('external_ref', 'cote-coulisses')->first();
+        $this->assertNotNull($event);
+        $this->assertNull($event->booking_url);
     }
 
     public function test_inactive_source_is_not_run(): void

@@ -1947,3 +1947,20 @@ Exécuté en production le 25/09/2026 : 9697 lignes supprimées définitivement,
 - "Soudain, une île" n'existe plus qu'en UNE seule fiche (`soudain-une-ile-1`, `source=scraped`, external_ref réel `joan-cambon_anne-lefevre_soudain-une-ile` — le titre affiché côté source a changé depuis la migration initiale) au lieu des 2 doublons legacy à dates incohérentes. Le texte source ("18 > 20 jan", toujours sans année) est maintenant résolu de façon AUTO-COHÉRENTE (18 janvier 2027 → 20 janvier 2027, les deux bornes sur la même année) grâce au correctif du §55/2 — confirme que le bug initialement signalé par le client tenait aux données legacy stagnantes, pas au scraper actuel.
 
 État final : `manual`=8914 (contre 18773 avant, 9697 supprimées comme prévu par le dry-run), `scraped`=710, `user_submitted`=16 non supprimés sur 18 au total (2 déjà soft-deleted depuis le 18/09 et le 24/09, avant cette commande — sans rapport avec elle, confirmé par leur `deleted_at`).
+
+## 59. TheatreDeLaCiteDriver : dates réelles depuis la fiche détail, réservation conditionnelle (28/09/2026, demande client)
+
+Le client a lui-même repéré et décrit précisément la structure DOM réelle du site (avant même que je ne la vérifie en direct) — instructions suivies puis affinées après vérification live sur 8+ fiches :
+
+1. **Lien de détail** : le client mentionnait une classe `.is-internal` — vérifiée en direct, elle n'existe PAS sur les cartes de listing (seulement sur un lien du footer, "S'inscrire à la newsletter", sans rapport). L'extraction déjà en place (premier `<a>` de la carte) reste donc inchangée, elle produit déjà le bon résultat.
+2. **Date** : venait jusqu'ici de la carte de LISTING (`.programmation-grid__item__date`, qui n'a jamais qu'UNE SEULE date, jamais de plage) — remplacée par la fiche détail (`.spectacle__period`), seule à afficher la vraie plage. 3 formats réels vérifiés en direct :
+   - Une seule date : `"8 octobre 2026"`.
+   - Plage même mois : `"7 – 8 octobre 2026"` — le DÉBUT n'a NI mois NI année dans le DOM (juste "7"), empruntés à la fin avant reparsing.
+   - Plage entre mois différents : `"23 septembre – 3 octobre 2026"` — le DÉBUT a un mois mais pas d'année, empruntée à la fin (sinon elle retomberait sur l'année du scraper).
+
+   Piège DOM réel (le client l'avait anticipé : *"certains formats de date peuvent avoir plusieurs espaces ou saut de ligne"*) : le séparateur est un tiret CADRATIN "–" (U+2013), pas un tiret simple (les deux acceptés par prudence) ; les espaces entre jour/mois/année sont des espaces INSÉCABLES U+00A0 (`&nbsp;`), pas des espaces ASCII — `\s` de PCRE ne les reconnaît pas nativement, converties explicitement (`str_replace("\u{00A0}", ' ', ...)`) avant tout parsing, sans quoi la regex de date échouait silencieusement.
+
+   `end_date` reflète désormais la VRAIE date de fin (auparavant toujours forcée égale à `start_date`, la plage n'était jamais capturée).
+3. **Réservation** : ne fixe `booking_url` QUE si le bloc `.is-billeterie` existe sur la fiche détail (repli explicite sur AUCUN lien sinon) — remplace la recherche par texte "Réserver" (fragile face à un changement de libellé). Vérifié en direct : les "evenements" gratuits (bord-de-scène, visite du théâtre...) n'ont réellement AUCUNE billetterie, la classe est simplement absente.
+
+`TheatreDeLaCiteDriver::fetchDetail()` fait maintenant une SEULE requête HTTP par carte (avant : la date venait de la carte de listing en amont, `fetchDetail()` n'apportait que prix/réservation/lieu en aval — désormais tout vient de la fiche détail en un seul passage). Tests : `ScrapeEventsTest::test_single_date_period_sets_the_same_start_and_end_date` / `test_same_month_range_borrows_month_and_year_for_the_start_date` / `test_cross_month_range_borrows_only_the_year_for_the_start_date` / `test_no_billeterie_block_means_no_booking_url`.
