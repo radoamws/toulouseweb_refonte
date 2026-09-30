@@ -1980,3 +1980,7 @@ Le client a fourni des pistes précises (`.spectacle-item`, position des dates/d
 - **Catégorie** : résolue depuis la taxonomie `type_de_spectacle` (Théâtre/Concert/Danse/Cirque/Festival...) par correspondance de libellé, en excluant "Spectacle" (fourre-tout appliqué à 167/242 entrées, sans valeur de catégorisation).
 
 Tests : `EscaleScraperTest` (réécrit intégralement, fixtures fidèles à la structure Elementor réelle vérifiée en direct).
+
+⚠️ Bug réel trouvé et corrigé en déployant : `per_page=100&_embed=1` (résolution du featured_media en un seul appel) met ~48s à répondre côté API réelle — au-dessus du timeout HTTP partagé (20s, `FetchesHttp`), faisait échouer toute la source. Sans `_embed`, la même requête répond en <1s. Images désormais résolues séparément via l'endpoint standard `/media` (batché par `include[]`, <1s pour ~78 ids) — `EscaleDriver::fetchFeaturedImages()`.
+
+Exécuté en production le 30/09/2026 : les 70 anciens événements scrapés (ancien schéma Ardei-Soft/VEL) supprimés définitivement (même raisonnement qu'aux §56/§58 : force delete pour libérer les slugs), puis `scrape:events --source=33` a importé 78/78 spectacles frais sans erreur. Vérifié en direct sur `/agenda/colline-1` : description complète, plage de dates (30 septembre → 4 octobre 2026), adresse réelle ("l'Escale — Place Roger Panouse 31170 Tournefeuille"), tarifs détaillés, JSON-LD cohérent. `content:dedupe-duplicate-events`/`content:dedupe-agenda-manual-entries` : 0 doublon.
