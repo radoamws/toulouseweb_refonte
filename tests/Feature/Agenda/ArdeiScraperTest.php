@@ -12,9 +12,9 @@ use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
- * Scraper agenda pour L'Aria (Cornebarrieu) — même plateforme Ardei-Soft/VEL
- * que EscaleDriver (voir son docblock et celui de AbstractArdeiSoftDriver),
- * mais avec catégorisation par thème (`updateAgendaforArdei`, voir
+ * Scraper agenda pour L'Aria (Cornebarrieu) — plateforme Ardei-Soft/VEL (voir
+ * docblock de AbstractArdeiSoftDriver), avec catégorisation par thème
+ * (`updateAgendaforArdei`, voir
  * old/backEnd/app/Http/Controllers/AgendaController.php ligne ~4735).
  * Vérifié en direct le 25/08/2026 : 18/18 spectacles importés.
  */
@@ -58,7 +58,7 @@ class ArdeiScraperTest extends TestCase
         $this->assertNotNull($event);
         $this->assertSame('Une pièce de théâtre', $event->title);
         // Horaire (06/09/2026, corrigé suite à l'audit §18) : "HH:MM" zéro-complété
-        // depuis dateD (date de DÉBUT, contrairement à EscaleDriver qui utilise dateF).
+        // depuis dateD (date de DÉBUT).
         $this->assertSame(['20:00'], $event->schedule);
         $this->assertTrue($event->categories->contains('slug', 'theatre'));
     }

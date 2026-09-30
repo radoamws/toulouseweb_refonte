@@ -11,8 +11,10 @@ use App\Services\Scraping\Agenda\Concerns\AbstractArdeiSoftDriver;
  * docblock de AbstractArdeiSoftDriver pour le contexte complet (plateforme
  * Ardei-Soft/VEL).
  *
- * Distinct de EscaleDriver (autre ville/salle sur la même plateforme
- * "SenousritPGI", d'où l'abstraction commune) : le nom "Ardei" dans le cron
+ * Historiquement distinct de EscaleDriver (autre ville/salle sur la même
+ * plateforme "SenousritPGI", d'où l'abstraction commune `AbstractArdeiSoftDriver`
+ * — EscaleDriver a depuis migré vers lescale-tournefeuille.fr, voir son
+ * docblock et TECHNICAL_DOCUMENTATION.md §60) : le nom "Ardei" dans le cron
  * client (`updateAgendaforArdei`) et dans les URLs (`ardei-soft.com`) désigne
  * ici l'éditeur de la plateforme de billetterie, pas un nom de salle — la
  * vraie salle migrée est "Aria" (Cornebarrieu).
@@ -26,11 +28,9 @@ use App\Services\Scraping\Agenda\Concerns\AbstractArdeiSoftDriver;
  *
  * ⚠️ Horaire (06/09/2026, corrigé suite à l'audit §18 de
  * TECHNICAL_DOCUMENTATION.md) : le legacy affiche `"HH:MM"` zéro-complété
- * (`addZeroNumberToString`) depuis `dateD[3]:dateD[4]` — la date de DÉBUT,
- * contrairement à EscaleDriver qui utilise la date de fin (bizarrerie du
- * code source legacy reproduite telle quelle, chaque salle étant fidèle à
- * SA propre méthode d'origine) — silencieusement jamais reporté avant ce
- * correctif.
+ * (`addZeroNumberToString`) depuis `dateD[3]:dateD[4]` — la date de DÉBUT
+ * (bizarrerie du code source legacy reproduite telle quelle) —
+ * silencieusement jamais reporté avant ce correctif.
  *
  * area_slug par défaut résolu via `areas.legacy_id = 3708` : "Aria"
  * (slug `aria`).

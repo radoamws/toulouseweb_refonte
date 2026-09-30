@@ -88,9 +88,7 @@ class AgendaScraperSourcesSeeder extends Seeder
             "L'Escale (Tournefeuille)" => [
                 'driver' => EscaleDriver::class,
                 'config' => [
-                    'town_slug' => 'tournefeuille',
                     'area_slug' => 'lescale-2',
-                    'tarifs_group' => 3,
                 ],
             ],
             'Théâtre du Grand Rond' => [

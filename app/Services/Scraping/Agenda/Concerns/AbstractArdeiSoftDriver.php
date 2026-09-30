@@ -49,9 +49,11 @@ abstract class AbstractArdeiSoftDriver implements ScraperDriver
     /**
      * Horaire affiché pour ce spectacle (06/09/2026, corrigé suite à l'audit
      * §18 de TECHNICAL_DOCUMENTATION.md) — chaque salle utilisant cette
-     * plateforme a sa propre formule côté legacy (voir les 2 implémentations
-     * concrètes, `EscaleDriver`/`ArdeiDriver`), pas de valeur par défaut
-     * commune sensée : `null` ici tant qu'une sous-classe ne l'implémente pas.
+     * plateforme a sa propre formule côté legacy (voir `ArdeiDriver`, seule
+     * implémentation concrète restante depuis que `EscaleDriver` a migré vers
+     * lescale-tournefeuille.fr, voir TECHNICAL_DOCUMENTATION.md §60), pas de
+     * valeur par défaut commune sensée : `null` ici tant qu'une sous-classe
+     * ne l'implémente pas.
      *
      * @return string[]|null
      */
