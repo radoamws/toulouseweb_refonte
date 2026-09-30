@@ -95,15 +95,18 @@ class EscaleDriver implements ScraperDriver
             throw new \RuntimeException('Échec de récupération de l\'API WordPress ('.self::API_BASE.'/les_spectacles).');
         }
 
+        $shows = array_values(array_filter(
+            $shows,
+            fn (array $show) => ! array_intersect($show['etat_du_spectacle'] ?? [], $archiveTermIds)
+        ));
+
+        $imagesByMediaId = $this->fetchFeaturedImages(
+            array_values(array_unique(array_filter(array_column($shows, 'featured_media'))))
+        );
+
         $stats = ['found' => 0, 'created' => 0, 'updated' => 0, 'skipped' => 0];
 
         foreach ($shows as $show) {
-            $etats = $show['etat_du_spectacle'] ?? [];
-            if (array_intersect($etats, $archiveTermIds)) {
-                // Spectacle d'une saison précédente / archive — jamais scrapé, voir docblock de classe.
-                continue;
-            }
-
             $stats['found']++;
 
             $externalRef = $show['slug'] ?? null;
@@ -123,7 +126,7 @@ class EscaleDriver implements ScraperDriver
                 continue;
             }
 
-            $image = $show['_embedded']['wp:featuredmedia'][0]['source_url'] ?? null;
+            $image = $imagesByMediaId[$show['featured_media'] ?? 0] ?? null;
 
             $existing = Event::where('external_ref', $externalRef)->exists();
 
@@ -156,13 +159,24 @@ class EscaleDriver implements ScraperDriver
         return $stats;
     }
 
-    /** @return array<int,array<string,mixed>>|null */
+    /**
+     * ⚠️ `_embed=1` (résolution du featured_media en un seul appel) constaté
+     * en direct le 30/09/2026 : ~48s de réponse à `per_page=100` (contre <1s
+     * sans), largement au-dessus du timeout HTTP partagé (20s, voir
+     * FetchesHttp) — une requête `X-WP-TotalPages` sur un site WordPress
+     * mutualisé standard n'a aucune raison d'être aussi lente, mais c'est le
+     * comportement réel constaté. Les images sont donc résolues séparément
+     * via `fetchFeaturedImages()` (endpoint `/media`, rapide), voir son
+     * docblock.
+     *
+     * @return array<int,array<string,mixed>>|null
+     */
     protected function fetchAllShows(): ?array
     {
         $all = [];
 
         for ($page = 1; $page <= 5; $page++) {
-            $url = self::API_BASE."/les_spectacles?per_page=100&page={$page}&_embed=1";
+            $url = self::API_BASE."/les_spectacles?per_page=100&page={$page}";
             $payload = $this->fetchJson($url);
 
             if ($payload === null) {
@@ -179,6 +193,33 @@ class EscaleDriver implements ScraperDriver
         }
 
         return $all ?: null;
+    }
+
+    /**
+     * Résout les URLs d'image en un seul appel batché (`include[]=ID1&
+     * include[]=ID2...`, endpoint standard `/media`) plutôt que le
+     * `_embed=1` de la liste principale (voir docblock de
+     * `fetchAllShows()` — 48s de réponse constatées en direct, contre <2s
+     * pour ce même volume via `/media`).
+     *
+     * @param  int[]  $mediaIds
+     * @return array<int,string> id média => URL
+     */
+    protected function fetchFeaturedImages(array $mediaIds): array
+    {
+        if (! $mediaIds) {
+            return [];
+        }
+
+        // `include%5B%5D=` (déjà encodé), pas `include[]=` brut : les crochets
+        // ne sont pas des caractères d'URI valides (RFC 3986), Guzzle les
+        // ré-encode différemment selon le contexte — vérifié en direct,
+        // encoder soi-même évite toute ambiguïté (même précaution que
+        // AbstractArdeiSoftDriver::run() pour son `reqData` JSON).
+        $query = 'per_page=100'.implode('', array_map(fn ($id) => '&include%5B%5D='.$id, $mediaIds));
+        $media = $this->fetchJson(self::API_BASE."/media?{$query}") ?? [];
+
+        return collect($media)->pluck('source_url', 'id')->all();
     }
 
     /** @return array<int,string> id de terme => nom */

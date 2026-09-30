@@ -113,15 +113,18 @@ class EscaleScraperTest extends TestCase
 
         Http::fake([
             ...$this->fakeTaxonomies(),
-            self::API_BASE.'/les_spectacles?per_page=100&page=1&_embed=1' => Http::response([[
+            self::API_BASE.'/les_spectacles?per_page=100&page=1' => Http::response([[
                 'id' => 1, 'slug' => 'festivals-croises',
                 'title' => ['rendered' => 'Festivals croisés'],
                 'link' => 'https://lescale-tournefeuille.fr/les_spectacles/festivals-croises/',
                 'type_de_spectacle' => [6],
                 'etat_du_spectacle' => [],
-                '_embedded' => ['wp:featuredmedia' => [['source_url' => 'https://lescale-tournefeuille.fr/img/festival.jpg']]],
+                'featured_media' => 42,
             ]]),
-            self::API_BASE.'/les_spectacles?per_page=100&page=2&_embed=1' => Http::response([]),
+            self::API_BASE.'/les_spectacles?per_page=100&page=2' => Http::response([]),
+            self::API_BASE.'/media?per_page=100&include%5B%5D=42' => Http::response([
+                ['id' => 42, 'source_url' => 'https://lescale-tournefeuille.fr/img/festival.jpg'],
+            ]),
             'lescale-tournefeuille.fr/les_spectacles/festivals-croises/' => Http::response(
                 $this->detailHtml(['2 octobre'])
             ),
@@ -152,14 +155,14 @@ class EscaleScraperTest extends TestCase
 
         Http::fake([
             ...$this->fakeTaxonomies(),
-            self::API_BASE.'/les_spectacles?per_page=100&page=1&_embed=1' => Http::response([[
+            self::API_BASE.'/les_spectacles?per_page=100&page=1' => Http::response([[
                 'id' => 2, 'slug' => 'colline',
                 'title' => ['rendered' => 'Colline'],
                 'link' => 'https://lescale-tournefeuille.fr/les_spectacles/colline/',
                 'type_de_spectacle' => [6],
                 'etat_du_spectacle' => [],
             ]]),
-            self::API_BASE.'/les_spectacles?per_page=100&page=2&_embed=1' => Http::response([]),
+            self::API_BASE.'/les_spectacles?per_page=100&page=2' => Http::response([]),
             'lescale-tournefeuille.fr/les_spectacles/colline/' => Http::response(
                 $this->detailHtml(['30 septembre', '4 octobre 2026'])
             ),
@@ -179,14 +182,14 @@ class EscaleScraperTest extends TestCase
 
         Http::fake([
             ...$this->fakeTaxonomies(),
-            self::API_BASE.'/les_spectacles?per_page=100&page=1&_embed=1' => Http::response([[
+            self::API_BASE.'/les_spectacles?per_page=100&page=1' => Http::response([[
                 'id' => 3, 'slug' => 'colline',
                 'title' => ['rendered' => 'Colline'],
                 'link' => 'https://lescale-tournefeuille.fr/les_spectacles/colline/',
                 'type_de_spectacle' => [6],
                 'etat_du_spectacle' => [],
             ]]),
-            self::API_BASE.'/les_spectacles?per_page=100&page=2&_embed=1' => Http::response([]),
+            self::API_BASE.'/les_spectacles?per_page=100&page=2' => Http::response([]),
             'lescale-tournefeuille.fr/les_spectacles/colline/' => Http::response(
                 $this->detailHtml(['30 septembre', '4 octobre 2026'], venueLabel: 'Cinéma Utopia')
             ),
@@ -211,14 +214,14 @@ class EscaleScraperTest extends TestCase
 
         Http::fake([
             ...$this->fakeTaxonomies(),
-            self::API_BASE.'/les_spectacles?per_page=100&page=1&_embed=1' => Http::response([[
+            self::API_BASE.'/les_spectacles?per_page=100&page=1' => Http::response([[
                 'id' => 4, 'slug' => 'rencontre-gratuite',
                 'title' => ['rendered' => 'Rencontre gratuite'],
                 'link' => 'https://lescale-tournefeuille.fr/les_spectacles/rencontre-gratuite/',
                 'type_de_spectacle' => [6],
                 'etat_du_spectacle' => [],
             ]]),
-            self::API_BASE.'/les_spectacles?per_page=100&page=2&_embed=1' => Http::response([]),
+            self::API_BASE.'/les_spectacles?per_page=100&page=2' => Http::response([]),
             'lescale-tournefeuille.fr/les_spectacles/rencontre-gratuite/' => Http::response(
                 $this->detailHtml(['2 octobre'], bookingUrl: null)
             ),
@@ -242,14 +245,14 @@ class EscaleScraperTest extends TestCase
 
         Http::fake([
             ...$this->fakeTaxonomies(),
-            self::API_BASE.'/les_spectacles?per_page=100&page=1&_embed=1' => Http::response([[
+            self::API_BASE.'/les_spectacles?per_page=100&page=1' => Http::response([[
                 'id' => 5, 'slug' => 'vieux-spectacle',
                 'title' => ['rendered' => 'Vieux spectacle'],
                 'link' => 'https://lescale-tournefeuille.fr/les_spectacles/vieux-spectacle/',
                 'type_de_spectacle' => [6],
                 'etat_du_spectacle' => [67],
             ]]),
-            self::API_BASE.'/les_spectacles?per_page=100&page=2&_embed=1' => Http::response([]),
+            self::API_BASE.'/les_spectacles?per_page=100&page=2' => Http::response([]),
         ]);
 
         $this->artisan('scrape:events', ['--source' => $source->id])->run();
@@ -265,14 +268,14 @@ class EscaleScraperTest extends TestCase
 
         Http::fake([
             ...$this->fakeTaxonomies(),
-            self::API_BASE.'/les_spectacles?per_page=100&page=1&_embed=1' => Http::response([[
+            self::API_BASE.'/les_spectacles?per_page=100&page=1' => Http::response([[
                 'id' => 6, 'slug' => 'divers-show',
                 'title' => ['rendered' => 'Divers Show'],
                 'link' => 'https://lescale-tournefeuille.fr/les_spectacles/divers-show/',
                 'type_de_spectacle' => [48], // "Spectacle", fourre-tout — voir docblock du driver.
                 'etat_du_spectacle' => [],
             ]]),
-            self::API_BASE.'/les_spectacles?per_page=100&page=2&_embed=1' => Http::response([]),
+            self::API_BASE.'/les_spectacles?per_page=100&page=2' => Http::response([]),
             'lescale-tournefeuille.fr/les_spectacles/divers-show/' => Http::response(
                 $this->detailHtml(['2 octobre'])
             ),
