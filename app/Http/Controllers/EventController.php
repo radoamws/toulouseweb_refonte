@@ -48,9 +48,29 @@ class EventController extends Controller
         return $this->show($request, $event);
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (30/09/2026, signalé par le client : "le
+     * bouton agenda du jour n'affiche toujours rien") : `EventCategory`
+     * "Agenda du jour" est une catégorie comme une autre, alimentée
+     * manuellement (voir son docblock migré) — 0 événement n'y a jamais été
+     * rattaché en production (personne ne "tague" un événement "aujourd'hui"
+     * à l'avance, la date change tous les jours). Le bouton était donc
+     * condamné à rester vide par construction, pas un bug de filtre. Son
+     * NOM indique pourtant sans ambiguïté un filtre par DATE ("aujourd'hui"),
+     * pas une catégorie — traité ici comme un cas spécial : ignore le
+     * rattachement catégorie (qui ne matchera jamais rien) et applique le
+     * même filtre que `?date=` avec la date du jour.
+     */
+    private const TODAY_PSEUDO_CATEGORY_SLUG = 'agenda-du-jour';
+
     protected function renderIndex(Request $request, ?EventCategory $category): View
     {
-        $date = $request->date('date');
+        $isTodayFilter = $category?->slug === self::TODAY_PSEUDO_CATEGORY_SLUG;
+        // Défaut sur aujourd'hui en arrivant sur le bouton, mais la
+        // navigation "Veille"/"Lendemain" de la vue (qui ajoute `?date=` à
+        // CETTE même URL, voir agenda/index.blade.php) doit rester
+        // fonctionnelle plutôt que de revenir systématiquement à aujourd'hui.
+        $date = $isTodayFilter ? ($request->date('date') ?? now()) : $request->date('date');
 
         // Filtre par lieu (demande client, 18/09/2026) — voir docblock de
         // `$areas` ci-dessous pour pourquoi la liste proposée n'est PAS
@@ -60,7 +80,7 @@ class EventController extends Controller
         $events = Event::query()
             ->published()
             ->with(['area', 'categories'])
-            ->when($category, fn ($q) => $q->whereHas('categories', fn ($q2) => $q2->where('event_categories.id', $category->id)))
+            ->when($category && ! $isTodayFilter, fn ($q) => $q->whereHas('categories', fn ($q2) => $q2->where('event_categories.id', $category->id)))
             ->when($area, fn ($q) => $q->where('area_id', $area->id))
             ->when($date, fn ($q) => $q->whereDate('start_date', '<=', $date)->where(function ($q2) use ($date) {
                 $q2->whereDate('end_date', '>=', $date)->orWhereNull('end_date');
@@ -109,7 +129,7 @@ class EventController extends Controller
         // recherche) que la liste, pour que les points affichés correspondent
         // vraiment à ce qui apparaîtra en cliquant sur un jour.
         $calendarMonth = $this->resolveCalendarMonth($request, $date);
-        $calendarCounts = $this->countEventsByDay($calendarMonth, $category, $area, $request->string('q')->value() ?: null);
+        $calendarCounts = $this->countEventsByDay($calendarMonth, $isTodayFilter ? null : $category, $area, $request->string('q')->value() ?: null);
 
         $this->recordPageView($request, $category ? 'event_category' : null, $category?->id);
 

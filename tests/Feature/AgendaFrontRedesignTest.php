@@ -268,6 +268,43 @@ class AgendaFrontRedesignTest extends TestCase
     }
 
     /**
+     * ⚠️ Bug réel trouvé et corrigé (30/09/2026, signalé par le client : "le
+     * bouton agenda du jour n'affiche toujours rien") : "Agenda du jour" est
+     * une `EventCategory` comme une autre, alimentée manuellement — 0
+     * événement n'y a jamais été rattaché en production (personne ne "tague"
+     * un événement "aujourd'hui" à l'avance). Son nom indique pourtant un
+     * filtre par DATE, pas une catégorie — traité en cas spécial dans
+     * EventController::renderIndex() : ignore le rattachement catégorie
+     * (qui ne matchera jamais rien) et filtre sur la date du jour.
+     */
+    public function test_agenda_du_jour_button_shows_todays_events_regardless_of_category_tagging(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 9, 30, 10, 0));
+
+        try {
+            EventCategory::create(['name' => 'Agenda du jour', 'slug' => 'agenda-du-jour']);
+
+            // Événement du jour, SANS aucune catégorie rattachée — exactement
+            // le cas réel en production (0 événement n'a jamais cette
+            // catégorie), pourtant il doit apparaître.
+            Event::create([
+                'title' => "Concert de ce soir", 'slug' => 'concert-de-ce-soir',
+                'status' => 'published', 'start_date' => '2026-09-30 20:00:00', 'end_date' => '2026-09-30 23:00:00',
+            ]);
+            Event::create([
+                'title' => 'Spectacle de demain', 'slug' => 'spectacle-de-demain',
+                'status' => 'published', 'start_date' => '2026-10-01 20:00:00',
+            ]);
+
+            $response = $this->get('/agenda/agenda-du-jour')->assertOk();
+            $response->assertSee('Concert de ce soir');
+            $response->assertDontSee('Spectacle de demain');
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
+    /**
      * Demande client, 23/09/2026 : "s'il n'y a pas d'image sur les
      * agendas, mettre l'image par défaut et le texte de la catégorie
      * dessus centré sur l'image (Ex: Théâtre, Rugby...)" — remplace
