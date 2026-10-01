@@ -7,7 +7,7 @@
             Votre proposition sera vérifiée par notre équipe avant publication — comptez généralement moins de 24h.
         </p>
 
-        <form method="POST" action="{{ route('actualites.store') }}" data-recaptcha-action="actualite" class="mt-8 space-y-5">
+        <form method="POST" action="{{ route('actualites.store') }}" enctype="multipart/form-data" data-recaptcha-action="actualite" class="mt-8 space-y-5">
             @csrf
 
             {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}
@@ -47,6 +47,14 @@
                 <textarea name="body" id="body" rows="8" required
                     class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">{{ old('body') }}</textarea>
                 <x-ui.field-error name="body" />
+            </div>
+
+            <div>
+                <label for="image" class="block text-sm font-medium text-ink-700">Photo (facultatif)</label>
+                <input type="file" name="image" id="image" accept="image/jpeg,image/png,image/webp"
+                    class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                <p class="mt-1 text-xs text-ink-500">JPEG, PNG ou WEBP, 4 Mo maximum.</p>
+                <x-ui.field-error name="image" />
             </div>
 
             <div>

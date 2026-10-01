@@ -212,10 +212,31 @@ class GrandRondDriver implements ScraperDriver
         }
 
         if (preg_match_all('/(\d{1,2})(?:er)?\s+([a-zéûôîâ]+)\.?\s*(\d{4})?/ui', $text, $matches, PREG_SET_ORDER)) {
-            $dates = array_filter(array_map(
-                fn (array $match) => $this->parseSingleFrenchDate(trim($match[0])),
-                $matches
-            ));
+            // ⚠️ Bug réel trouvé et corrigé (01/10/2026, test devenu rouge au
+            // passage d'octobre) : "Mercredi 30 septembre et samedi 3 octobre
+            // 2026" — seul le DERNIER jeton porte une année explicite ; les
+            // autres, parsés indépendamment sans elle, retombaient sur
+            // l'heuristique "mois déjà passé par rapport à MAINTENANT (mois
+            // du scraper) -> année suivante" (même famille de bug qu'au
+            // §55/2 et §59/60) : "30 septembre" scrapé en octobre basculait à
+            // tort sur 2027. On repère l'année explicite si un jeton en porte
+            // une, et on la complète en texte sur les jetons qui n'en ont pas
+            // AVANT de parser — jamais de comparaison de mois ambiguë.
+            $explicitYear = null;
+            foreach ($matches as $match) {
+                if (! empty($match[3])) {
+                    $explicitYear = $match[3];
+                }
+            }
+
+            $dates = array_filter(array_map(function (array $match) use ($explicitYear) {
+                $token = trim($match[0]);
+                if (empty($match[3]) && $explicitYear) {
+                    $token .= ' '.$explicitYear;
+                }
+
+                return $this->parseSingleFrenchDate($token);
+            }, $matches));
 
             if ($dates) {
                 return [min($dates), max($dates)];

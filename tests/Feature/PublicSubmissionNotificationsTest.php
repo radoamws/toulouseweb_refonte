@@ -252,6 +252,48 @@ class PublicSubmissionNotificationsTest extends TestCase
         Mail::assertSent(AdminNotification::class, fn (AdminNotification $mail) => $mail->heading === 'Nouvelle actualité à valider');
     }
 
+    /**
+     * Demande client, 01/10/2026 : upload d'image sur la proposition
+     * d'actualité — même garde-fou sécurité que les autres dépôts publics
+     * (GenuineImage/ImageSanitizer), voir NewsController::store().
+     */
+    public function test_news_submission_with_a_genuine_image_is_stored_and_sanitized(): void
+    {
+        Storage::fake('public');
+        Mail::fake();
+
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-image']);
+
+        $this->post('/actualites/proposer', [
+            'category_id' => $category->id,
+            'title' => 'Une brocante ce week-end',
+            'body' => 'Tous les détails de cette brocante...',
+            'submitter_email' => 'proposant@example.com',
+            'image' => UploadedFile::fake()->image('brocante.jpg', 400, 300),
+            'website' => '',
+        ])->assertRedirect(route('actualites.index'));
+
+        $news = News::firstOrFail();
+        $this->assertNotNull($news->image);
+        Storage::disk('public')->assertExists($news->image);
+    }
+
+    public function test_news_submission_rejects_a_fake_image_disguised_as_a_photo(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-fake-image']);
+
+        $this->post('/actualites/proposer', [
+            'category_id' => $category->id,
+            'title' => 'Une brocante ce week-end',
+            'body' => 'Tous les détails de cette brocante...',
+            'submitter_email' => 'proposant@example.com',
+            'image' => UploadedFile::fake()->create('malware.jpg', 10, 'image/jpeg'),
+            'website' => '',
+        ])->assertSessionHasErrors('image');
+
+        $this->assertDatabaseCount('news', 0);
+    }
+
     public function test_news_submission_honeypot_silently_rejects_bots(): void
     {
         $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale']);

@@ -5,12 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\News;
 use App\Models\NewsCategory;
 use App\Models\Page;
+use App\Rules\GenuineImage;
 use App\Rules\Recaptcha;
+use App\Services\Uploads\ImageSanitizer;
 use App\Support\AdminNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * Actualités. Même pattern de résolution que l'agenda (brief §6 appliqué
@@ -157,6 +161,11 @@ class NewsController extends Controller
             'excerpt' => ['nullable', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:5000'],
             'submitter_email' => ['required', 'email', 'max:255'],
+            // Upload d'image sécurisé (demande client, 01/10/2026) — même
+            // garde-fou que les autres dépôts publics (voir
+            // EventController::store() : App\Rules\GenuineImage inspecte le
+            // contenu réel du fichier, pas seulement l'extension déclarée).
+            'image' => ['nullable', 'file', 'image', 'mimes:jpeg,png,webp', 'max:4096', new GenuineImage()],
             // Honeypot anti-spam (brief §18) : champ invisible, un vrai
             // visiteur ne le remplit jamais.
             'website' => ['size:0'],
@@ -166,9 +175,22 @@ class NewsController extends Controller
         // Le slug est généré automatiquement depuis `title` par HasSlug
         // (voir App\Models\News) — pas besoin de le fournir ici.
         $news = News::create([
-            ...collect($validated)->except(['website', 'recaptcha_token'])->all(),
+            ...collect($validated)->except(['website', 'image', 'recaptcha_token'])->all(),
             'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
         ]);
+
+        if ($request->hasFile('image')) {
+            // Ne doit jamais faire échouer la soumission elle-même (même
+            // remarque que EventController::store()) : la proposition reste
+            // enregistrée sans image, à ajouter par l'admin si besoin lors
+            // de la modération.
+            try {
+                $news->image = ImageSanitizer::sanitizeAndStore($request->file('image'), 'news');
+                $news->save();
+            } catch (Throwable $e) {
+                Log::warning('Image actualité rejetée après validation', ['exception' => $e->getMessage()]);
+            }
+        }
 
         // Notification admin (demande client, voir App\Support\AdminNotifier
         // et TECHNICAL_DOCUMENTATION.md §28).
