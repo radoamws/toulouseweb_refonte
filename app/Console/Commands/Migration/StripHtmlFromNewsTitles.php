@@ -45,6 +45,15 @@ class StripHtmlFromNewsTitles extends Command
 
         News::query()->select(['id', 'title'])->orderBy('id')->chunkById(200, function ($batch) use ($dryRun, $log, &$updated) {
             foreach ($batch as $news) {
+                // Filtre sur une VRAIE balise avant toute chose : comparer
+                // juste "stripHtml($title) !== $title" capte AUSSI de
+                // simples espaces multiples (291 lignes constatées en base,
+                // contre 5 avec une vraie balise) — hors de la portée de
+                // cette commande, voir LegacyCleaner::containsHtmlTag().
+                if (! LegacyCleaner::containsHtmlTag($news->title)) {
+                    continue;
+                }
+
                 $cleaned = LegacyCleaner::stripHtml($news->title);
 
                 if ($cleaned === null || $cleaned === $news->title) {

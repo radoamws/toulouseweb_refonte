@@ -18,6 +18,13 @@ class LegacyCleaner
     ];
 
     /**
+     * Ne matche qu'une balise HTML bien formée (nom de balise, lettre,
+     * immédiatement après `<`/`</`) — jamais un "<"/">" isolé. Voir
+     * `stripHtml()`/`containsHtmlTag()`.
+     */
+    protected const HTML_TAG_PATTERN = '#</?[a-zA-Z][a-zA-Z0-9]*(?:\s+[^<>]*)?>#';
+
+    /**
      * Trim + null si vide + correction heuristique du mojibake (texte
      * mal décodé, ex. "sp�cialiste"). Ne peut pas récupérer les octets
      * perdus — se contente d'éviter de propager le caractère de
@@ -112,12 +119,27 @@ class LegacyCleaner
         // remplacées par une espace (pas une suppression sèche) pour ne
         // jamais coller deux mots qui n'avaient pas d'espace de part et
         // d'autre de la balise d'origine.
-        $text = preg_replace('#</?[a-zA-Z][a-zA-Z0-9]*(?:\s+[^<>]*)?>#', ' ', $value) ?? $value;
+        $text = preg_replace(self::HTML_TAG_PATTERN, ' ', $value) ?? $value;
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
         $text = trim($text);
 
         return $text !== '' ? $text : null;
+    }
+
+    /**
+     * Vrai uniquement si `$value` contient une balise HTML bien formée — pas
+     * un simple "<"/">" isolé (ex. "13<17 decembre"). Sert à cibler
+     * PRÉCISÉMENT les lignes réellement contaminées avant une correction en
+     * base (voir `App\Console\Commands\Migration\StripHtmlFromNewsTitles`) :
+     * comparer `stripHtml($value) !== $value` seul capte AUSSI de simples
+     * espaces multiples ("mot  mot" -> "mot mot"), un problème différent,
+     * bien plus répandu (291 lignes constatées en base le 02/10/2026 contre
+     * 5 avec une vraie balise) — hors de la portée prévue ici.
+     */
+    public static function containsHtmlTag(?string $value): bool
+    {
+        return $value !== null && preg_match(self::HTML_TAG_PATTERN, $value) === 1;
     }
 
     /**

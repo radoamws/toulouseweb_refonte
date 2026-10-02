@@ -52,6 +52,22 @@ class StripHtmlFromNewsTitlesTest extends TestCase
         $this->assertSame('Marin / Belarbi - Théâtre Garonne - 13<17 decembre', $news->fresh()->title);
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé avant exécution en production
+     * (02/10/2026) : un titre avec de simples espaces multiples ("mot  mot")
+     * mais AUCUNE vraie balise ne doit jamais être touché — 291 lignes
+     * auraient été modifiées à tort sans ce filtre (contre 5 avec une vraie
+     * balise), un problème différent et hors de la portée de cette commande.
+     */
+    public function test_does_not_touch_a_title_with_only_multiple_spaces_and_no_real_tag(): void
+    {
+        $news = $this->makeNews('Expo d’été 2023 -  Musée Ingres Bourdelle', 'expo-ete-espaces-multiples');
+
+        Artisan::call('content:strip-html-from-news-titles');
+
+        $this->assertSame('Expo d’été 2023 -  Musée Ingres Bourdelle', $news->fresh()->title);
+    }
+
     public function test_never_changes_the_slug(): void
     {
         $news = $this->makeNews('<b>Titre contaminé</b>', 'titre-contamine-slug-fixe');

@@ -2040,4 +2040,6 @@ Deux traitements distincts selon le nombre de points d'affichage (principe déj�
 
 Tests : `StripHtmlTest` (dont les 2 pièges "<" littéral), `ListingCleanAddressTest`, `ListingCleanPhoneTest` (nouveau cas balises imbriquées), `PublicContentPagesTest::test_annuaire_show_strips_html_from_a_legacy_address` / `test_agenda_show_strips_html_from_the_area_address_fallback`, `StripHtmlFromNewsTitlesTest` (dont la non-régression sur le "<" littéral et la préservation du slug).
 
-À exécuter en production après déploiement : `content:strip-html-from-news-titles` (5 titres contaminés identifiés en dry-run).
+⚠️ Second piège réel trouvé en dry-run AVANT exécution en production (jamais sur le dépôt, donc jamais testé par la suite initiale) : comparer seulement `stripHtml($title) !== $title` capte AUSSI de simples espaces multiples ("mot  mot" -> "mot mot", un problème différent, bien plus répandu) — 291 titres auraient été modifiés à tort, contre 5 avec une VRAIE balise. Corrigé en ajoutant `LegacyCleaner::containsHtmlTag()` (même regex que `stripHtml()`, extraite en constante partagée `HTML_TAG_PATTERN`) comme filtre préalable dans la commande — seules les lignes contenant une balise bien formée sont même candidates à la correction. Test : `StripHtmlFromNewsTitlesTest::test_does_not_touch_a_title_with_only_multiple_spaces_and_no_real_tag`.
+
+À exécuter en production après déploiement : `content:strip-html-from-news-titles` (5 titres à vraie balise identifiés en dry-run, 291 faux positifs désormais exclus).

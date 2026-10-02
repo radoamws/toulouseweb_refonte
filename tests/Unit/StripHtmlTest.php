@@ -70,4 +70,24 @@ class StripHtmlTest extends TestCase
         $this->assertNull(LegacyCleaner::stripHtml(''));
         $this->assertNull(LegacyCleaner::stripHtml('<b></b>'));
     }
+
+    /**
+     * `LegacyCleaner::containsHtmlTag()` — distingue une VRAIE balise d'un
+     * simple espace multiple ou d'un "<" décoratif, voir docblock de la
+     * méthode (291 titres d'actualité auraient été touchés à tort sans ce
+     * filtre, contre 5 avec une vraie balise, constaté en production le
+     * 02/10/2026).
+     */
+    public function test_contains_html_tag_detects_a_real_tag(): void
+    {
+        $this->assertTrue(LegacyCleaner::containsHtmlTag('<b>Titre</b>'));
+        $this->assertTrue(LegacyCleaner::containsHtmlTag('Titre<br>Suite'));
+    }
+
+    public function test_contains_html_tag_ignores_multiple_spaces_and_decorative_less_than(): void
+    {
+        $this->assertFalse(LegacyCleaner::containsHtmlTag('Un titre avec  deux espaces'));
+        $this->assertFalse(LegacyCleaner::containsHtmlTag('13<17 decembre'));
+        $this->assertFalse(LegacyCleaner::containsHtmlTag(null));
+    }
 }
