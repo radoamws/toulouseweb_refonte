@@ -7,6 +7,7 @@ use App\Contracts\HasGoogleIndexingUrl;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\ResolvesImageUrl;
 use App\Models\Concerns\Trackable;
+use App\Services\Migration\LegacyCleaner;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -53,6 +54,19 @@ class News extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUrl
     protected function imageUrl(): Attribute
     {
         return Attribute::get(fn () => static::resolveImageUrl($this->image));
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (02/10/2026, même bug que sur
+     * App\Models\Listing — voir son docblock) : `website` legacy est parfois
+     * stocké sans schéma ("www.exemple.fr"), interprété par le navigateur
+     * comme un chemin relatif à la page courante au lieu d'une URL externe.
+     * `website` reste inchangé en base, cet accesseur ajoute `https://` à
+     * l'affichage quand aucun schéma n'est présent.
+     */
+    protected function cleanWebsite(): Attribute
+    {
+        return Attribute::get(fn () => LegacyCleaner::normalizeUrl($this->website));
     }
 
     /** "01 sept. 2026" ou "01 sept. 2026 → 15 sept. 2026" ; null si pas de start_date (article sans événement). */

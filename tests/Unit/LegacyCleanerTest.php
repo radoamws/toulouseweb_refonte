@@ -74,4 +74,28 @@ class LegacyCleanerTest extends TestCase
     {
         $this->assertSame([null, null], LegacyCleaner::postalAndCity(null));
     }
+
+    /**
+     * `LegacyCleaner::normalizeUrl()` — bug réel trouvé et corrigé (02/10/2026,
+     * signalé par le client : lien "Visiter le site" d'une fiche annuaire
+     * pointant vers "toulouseweb.com/annuaire/fiche/www.exemple.fr" au lieu
+     * du vrai site externe) — voir docblock de la méthode et de
+     * Listing::cleanWebsite().
+     */
+    public function test_normalize_url_adds_https_when_no_scheme_is_present(): void
+    {
+        $this->assertSame('https://www.coursdedansetoulouse.fr', LegacyCleaner::normalizeUrl('www.coursdedansetoulouse.fr'));
+    }
+
+    public function test_normalize_url_leaves_an_existing_scheme_untouched(): void
+    {
+        $this->assertSame('http://example.fr', LegacyCleaner::normalizeUrl('http://example.fr'));
+        $this->assertSame('https://example.fr', LegacyCleaner::normalizeUrl('https://example.fr'));
+    }
+
+    public function test_normalize_url_returns_null_for_null_or_empty_input(): void
+    {
+        $this->assertNull(LegacyCleaner::normalizeUrl(null));
+        $this->assertNull(LegacyCleaner::normalizeUrl(''));
+    }
 }

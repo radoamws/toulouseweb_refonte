@@ -132,4 +132,25 @@ class NewsResourceEventFieldsTest extends TestCase
 
         $this->assertSame('2026-12-31', $news->fresh()->end_date->toDateString());
     }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (02/10/2026, même bug que sur l'annuaire,
+     * voir PublicContentPagesTest::test_annuaire_show_adds_https_to_a_website_without_a_scheme) :
+     * `website` legacy stocké sans schéma ("www.exemple.fr") produisait un
+     * lien relatif à la page courante au lieu de la vraie URL externe. Voir
+     * News::cleanWebsite().
+     */
+    public function test_news_show_adds_https_to_a_website_without_a_scheme(): void
+    {
+        $category = \App\Models\NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-website-scheme']);
+        $news = News::create([
+            'title' => 'Brocante du quartier', 'slug' => 'brocante-website-scheme', 'body' => 'x',
+            'category_id' => $category->id, 'status' => 'published', 'published_at' => now(),
+            'website' => 'www.exemple-brocante.fr',
+        ]);
+
+        $response = $this->get('/actualites/'.$news->slug)->assertOk();
+        $response->assertSee('href="https://www.exemple-brocante.fr"', false);
+        $response->assertDontSee('href="www.exemple-brocante.fr"', false);
+    }
 }

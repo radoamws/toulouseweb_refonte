@@ -77,6 +77,28 @@ class LegacyCleaner
         return [null, null];
     }
 
+    /**
+     * Préfixe `https://` à une URL stockée sans schéma (ex. "www.exemple.fr",
+     * format courant côté legacy, confirmé en production le 02/10/2026 —
+     * demande client : un lien `<a href="www.exemple.fr">` est interprété
+     * par le navigateur comme un chemin RELATIF à la page courante, pas
+     * comme une URL externe, donnant une redirection absurde du type
+     * "toulouseweb.com/annuaire/fiche/www.exemple.fr" au lieu du vrai site).
+     * Une URL avec un schéma déjà présent (`http://`/`https://`, voire
+     * `mailto:`/`tel:` par prudence) n'est jamais modifiée.
+     */
+    public static function normalizeUrl(?string $value): ?string
+    {
+        $value = self::text($value);
+        if ($value === null) {
+            return null;
+        }
+
+        return str_contains($value, '://') || str_starts_with($value, 'mailto:') || str_starts_with($value, 'tel:')
+            ? $value
+            : 'https://'.$value;
+    }
+
     public static function date(null|string|\DateTimeInterface $value): ?string
     {
         if (! $value) {

@@ -117,7 +117,7 @@
                 @if ($news->website)
                     <div>
                         <dt class="text-sm font-medium text-ink-500">Site web</dt>
-                        <dd><a href="{{ $news->website }}" target="_blank" rel="noopener" class="text-brand-700 hover:underline" data-track="news:{{ $news->id }}:website_click">Visiter le site</a></dd>
+                        <dd><a href="{{ $news->clean_website }}" target="_blank" rel="noopener" class="text-brand-700 hover:underline" data-track="news:{{ $news->id }}:website_click">Visiter le site</a></dd>
                     </div>
                 @endif
             </dl>

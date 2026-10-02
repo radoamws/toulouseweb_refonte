@@ -6,6 +6,7 @@ use App\Contracts\HasCloudflarePurgeUrls;
 use App\Contracts\HasGoogleIndexingUrl;
 use App\Models\Concerns\HasSeoMeta;
 use App\Models\Concerns\Trackable;
+use App\Services\Migration\LegacyCleaner;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
@@ -79,6 +80,29 @@ class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoog
 
             return $value !== '' ? $value : null;
         });
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (02/10/2026, signalé par le client :
+     * lien "Visiter le site" pointant vers
+     * "toulouseweb.com/annuaire/fiche/www.exemple.fr" au lieu du vrai site
+     * externe) : `website`/`reservation_url` legacy sont parfois stockés
+     * SANS schéma ("www.exemple.fr", confirmé en production) — un
+     * `<a href="www.exemple.fr">` est alors interprété par le navigateur
+     * comme un chemin RELATIF à la page courante, pas une URL externe.
+     * `website`/`reservation_url` restent INCHANGÉS en base (même principe
+     * que `cleanPhone()` ci-dessus) — ces accesseurs ajoutent `https://` à
+     * l'affichage quand aucun schéma n'est présent, voir
+     * LegacyCleaner::normalizeUrl().
+     */
+    protected function cleanWebsite(): Attribute
+    {
+        return Attribute::get(fn () => LegacyCleaner::normalizeUrl($this->website));
+    }
+
+    protected function cleanReservationUrl(): Attribute
+    {
+        return Attribute::get(fn () => LegacyCleaner::normalizeUrl($this->reservation_url));
     }
 
     public function registerMediaCollections(): void

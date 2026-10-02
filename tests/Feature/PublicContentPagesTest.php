@@ -109,6 +109,31 @@ class PublicContentPagesTest extends TestCase
     }
 
     /**
+     * ⚠️ Bug réel trouvé et corrigé (02/10/2026, signalé par le client) :
+     * https://toulouseweb.com/annuaire/fiche/www.coursdedansetoulouse.fr —
+     * le lien "Visiter le site" pointait vers
+     * "toulouseweb.com/annuaire/fiche/www.coursdedansetoulouse.fr" (chemin
+     * RELATIF à la page courante) au lieu du vrai site externe, car
+     * `website` legacy est stocké sans schéma ("www.exemple.fr"). Voir
+     * Listing::cleanWebsite()/cleanReservationUrl().
+     */
+    public function test_annuaire_show_adds_https_to_a_website_without_a_scheme(): void
+    {
+        $category = Category::create(['name' => 'Loisirs', 'slug' => 'loisirs-website-scheme']);
+
+        $listing = Listing::create([
+            'title' => 'Cours de danse Toulouse', 'slug' => 'cours-de-danse-toulouse', 'tier' => 'paid', 'status' => 'published',
+            'website' => 'www.coursdedansetoulouse.fr', 'reservation_url' => 'www.coursdedansetoulouse.fr/reservation',
+        ]);
+        $listing->categories()->attach($category);
+
+        $response = $this->get('/annuaire/fiche/cours-de-danse-toulouse')->assertOk();
+        $response->assertSee('href="https://www.coursdedansetoulouse.fr"', false);
+        $response->assertSee('href="https://www.coursdedansetoulouse.fr/reservation"', false);
+        $response->assertDontSee('href="www.coursdedansetoulouse.fr"', false);
+    }
+
+    /**
      * ⚠️ Gap réel trouvé et corrigé (11/09/2026, audit SEO/GEO) :
      * `opening_hours` est migré (211 fiches réelles) mais n'était affiché
      * NULLE PART — voir annuaire/show.blade.php et TECHNICAL_DOCUMENTATION.md §30.

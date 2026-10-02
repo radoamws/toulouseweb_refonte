@@ -12,7 +12,11 @@
         // fiches ont un `phone` legacy mélangeant téléphone/email/HTML brut.
         'telephone' => $listing->clean_phone,
         'email' => $listing->email,
-        'url' => $listing->website,
+        // `clean_website`, pas `website` : voir docblock de
+        // Listing::cleanWebsite() (bug réel corrigé le 02/10/2026) — un
+        // site legacy stocké sans schéma ("www.exemple.fr") produirait une
+        // URL JSON-LD invalide (relative), pas la vraie URL externe.
+        'url' => $listing->clean_website,
         'address' => array_filter([
             '@type' => 'PostalAddress',
             'streetAddress' => $listing->address,
@@ -214,11 +218,11 @@
                         @if ($listing->website)
                             <div>
                                 <dt class="font-medium text-ink-500">Site web</dt>
-                                <dd><a href="{{ $listing->website }}" target="_blank" rel="noopener" class="text-brand-700 hover:underline" data-track="listing:{{ $listing->id }}:website_click">Visiter le site</a></dd>
+                                <dd><a href="{{ $listing->clean_website }}" target="_blank" rel="noopener" class="text-brand-700 hover:underline" data-track="listing:{{ $listing->id }}:website_click">Visiter le site</a></dd>
                             </div>
                         @endif
                         @if ($listing->reservation_url)
-                            <x-ui.button :href="$listing->reservation_url" target="_blank" rel="noopener" variant="primary" class="w-full !justify-center" data-track="listing:{{ $listing->id }}:reservation_click">
+                            <x-ui.button :href="$listing->clean_reservation_url" target="_blank" rel="noopener" variant="primary" class="w-full !justify-center" data-track="listing:{{ $listing->id }}:reservation_click">
                                 Réserver
                             </x-ui.button>
                         @endif
