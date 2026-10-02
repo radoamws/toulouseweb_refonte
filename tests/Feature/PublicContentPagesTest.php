@@ -418,6 +418,54 @@ class PublicContentPagesTest extends TestCase
         $this->get('/agenda/sans-horaires')->assertOk()->assertDontSee('Horaires');
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (02/10/2026, rapport Google Search
+     * Console) : "performer"/"organizer" manquants sur ~63 fiches, "offers"
+     * manquant sur ~62 (omis dès que `price` était vide). Désormais toujours
+     * présents, voir docblock de agenda/show.blade.php.
+     */
+    public function test_agenda_show_json_ld_always_includes_offers_performer_and_organizer(): void
+    {
+        $area = Area::create(['name' => 'Le Bijou', 'slug' => 'le-bijou-jsonld-test']);
+        Event::create([
+            'title' => 'Concert sans prix connu', 'slug' => 'concert-sans-prix-jsonld-test',
+            'status' => 'published', 'start_date' => now()->addDay(), 'area_id' => $area->id,
+        ]);
+
+        $html = $this->get('/agenda/concert-sans-prix-jsonld-test')->assertOk()->getContent();
+        preg_match_all('#<script type="application/ld\+json">(.*?)</script>#s', $html, $matches);
+        $eventJsonLd = collect($matches[1])->map(fn ($json) => json_decode($json, true))
+            ->first(fn ($data) => ($data['@type'] ?? null) === 'Event');
+
+        $this->assertNotNull($eventJsonLd);
+        $this->assertSame('Le Bijou', $eventJsonLd['performer']['name']);
+        $this->assertSame('Le Bijou', $eventJsonLd['organizer']['name']);
+        $this->assertSame('0', $eventJsonLd['offers']['price']);
+        $this->assertSame('EUR', $eventJsonLd['offers']['priceCurrency']);
+        $this->assertSame('https://schema.org/InStock', $eventJsonLd['offers']['availability']);
+        $this->assertNotEmpty($eventJsonLd['offers']['url']);
+        $this->assertNotEmpty($eventJsonLd['offers']['validFrom']);
+        $this->assertStringContainsString('branding/default-card-image.png', $eventJsonLd['image']);
+    }
+
+    public function test_agenda_show_json_ld_price_is_a_valid_number_not_the_raw_free_text(): void
+    {
+        $area = Area::create(['name' => "L'Escale", 'slug' => 'lescale-jsonld-test']);
+        Event::create([
+            'title' => 'Spectacle avec tarif', 'slug' => 'spectacle-avec-tarif-jsonld-test',
+            'status' => 'published', 'start_date' => now()->addDay(), 'area_id' => $area->id,
+            'price' => 'de 8 € à 15 €', 'booking_url' => 'https://www.ardei-soft.com/tournefeuille/spectacle.html?spectacle=x',
+        ]);
+
+        $html = $this->get('/agenda/spectacle-avec-tarif-jsonld-test')->assertOk()->getContent();
+        preg_match_all('#<script type="application/ld\+json">(.*?)</script>#s', $html, $matches);
+        $eventJsonLd = collect($matches[1])->map(fn ($json) => json_decode($json, true))
+            ->first(fn ($data) => ($data['@type'] ?? null) === 'Event');
+
+        $this->assertSame('8', $eventJsonLd['offers']['price']);
+        $this->assertSame('https://www.ardei-soft.com/tournefeuille/spectacle.html?spectacle=x', $eventJsonLd['offers']['url']);
+    }
+
     public function test_cinema_index_and_movie_and_salle_pages_render(): void
     {
         $cinema = Cinema::create(['name' => 'Gaumont Wilson', 'slug' => 'gaumont-wilson', 'is_active' => true]);

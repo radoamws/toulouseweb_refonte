@@ -279,11 +279,21 @@ class TheatreDeLaCiteDriver implements ScraperDriver
         $venueName = null;
         $infoLines = $crawler->filter('.spectacle__informations__content__line');
         if ($infoLines->count()) {
-            // La première ligne mélange date/lieu/durée/tarif en texte libre
-            // côté site (pas de champ prix isolé) — on la garde telle quelle,
-            // c'est déjà l'information affichée aux visiteurs sur le site source.
-            $priceText = trim(preg_replace('/\s+/u', ' ', $infoLines->first()->text('')));
-            $priceText = mb_substr($priceText, 0, 255) ?: null;
+            // ⚠️ Bug réel trouvé et corrigé (02/10/2026, Google Search
+            // Console : "Format de prix non valide") : la 1ère ligne mélange
+            // date/lieu/durée/tarif en texte libre SEULEMENT sur les fiches
+            // "evenement" (ex. "Samedi 26 septembre à 14h Le CUB Durée 1h10
+            // Gratuit sur réservation") — sur les fiches "spectacle" (la
+            // majorité), c'est en réalité le bandeau de DISCIPLINE ("Cirque
+            // Musique Théâtre"), confirmé en direct le 02/10/2026 sur
+            // plusieurs fiches réelles (aucun prix n'y figure jamais). La
+            // garder quand même comme "prix" stockait littéralement le nom
+            // de la discipline en base. Ne retenue désormais que si elle
+            // contient un vrai indice de tarif ("€"/"gratuit"/"libre").
+            $firstLineText = trim(preg_replace('/\s+/u', ' ', $infoLines->first()->text('')) ?? '');
+            if (preg_match('/€|gratuit|libre/ui', $firstLineText)) {
+                $priceText = mb_substr($firstLineText, 0, 255) ?: null;
+            }
         }
 
         // Demande client, 24/09/2026 : le Théâtre de la Cité programme dans

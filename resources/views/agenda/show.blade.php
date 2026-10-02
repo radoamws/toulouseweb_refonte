@@ -1,5 +1,26 @@
 @php
     // Schema.org Event (brief §13).
+    //
+    // ⚠️ Champs ajoutés/corrigés le 02/10/2026 suite à un rapport Google
+    // Search Console sur des dizaines de fiches ("performer"/"organizer"
+    // manquants sur ~63, "offers" manquant sur ~62, format de prix invalide) :
+    // - `offers` était OMIS dès que `price` était vide (la majorité des
+    //   événements) — désormais toujours présent (Google l'exige pour le
+    //   rich result Event), avec repli sur la page de l'événement elle-même
+    //   si aucun lien de billetterie n'est connu (`url` reste obligatoire).
+    // - `price` utilise désormais `structured_data_price` (voir son docblock
+    //   sur App\Models\Event) — `price` brut est un texte libre ("de 8 € à
+    //   15 €"...), jamais un nombre, rejeté par la validation schema.org.
+    // - `performer`/`organizer` : aucun champ dédié n'existe dans le modèle
+    //   (pas d'artiste/compagnie distinct du titre côté scraping) — repli
+    //   honnête sur le LIEU réel de l'événement (`venue_display_name`),
+    //   qui organise/accueille bien la représentation, plutôt que d'inventer
+    //   une donnée qu'on n'a pas.
+    // - `image` replie sur l'image de marque ToulouseWeb (déjà utilisée
+    //   comme repli visuel sur tout le site, voir §64) plutôt que de
+    //   laisser le champ absent.
+    $venueOrSite = $event->venue_display_name ?: config('app.name', 'ToulouseWeb');
+
     $jsonLd = array_filter([
         '@context' => 'https://schema.org',
         '@type' => 'Event',
@@ -8,8 +29,21 @@
         'startDate' => $event->start_date->toIso8601String(),
         'endDate' => $event->end_date?->toIso8601String(),
         'eventStatus' => $event->status === 'cancelled' ? 'https://schema.org/EventCancelled' : 'https://schema.org/EventScheduled',
-        'image' => $event->image_url,
-        'offers' => $event->price ? ['@type' => 'Offer', 'price' => $event->price, 'priceCurrency' => 'EUR', 'url' => $event->booking_url] : null,
+        'image' => $event->image_url ?: asset('branding/default-card-image.png'),
+        'offers' => [
+            '@type' => 'Offer',
+            'url' => $event->booking_url ?: $event->publicUrl(),
+            'price' => $event->structured_data_price,
+            'priceCurrency' => 'EUR',
+            'availability' => 'https://schema.org/InStock',
+            'validFrom' => $event->created_at->toIso8601String(),
+        ],
+        'performer' => ['@type' => 'Organization', 'name' => $venueOrSite],
+        'organizer' => array_filter([
+            '@type' => 'Organization',
+            'name' => $venueOrSite,
+            'url' => $event->booking_url ?: url('/'),
+        ]),
         // Lieu RÉEL de l'événement, pas l'Area générique (demande client,
         // 23/09/2026) — voir Event::venueDisplayName()/venueDisplayAddress().
         'location' => $event->venue_display_name ? array_filter([

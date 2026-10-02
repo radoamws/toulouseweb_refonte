@@ -308,6 +308,63 @@ class ScrapeEventsTest extends TestCase
     }
 
     /**
+     * ⚠️ Bug réel trouvé et corrigé (02/10/2026, Google Search Console :
+     * "Format de prix non valide") : sur une fiche "spectacle", la 1ère
+     * ligne `.spectacle__informations__content__line` est le bandeau de
+     * DISCIPLINE ("Cirque Musique Théâtre"), jamais un prix — vérifié en
+     * direct sur plusieurs fiches réelles. La prendre quand même comme
+     * "prix" stockait littéralement le nom de la discipline en base.
+     */
+    public function test_discipline_banner_is_never_stored_as_the_price(): void
+    {
+        Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);
+        EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $this->makeSource();
+
+        Http::fake([
+            'theatre-cite.com/programmation' => Http::response($this->listingHtml([
+                $this->card('qui-som', 'Qui som?', '23 septembre 2026', type: 'spectacles'),
+            ])),
+            'theatre-cite.com/programmation/2026-2027/spectacle/qui-som/' => Http::response(
+                '<html><body>'
+                .'<div class="spectacle__period">23 septembre 2026</div>'
+                .'<div class="spectacle__informations__content__line">Cirque Musique Théâtre</div>'
+                .'<div class="spectacle__informations__content__line">Cirque Musique Théâtre</div>'
+                .'<div class="spectacle__informations__content__line">La Salle Durée 2h15</div>'
+                .'</body></html>'
+            ),
+        ]);
+
+        $this->artisan('scrape:events')->run();
+
+        $event = Event::where('external_ref', 'qui-som')->first();
+        $this->assertNotNull($event);
+        $this->assertNull($event->price);
+    }
+
+    public function test_a_real_price_line_is_still_captured(): void
+    {
+        Area::create(['name' => 'TNT Théâtre de la Cité', 'slug' => 'tnt-theatre-de-la-cite']);
+        EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre']);
+        $this->makeSource();
+
+        Http::fake([
+            'theatre-cite.com/programmation' => Http::response($this->listingHtml([
+                $this->card('bord-de-scene', 'Bord de scène', '26 septembre 2026'),
+            ])),
+            'theatre-cite.com/programmation/2026-2027/evenement/bord-de-scene/' => Http::response(
+                $this->detailHtml(periodText: '26 septembre 2026', timeText: null)
+            ),
+        ]);
+
+        $this->artisan('scrape:events')->run();
+
+        $event = Event::where('external_ref', 'bord-de-scene')->first();
+        $this->assertNotNull($event);
+        $this->assertStringContainsString('Gratuit', $event->price);
+    }
+
+    /**
      * Demande client, 28/09/2026 : la date d'un spectacle vient de la fiche
      * détail (`.spectacle__period`), pas de la carte de listing — seule la
      * fiche détail affiche la vraie plage. Cas réel vérifié en direct :

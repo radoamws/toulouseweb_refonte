@@ -92,6 +92,31 @@ class Event extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUr
         return Attribute::get(fn () => $this->venue_address ?: $this->area?->clean_address);
     }
 
+    /**
+     * Prix numérique "propre" pour `offers.price` (JSON-LD schema.org Event)
+     * — demande client, 02/10/2026, Google Search Console : "Format de prix
+     * non valide dans la propriété price". `price` est un champ texte libre
+     * ("de 8 € à 15 €", "Tarif plein : 22 € | Tarif réduit : ...", voire
+     * carrément une catégorie mal scrapée comme "Cirque Musique Théâtre",
+     * voir TheatreDeLaCiteDriver — jamais un simple nombre), inexploitable
+     * tel quel par schema.org (qui exige un NOMBRE). Extrait le premier
+     * montant suivi de "€" rencontré (ex. "de 8 € à 15 €" -> "8", le tarif
+     * le plus bas — cohérent avec un prix "à partir de"). Replie sur "0"
+     * quand rien de fiable ne se dégage (gratuit, ou texte sans montant
+     * identifiable) plutôt que d'omettre `price` (schema.org l'exige dès que
+     * `offers` est présent) ou d'inventer un montant.
+     */
+    protected function structuredDataPrice(): Attribute
+    {
+        return Attribute::get(function () {
+            if ($this->price && preg_match('/(\d+(?:[.,]\d+)?)\s*€/u', $this->price, $matches)) {
+                return str_replace(',', '.', $matches[1]);
+            }
+
+            return '0';
+        });
+    }
+
     public function area(): BelongsTo
     {
         return $this->belongsTo(Area::class);
