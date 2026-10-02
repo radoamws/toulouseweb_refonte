@@ -19,7 +19,9 @@
         'url' => $listing->clean_website,
         'address' => array_filter([
             '@type' => 'PostalAddress',
-            'streetAddress' => $listing->address,
+            // `clean_address`, pas `address` : voir docblock de
+            // Listing::cleanAddress() (bug réel corrigé le 02/10/2026).
+            'streetAddress' => $listing->clean_address,
             'addressLocality' => $listing->city,
             'postalCode' => $listing->postal_code,
             'addressCountry' => 'FR',
@@ -185,7 +187,7 @@
                     @if ($listing->address)
                         <div>
                             <dt class="font-medium text-ink-500">Adresse</dt>
-                            <dd class="text-ink-800">{{ $listing->address }}@if($listing->city), {{ $listing->city }}@endif</dd>
+                            <dd class="text-ink-800">{{ $listing->clean_address }}@if($listing->city), {{ $listing->city }}@endif</dd>
                         </div>
                     @endif
                     {{-- Migrée mais jamais affichée nulle part avant ce correctif

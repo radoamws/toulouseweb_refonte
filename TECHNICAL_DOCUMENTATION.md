@@ -2020,3 +2020,24 @@ Nouveau `LegacyCleaner::normalizeUrl()` : préfixe `https://` si aucun schéma n
 - `News::cleanWebsite()` — actualité (bloc "informations pratiques").
 
 `Event::booking_url`/`Classified` : non concernés — toujours construits par le code (scrapers) ou validés avec le schéma déjà exigé (formulaires publics), jamais de données legacy sans schéma pour ces champs-là. Tests : `LegacyCleanerTest::test_normalize_url_*`, `ListingCleanWebsiteTest`, `PublicContentPagesTest::test_annuaire_show_adds_https_to_a_website_without_a_scheme`, `NewsResourceEventFieldsTest::test_news_show_adds_https_to_a_website_without_a_scheme`.
+
+## 66. Audit HTML résiduel sur tous les champs texte brut de toutes les entités (02/10/2026, demande client)
+
+Demande explicite : "Verifie pour toutes les encodage HTML de toutes les entités... en front, c'est pas propre de voir des balises HTML" — exemple donné, fiche annuaire "Un ingénieur à la maison" : `address` = `"<b>Un ingénieur à la maison</b><br>6 Avenue de la Gloire - Toulouse"`, affiché tel quel via `{{ }}` (échappement Blade), les balises apparaissant donc LITTÉRALEMENT en texte visible côté public.
+
+Audit chiffré en base sur tous les champs texte brut (pas les champs riches type `description`/`body`, déjà traités à part, voir plus bas) de tous les modèles publics (Listing, Area, News, Event, Classified) :
+- **`listings.address`** : 659/2978 fiches (legacy stocke le nom de l'enseigne en gras suivi d'un saut de ligne avant la vraie adresse — exactement l'exemple du client).
+- **`areas.address`** : 24 lignes (adresse multi-lignes avec `<br>`) — publiquement visible via `Event::venueDisplayAddress()` (repli sur l'Area quand l'événement n'a pas sa propre adresse, voir §55/5).
+- **`listings.phone`** : 1 cas (sur les 127 déjà couverts par `cleanPhone()`, §24) où une balise `<b>` imbriquée autour du marqueur "Email" laissait une balise orpheline en fin de chaîne.
+- **`news.title`** : 5 lignes sur plusieurs milliers.
+- Tout le reste (listings.city/short_description/email, areas.phone — non affiché publiquement —, events.title/price/description, classifieds.title/location/description, news.address/phone/price/excerpt) : AUCUNE contamination réelle — les quelques faux positifs trouvés (`events.title`/`news.title`/`events.price` contenant un "<" littéral type "13<17 decembre"/"gratuit <12 ans") sont des séparateurs/comparaisons décoratifs, PAS des balises HTML.
+
+⚠️ Piège réel découvert en construisant le correctif : `strip_tags()` seul dévore tout le texte entre un "<" isolé (sans balise valide) et le PROCHAIN ">" rencontré dans le reste de la chaîne — ou jusqu'à la fin s'il n'y en a aucun (comportement PHP documenté, pas spécifique à ce projet). Appliqué naïvement aux cas ci-dessus ("13<17 decembre"), il aurait tronqué le texte au lieu de le nettoyer (`strip_tags("Marin... 13<17 decembre")` donne réellement `"Marin... 13"`, vérifié en direct). `LegacyCleaner::stripHtml()` (nouvelle méthode) ne retire donc que des balises bien formées (`</?[a-zA-Z][a-zA-Z0-9]*(?:\s+[^<>]*)?>`, une lettre immédiatement après `<`/`</`), remplacées par une espace (jamais une balise/un "<" isolé) ; décode aussi les entités HTML résiduelles.
+
+Deux traitements distincts selon le nombre de points d'affichage (principe déjà établi avec `cleanPhone()`/`cleanWebsite()` — colonne stockée JAMAIS modifiée, seul l'affichage est nettoyé) :
+- **Accesseur d'affichage** (`address`, peu de points d'affichage) : `Listing::cleanAddress()` / `Area::cleanAddress()` (ce dernier utilisé par `Event::venueDisplayAddress()`, un seul point de lecture).
+- **Correction ponctuelle en base** (`news.title`, des dizaines de points d'affichage — h1, balise `<title>`, JSON-LD, fil d'Ariane, cartes apparentées... menacer un accesseur à travers TOUS serait fragile) : nouvelle commande `content:strip-html-from-news-titles`, mise à jour en SQL BRUT (`DB::table('news')->update()`, pas `News::update()`) pour ne jamais déclencher la régénération automatique du `slug` par `spatie/laravel-sluggable` (qui aurait changé l'URL déjà indexée de ces articles — `News::getSlugOptions()` ne désactive pas la régénération sur update).
+
+Tests : `StripHtmlTest` (dont les 2 pièges "<" littéral), `ListingCleanAddressTest`, `ListingCleanPhoneTest` (nouveau cas balises imbriquées), `PublicContentPagesTest::test_annuaire_show_strips_html_from_a_legacy_address` / `test_agenda_show_strips_html_from_the_area_address_fallback`, `StripHtmlFromNewsTitlesTest` (dont la non-régression sur le "<" littéral et la préservation du slug).
+
+À exécuter en production après déploiement : `content:strip-html-from-news-titles` (5 titres contaminés identifiés en dry-run).

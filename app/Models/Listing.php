@@ -78,8 +78,36 @@ class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoog
             $value = preg_replace('/^[^\d+]*/u', '', trim($value));
             $value = trim($value, " \t\n\r\0\x0B-:");
 
+            // Filet de sécurité (02/10/2026, constaté en base sur 1 fiche :
+            // "<b>Tel :</b> 06.38.67.97.62 - <b>Email :</b> ...") : le
+            // marqueur "Email" coupé par le preg_split ci-dessus peut laisser
+            // une balise ouvrante orpheline en fin de chaîne (ex. "<b>"),
+            // que trim() seul (liste de caractères fixe) ne retire pas.
+            // `LegacyCleaner::stripHtml()`, pas `strip_tags()` brut : ce
+            // dernier dévore tout jusqu'au PROCHAIN ">" dès qu'il croise un
+            // "<" isolé sans balise valide (piège PHP documenté sur son
+            // propre docblock).
+            $value = LegacyCleaner::stripHtml($value);
+            $value = trim((string) $value, " \t\n\r\0\x0B-:");
+
             return $value !== '' ? $value : null;
         });
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (02/10/2026, signalé par le client,
+     * exemple réel : "<b>Un ingénieur à la maison</b><br>6 Avenue de la
+     * Gloire - Toulouse") : `address` legacy embarque parfois le nom de
+     * l'enseigne en gras suivi d'un saut de ligne avant la vraie adresse —
+     * confirmé en base sur 659/2978 fiches. Affiché tel quel via `{{ }}`
+     * (échappement Blade), les balises apparaissaient LITTÉRALEMENT en
+     * texte visible côté public. `address` reste INCHANGÉ en base (même
+     * principe que `cleanPhone()` ci-dessus — l'admin voit toujours la
+     * vraie valeur legacy dans le BO) — voir LegacyCleaner::stripHtml().
+     */
+    protected function cleanAddress(): Attribute
+    {
+        return Attribute::get(fn () => LegacyCleaner::stripHtml($this->address));
     }
 
     /**

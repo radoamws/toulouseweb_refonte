@@ -78,6 +78,49 @@ class LegacyCleaner
     }
 
     /**
+     * Retire tout balisage HTML d'un champ censé être du texte brut (ex.
+     * `listings.address`/`areas.address` : demande client, 02/10/2026 —
+     * exemple réel "<b>Un ingénieur à la maison</b><br>6 Avenue de la
+     * Gloire - Toulouse", confirmé en base sur 659/2978 fiches annuaire —
+     * le legacy stockait visiblement le nom de l'enseigne en gras suivi
+     * d'un saut de ligne avant la vraie adresse). Affiché tel quel via
+     * `{{ }}` (échappement Blade), les balises apparaissaient donc
+     * LITTÉRALEMENT en texte visible côté public, jamais interprétées.
+     *
+     * Toute balise bien formée (`<br>`, `</p>`, `<b>`...) est convertie en
+     * simple espace (jamais `strip_tags()` seul, voir piège documenté plus
+     * bas dans le corps de la méthode). Les entités HTML résiduelles
+     * (`&eacute;`...) sont décodées, les espaces multiples résultants
+     * recollés à un seul.
+     */
+    public static function stripHtml(?string $value): ?string
+    {
+        $value = self::text($value);
+        if ($value === null) {
+            return null;
+        }
+
+        // ⚠️ Jamais `strip_tags()` seul ici : constaté en base, plusieurs
+        // champs (titres d'actualités, prix, dates d'événements...) utilisent
+        // un "<" littéral en guise de séparateur ("13<17 decembre", "gratuit
+        // <12 ans"), SANS "<" valide de balise ni ">" qui lui corresponde —
+        // `strip_tags()` dévore alors tout le texte entre ce "<" isolé et le
+        // PROCHAIN ">" du reste de la chaîne (ou jusqu'à la fin s'il n'y en a
+        // aucun), un piège PHP connu, pas spécifique à ce projet. On ne
+        // retire donc que des balises HTML bien formées (un nom de balise,
+        // lettre, immédiatement après "<" ou "</"), jamais un "<"/">" isolé —
+        // remplacées par une espace (pas une suppression sèche) pour ne
+        // jamais coller deux mots qui n'avaient pas d'espace de part et
+        // d'autre de la balise d'origine.
+        $text = preg_replace('#</?[a-zA-Z][a-zA-Z0-9]*(?:\s+[^<>]*)?>#', ' ', $value) ?? $value;
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        return $text !== '' ? $text : null;
+    }
+
+    /**
      * Préfixe `https://` à une URL stockée sans schéma (ex. "www.exemple.fr",
      * format courant côté legacy, confirmé en production le 02/10/2026 —
      * demande client : un lien `<a href="www.exemple.fr">` est interprété

@@ -85,7 +85,11 @@ class Event extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUr
 
     protected function venueDisplayAddress(): Attribute
     {
-        return Attribute::get(fn () => $this->venue_address ?: $this->area?->address);
+        // `area->clean_address`, pas `area->address` (bug réel corrigé le
+        // 02/10/2026, voir docblock de Area::cleanAddress()) : certaines
+        // Areas legacy ont une adresse multi-lignes avec des `<br>` bruts,
+        // affichés littéralement en texte visible sinon.
+        return Attribute::get(fn () => $this->venue_address ?: $this->area?->clean_address);
     }
 
     public function area(): BelongsTo

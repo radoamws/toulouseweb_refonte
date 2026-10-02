@@ -134,6 +134,28 @@ class PublicContentPagesTest extends TestCase
     }
 
     /**
+     * ⚠️ Bug réel trouvé et corrigé (02/10/2026, signalé par le client,
+     * exemple réel : "<b>Un ingénieur à la maison</b><br>6 Avenue de la
+     * Gloire - Toulouse" affiché LITTÉRALEMENT, balises visibles, sur la
+     * fiche annuaire) : voir Listing::cleanAddress().
+     */
+    public function test_annuaire_show_strips_html_from_a_legacy_address(): void
+    {
+        $category = Category::create(['name' => 'Services', 'slug' => 'services-address-html']);
+
+        $listing = Listing::create([
+            'title' => 'Un ingénieur à la maison', 'slug' => 'un-ingenieur-a-la-maison', 'tier' => 'free', 'status' => 'published',
+            'address' => '<b>Un ingénieur à la maison</b><br>6 Avenue de la Gloire - Toulouse',
+        ]);
+        $listing->categories()->attach($category);
+
+        $response = $this->get('/annuaire/fiche/un-ingenieur-a-la-maison')->assertOk();
+        $response->assertSee('Un ingénieur à la maison 6 Avenue de la Gloire - Toulouse');
+        $response->assertDontSee('<b>', false);
+        $response->assertDontSee('<br>', false);
+    }
+
+    /**
      * ⚠️ Gap réel trouvé et corrigé (11/09/2026, audit SEO/GEO) :
      * `opening_hours` est migré (211 fiches réelles) mais n'était affiché
      * NULLE PART — voir annuaire/show.blade.php et TECHNICAL_DOCUMENTATION.md §30.
@@ -347,6 +369,28 @@ class PublicContentPagesTest extends TestCase
         ]);
 
         $this->get('/agenda/spectacle-salle-unique-venue-test')->assertOk()->assertSee('1 rue du Théâtre, Toulouse');
+    }
+
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (02/10/2026, même bug que sur l'annuaire,
+     * voir Area::cleanAddress()) : 24 `areas.address` legacy contiennent des
+     * `<br>` (adresse multi-lignes), affichés littéralement en texte visible
+     * sur la fiche détail d'un événement repliant sur l'Area.
+     */
+    public function test_agenda_show_strips_html_from_the_area_address_fallback(): void
+    {
+        $area = Area::create([
+            'name' => 'Hôtel Assézat', 'slug' => 'hotel-assezat-venue-test',
+            'address' => "Hôtel d'Assézat<br>Place d'Assézat <br>31000 TOULOUSE",
+        ]);
+        Event::create([
+            'title' => 'Exposition Assézat', 'slug' => 'exposition-assezat-venue-test',
+            'status' => 'published', 'start_date' => now()->addDay(), 'area_id' => $area->id,
+        ]);
+
+        $response = $this->get('/agenda/exposition-assezat-venue-test')->assertOk();
+        $response->assertSee("Hôtel d'Assézat Place d'Assézat 31000 TOULOUSE");
+        $response->assertDontSee('<br>', false);
     }
 
     /**

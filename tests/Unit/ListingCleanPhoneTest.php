@@ -27,6 +27,10 @@ class ListingCleanPhoneTest extends TestCase
             'br followed directly by an email, no label at all' => ['Tel : 05 61 62 89 41<br>contact@hotelraymond4toulo', '05 61 62 89 41'],
             'two phone numbers kept together' => ['Tel : 05 34 58 24 78 - 06 37 24 88 83 <br>contact@', '05 34 58 24 78 - 06 37 24 88 83'],
             'pure email, no phone at all' => ['Email : contact@julesetjulies.fr', null],
+            // Filet de sécurité (02/10/2026, constaté en base sur 1 fiche) :
+            // le marqueur "Email" est lui-même entouré de balises <b>, ce
+            // qui laissait une balise orpheline en fin de chaîne.
+            'nested bold tags around both labels' => ['<b>Tel :</b> 06.38.67.97.62 - <b>Email :</b> assof', '06.38.67.97.62'],
             'null input' => [null, null],
             'empty string' => ['', null],
         ];
