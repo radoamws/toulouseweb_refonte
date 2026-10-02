@@ -38,9 +38,7 @@
 
         <div class="grid gap-8 sm:grid-cols-3">
             <div class="aspect-[2/3] overflow-hidden rounded-2xl bg-ink-100 sm:col-span-1">
-                @if ($movie->poster_url)
-                    <img src="{{ $movie->poster_url }}" alt="{{ $movie->title }}" class="h-full w-full object-cover">
-                @endif
+                <x-ui.entity-image :src="$movie->poster_url" :alt="$movie->title" />
             </div>
             <div class="sm:col-span-2">
                 <h1 class="font-heading text-3xl font-bold text-ink-900">{{ $movie->title }}</h1>

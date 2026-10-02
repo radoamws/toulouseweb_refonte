@@ -23,15 +23,19 @@
         {{-- Bug réel trouvé et corrigé (15/09/2026, demande client) : les photos
         uploadées (visibles en admin, jusqu'à 8 via SpatieMediaLibraryFileUpload)
         ne s'affichaient nulle part sur le front. --}}
-        @if ($classified->getMedia('photos')->isNotEmpty())
-            <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            @if ($classified->getMedia('photos')->isNotEmpty())
                 @foreach ($classified->getMedia('photos') as $photo)
-                    <a href="{{ $photo->getUrl() }}" target="_blank" rel="noopener" class="block overflow-hidden rounded-xl bg-ink-100">
-                        <img src="{{ $photo->getUrl() }}" alt="{{ $classified->title }}" loading="lazy" class="aspect-[4/3] w-full object-cover transition hover:scale-105">
+                    <a href="{{ $photo->getUrl() }}" target="_blank" rel="noopener" class="block aspect-[4/3] w-full overflow-hidden rounded-xl bg-ink-100">
+                        <img src="{{ $photo->getUrl() }}" alt="{{ $classified->title }}" loading="lazy" class="h-full w-full object-cover transition hover:scale-105">
                     </a>
                 @endforeach
-            </div>
-        @endif
+            @else
+                <div class="aspect-[4/3] w-full overflow-hidden rounded-xl bg-ink-100">
+                    <x-ui.entity-image :src="null" :alt="$classified->title" />
+                </div>
+            @endif
+        </div>
 
         <div class="prose prose-ink mt-6 max-w-none">{!! nl2br(e($classified->description)) !!}</div>
 

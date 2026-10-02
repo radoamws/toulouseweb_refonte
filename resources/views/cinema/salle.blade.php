@@ -78,15 +78,10 @@
                                     </div>
                                 @endforeach
                             </div>
-                            @if ($movie?->poster_url)
+                            @if ($movie)
                                 <div class="mt-4 shrink-0 sm:order-2 sm:mt-0 sm:w-32">
-                                    <a href="/cinema/films/{{ $movie->slug }}" data-track="movie:{{ $movie->id }}:cinema_salle" class="block overflow-hidden rounded-lg bg-ink-100">
-                                        <img
-                                            src="{{ $movie->poster_url }}"
-                                            alt="{{ $movieTitle }}"
-                                            loading="lazy"
-                                            class="aspect-[2/3] w-full object-cover transition hover:scale-105"
-                                        >
+                                    <a href="/cinema/films/{{ $movie->slug }}" data-track="movie:{{ $movie->id }}:cinema_salle" class="block aspect-[2/3] w-full overflow-hidden rounded-lg bg-ink-100">
+                                        <x-ui.entity-image :src="$movie->poster_url" :alt="$movieTitle" class="transition hover:scale-105" />
                                     </a>
                                 </div>
                             @endif

@@ -59,9 +59,9 @@
             ['label' => $news->title],
         ]" />
 
-        @if ($news->image_url)
-            <img src="{{ $news->image_url }}" alt="{{ $news->title }}" class="mb-6 aspect-video w-full rounded-2xl object-cover">
-        @endif
+        <div class="mb-6 aspect-video w-full overflow-hidden rounded-2xl bg-ink-100">
+            <x-ui.entity-image :src="$news->image_url" :alt="$news->title" />
+        </div>
 
         @if ($news->category)
             <x-ui.badge>{{ $news->category->name }}</x-ui.badge>

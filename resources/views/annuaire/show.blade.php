@@ -57,11 +57,9 @@
             </div>
         </div>
 
-        @if ($listing->getFirstMediaUrl('logo'))
-            <div class="mt-6 aspect-[16/9] w-full overflow-hidden rounded-2xl bg-ink-100 sm:aspect-[21/9]">
-                <img src="{{ $listing->getFirstMediaUrl('logo') }}" alt="{{ $listing->title }}" class="h-full w-full object-cover">
-            </div>
-        @endif
+        <div class="mt-6 aspect-[16/9] w-full overflow-hidden rounded-2xl bg-ink-100 sm:aspect-[21/9]">
+            <x-ui.entity-image :src="$listing->getFirstMediaUrl('logo')" :alt="$listing->title" />
+        </div>
 
         <div class="mt-8 grid gap-8 lg:grid-cols-3">
             <div class="lg:col-span-2">
