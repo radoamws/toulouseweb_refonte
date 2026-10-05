@@ -60,7 +60,10 @@
             </div>
         </div>
 
-        <h2 class="mt-10 font-heading text-xl font-bold text-ink-900">Séances</h2>
+        {{-- Ancre utilisée par /cinema/panorama ("Où voir ce film ?",
+        demande client 05/10/2026) pour pointer directement sur cette
+        section depuis la liste alphabétique. --}}
+        <h2 id="seances" class="mt-10 font-heading text-xl font-bold text-ink-900">Séances</h2>
         @if ($screeningsByCinema->isEmpty())
             <p class="mt-3 text-ink-500">Aucune séance programmée actuellement.</p>
         @else
@@ -94,7 +97,10 @@
             </div>
         @endif
 
-        <h2 class="mt-10 font-heading text-xl font-bold text-ink-900">Avis ({{ $commentsCount }})</h2>
+        {{-- Ancre utilisée par /cinema/panorama ("Avis", demande client
+        05/10/2026) pour pointer directement sur cette section depuis la
+        liste alphabétique. --}}
+        <h2 id="avis" class="mt-10 font-heading text-xl font-bold text-ink-900">Avis ({{ $commentsCount }})</h2>
 
         @if ($movie->publishedComments->isNotEmpty())
             <div class="mt-4 space-y-4">

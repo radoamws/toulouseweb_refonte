@@ -658,6 +658,28 @@ class PublicContentPagesTest extends TestCase
         $this->get('/cinema/films/film-principal')->assertOk()->assertSee('Autre Film');
     }
 
+    /**
+     * Demande client (05/10/2026) : restaure la page "Panorama" dédiée du
+     * legacy (liste alphabétique de tous les films à l'affiche + lien avis +
+     * lien "où voir ce film ?"), abandonnée le 19/09/2026 au profit d'un
+     * simple bloc d'en-tête sur /cinema (voir §49/§68 TECHNICAL_DOCUMENTATION.md).
+     */
+    public function test_cinema_panorama_page_lists_movies_alphabetically_with_review_and_salle_links(): void
+    {
+        $cinema = Cinema::create(['name' => 'Gaumont Wilson', 'slug' => 'gaumont-wilson-panorama', 'is_active' => true]);
+        $zebra = Movie::create(['title' => 'Zebra Movie', 'slug' => 'zebra-movie-panorama']);
+        $alpha = Movie::create(['title' => 'Alpha Movie', 'slug' => 'alpha-movie-panorama']);
+        foreach ([$zebra, $alpha] as $movie) {
+            Screening::create(['cinema_id' => $cinema->id, 'movie_id' => $movie->id, 'start_date' => now()->subDay(), 'end_date' => now()->addWeek()]);
+        }
+
+        $response = $this->get('/cinema/panorama')->assertOk();
+        $response->assertSeeTextInOrder(['Alpha Movie', 'Zebra Movie']);
+        $response->assertSee('href="/cinema/films/alpha-movie-panorama"', false);
+        $response->assertSee('href="/cinema/films/alpha-movie-panorama#avis"', false);
+        $response->assertSee('href="/cinema/films/alpha-movie-panorama#seances"', false);
+    }
+
     public function test_cinema_salle_show_lists_other_active_cinemas(): void
     {
         Cinema::create(['name' => 'Gaumont Wilson', 'slug' => 'gaumont-wilson', 'is_active' => true]);

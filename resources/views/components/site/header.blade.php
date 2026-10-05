@@ -9,9 +9,16 @@
         ['label' => 'Actualités', 'href' => '/actualites'],
         ['label' => 'Agenda', 'href' => '/agenda'],
         ['label' => 'Théâtre', 'href' => '/agenda/theatre'],
-        ['label' => 'Cinéma', 'href' => '/cinema'],
         ['label' => 'Annonces', 'href' => '/annonces'],
         ['label' => 'Contact', 'href' => '/contact'],
+    ];
+    // Demande client (05/10/2026) : sous-menu "Panorama" sous "Cinéma" — la
+    // page Panorama étant redevenue une page à part entière (voir
+    // CinemaController::panorama(), TECHNICAL_DOCUMENTATION.md §68), "Cinéma"
+    // passe d'un lien simple à un menu déroulant comme "Annuaire" ci-dessous.
+    $cinemaNav = [
+        ['label' => 'Tous les cinémas', 'href' => '/cinema'],
+        ['label' => 'Panorama', 'href' => '/cinema/panorama'],
     ];
     $annuaireNav = [
         ['label' => 'Tout l\'annuaire', 'href' => '/annuaire'],
@@ -36,7 +43,7 @@
         ['label' => 'Proposer une actualité', 'href' => '/actualites/proposer'],
     ];
 @endphp
-<header x-data="{ mobileOpen: false, annuaireOpen: false, publishOpen: false }" class="sticky top-0 z-40 border-b border-ink-100 bg-white/95 backdrop-blur">
+<header x-data="{ mobileOpen: false, annuaireOpen: false, cinemaOpen: false, publishOpen: false }" class="sticky top-0 z-40 border-b border-ink-100 bg-white/95 backdrop-blur">
     <div class="mx-auto flex h-16 max-w-[96rem] items-center justify-between gap-4 px-4 sm:px-6 lg:px-6">
         <a href="{{ url('/') }}" class="flex shrink-0 items-stretch self-stretch gap-2 font-heading text-xl font-bold text-brand-600">
             @if ($siteSettings->logo_url)
@@ -100,6 +107,36 @@
                 </div>
             </div>
 
+            <div class="relative" @mouseleave="cinemaOpen = false">
+                <button
+                    type="button"
+                    @click="cinemaOpen = !cinemaOpen"
+                    @mouseenter="cinemaOpen = true"
+                    class="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-ink-700 hover:bg-brand-50 hover:text-brand-700"
+                    :aria-expanded="cinemaOpen.toString()"
+                >
+                    Cinéma
+                    <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180': cinemaOpen }" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                {{-- Même pattern pt-1 (pas mt-1) que le sous-menu Annuaire ci-dessus. --}}
+                <div
+                    x-show="cinemaOpen"
+                    x-transition
+                    x-cloak
+                    class="absolute left-0 top-full w-48 pt-1"
+                >
+                    <div class="rounded-xl border border-ink-100 bg-white p-2 shadow-lg">
+                        @foreach ($cinemaNav as $item)
+                            <a href="{{ $item['href'] }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50 hover:text-brand-700">
+                                {{ $item['label'] }}
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
             @foreach ($primaryNav as $item)
                 <a href="{{ $item['href'] }}" class="rounded-lg px-3 py-2 text-sm font-medium text-ink-700 hover:bg-brand-50 hover:text-brand-700">
                     {{ $item['label'] }}
@@ -152,6 +189,11 @@
     <nav x-show="mobileOpen" x-cloak x-transition class="border-t border-ink-100 px-4 pb-4 lg:hidden" aria-label="Navigation mobile">
         <p class="mt-3 px-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Annuaire</p>
         @foreach ($annuaireNav as $item)
+            <a href="{{ $item['href'] }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50">{{ $item['label'] }}</a>
+        @endforeach
+        <div class="my-2 border-t border-ink-100"></div>
+        <p class="px-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Cinéma</p>
+        @foreach ($cinemaNav as $item)
             <a href="{{ $item['href'] }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50">{{ $item['label'] }}</a>
         @endforeach
         <div class="my-2 border-t border-ink-100"></div>

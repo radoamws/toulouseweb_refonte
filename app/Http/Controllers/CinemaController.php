@@ -201,6 +201,33 @@ class CinemaController extends Controller
     }
 
     /**
+     * Page dédiée "Panorama" (demande client, 05/10/2026 — restaure la page
+     * du legacy après un 1er essai en simple bloc d'en-tête sur /cinema,
+     * voir TECHNICAL_DOCUMENTATION.md §49/§68) : liste alphabétique de TOUS
+     * les films actuellement à l'affiche, SEO propre (distincte de /cinema),
+     * un tableau plutôt qu'une grille d'affiches — l'intérêt ici est la
+     * recherche par titre, pas la découverte visuelle (déjà couverte par
+     * /cinema).
+     */
+    public function panorama(Request $request): View
+    {
+        $movies = Movie::query()
+            ->whereHas('screenings', fn (Builder $q) => $q->currentlyValid())
+            ->withCount('publishedComments')
+            ->orderBy('title')
+            ->paginate(50)
+            ->withQueryString();
+
+        $this->recordPageView($request);
+
+        return view('cinema.panorama', [
+            'movies' => $movies,
+            'weekDays' => $this->cinemaWeekDays(),
+            'seo' => Page::where('key', 'seo-cinema-panorama')->first()?->resolveSeo() ?? [],
+        ]);
+    }
+
+    /**
      * Les 7 jours de la semaine cinéma en cours (mercredi à mardi,
      * convention française de sortie des films, voir index()), sous forme de
      * dates Carbon réelles pour l'affichage ("mer. 07/10") — PAS les 7

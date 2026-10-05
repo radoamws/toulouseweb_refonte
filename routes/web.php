@@ -54,6 +54,12 @@ Route::get('/cinema/films/{slug}', [CinemaController::class, 'showMovie'])->name
 // autres formulaires publics (agenda.store, annonces.store...).
 Route::post('/cinema/films/{slug}/avis', [CinemaController::class, 'storeComment'])->middleware('throttle:5,1')->name('cinema.movie.comment');
 Route::get('/cinema/salles/{slug}', [CinemaController::class, 'showCinema'])->name('cinema.salle');
+// Panorama (demande client, 05/10/2026 — restaure la page dédiée du
+// legacy après un 1er essai en simple bloc d'en-tête sur /cinema, voir
+// TECHNICAL_DOCUMENTATION.md §49/§68) : page et SEO distincts de /cinema et
+// /cinema/salles/{slug}, AVANT /cinema/{slug} générique s'il en existait un
+// (aucun ici, mais convention de ce fichier : plus spécifique avant).
+Route::get('/cinema/panorama', [CinemaController::class, 'panorama'])->name('cinema.panorama');
 
 // Actualités — même pattern catégorie/article que l'agenda. `proposer`
 // avant `{slug}` (wildcard) pour ne pas être intercepté — même piège que

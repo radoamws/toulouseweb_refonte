@@ -73,12 +73,19 @@
                 Semaine du {{ $weekDays->first()->translatedFormat('d F') }} au {{ $weekDays->last()->translatedFormat('d F Y') }}
             </p>
             <div class="mt-4 overflow-x-auto">
-                <table class="w-full min-w-[800px] border-separate border-spacing-0 text-sm">
+                {{-- Demande client (05/10/2026, 2e retour) : "difficile à lire
+                en alignement" — bordures de couleur sur chaque cellule +
+                zébrage des lignes pour suivre facilement une ligne/colonne du
+                regard. Colonne "Films" réduite en mobile (miniature plus
+                petite, méta masquée) : sans ça le tableau des horaires
+                n'était pas visible à l'écran, la colonne film à elle seule
+                prenant toute la largeur utile du viewport. --}}
+                <table class="w-full min-w-[640px] border-separate border-spacing-0 text-sm">
                     <thead>
                         <tr>
-                            <th class="sticky left-0 z-10 bg-white px-3 py-2 text-left font-heading text-ink-900">Films</th>
+                            <th class="sticky left-0 z-10 border border-brand-200 bg-brand-50 px-2 py-2 text-left font-heading text-ink-900 sm:px-3">Films</th>
                             @foreach ($weekDays as $day)
-                                <th class="px-2 py-2 text-center font-heading text-xs font-semibold uppercase text-ink-700">
+                                <th class="border border-brand-200 bg-brand-50 px-2 py-2 text-center font-heading text-xs font-semibold uppercase text-ink-700">
                                     {{ $day->translatedFormat('D') }}<br>{{ $day->format('d/m') }}
                                 </th>
                             @endforeach
@@ -86,23 +93,27 @@
                     </thead>
                     <tbody>
                         @foreach ($screeningsByMovie as $movieTitle => $screenings)
-                            @php $movie = $screenings->first()->movie; @endphp
-                            <tr class="border-t border-ink-100 align-top">
-                                <td class="sticky left-0 z-10 bg-white py-3 pr-4">
-                                    <div class="flex items-start gap-3">
+                            @php
+                                $movie = $screenings->first()->movie;
+                                $rowBg = $loop->iteration % 2 === 0 ? 'bg-ink-50' : 'bg-white';
+                            @endphp
+                            <tr class="{{ $rowBg }} align-top">
+                                <td class="sticky left-0 z-10 {{ $rowBg }} border border-ink-200 px-2 py-3 sm:px-3">
+                                    <div class="flex items-start gap-2 sm:gap-3">
                                         {{-- Miniature volontairement petite (demande client) : juste assez
-                                        pour identifier le film visuellement sans alourdir la ligne. --}}
+                                        pour identifier le film visuellement sans alourdir la ligne —
+                                        encore réduite en mobile (demande client, 2e retour). --}}
                                         <a href="/cinema/films/{{ $movie?->slug }}" data-track="movie:{{ $movie?->id }}:cinema_salle"
-                                           class="block aspect-[2/3] w-12 shrink-0 overflow-hidden rounded bg-ink-100">
+                                           class="block aspect-[2/3] w-8 shrink-0 overflow-hidden rounded bg-ink-100 sm:w-12">
                                             <x-ui.entity-image :src="$movie?->poster_url" :alt="$movieTitle" />
                                         </a>
-                                        <div class="min-w-[10rem]">
+                                        <div class="min-w-[4.5rem] sm:min-w-[10rem]">
                                             <a href="/cinema/films/{{ $movie?->slug }}" data-track="movie:{{ $movie?->id }}:cinema_salle"
-                                               class="font-heading font-semibold text-ink-900 hover:text-brand-700">
+                                               class="font-heading text-xs font-semibold text-ink-900 hover:text-brand-700 sm:text-sm">
                                                 {{ $movieTitle }}
                                             </a>
                                             @if ($movie)
-                                                <p class="mt-0.5 text-xs text-ink-500">
+                                                <p class="mt-0.5 hidden text-xs text-ink-500 sm:block">
                                                     {{ collect([$movie->genres, $movie->duration_minutes ? $movie->duration_minutes.' min' : null, $movie->director, $movie->distributor])->filter()->implode(' · ') }}
                                                 </p>
                                             @endif
@@ -110,7 +121,7 @@
                                     </div>
                                 </td>
                                 @foreach ($weekDays as $day)
-                                    <td class="px-2 py-3 text-center">
+                                    <td class="border border-ink-200 px-2 py-3 text-center">
                                         <div class="flex flex-col items-center gap-1">
                                             {{-- Horaire cliquable vers la réservation sur le vrai site source
                                             (demande client — "2e scraping" du legacy, autoUpdateCinemaAllocineLiens/Liens2,

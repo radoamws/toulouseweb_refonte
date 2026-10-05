@@ -41,13 +41,14 @@
             </div>
         @endif
 
-        {{-- "Panorama" de la semaine (demande client, 19/09/2026) — entre la
-        liste des salles et la liste des films, semaine cinéma (mercredi à
-        mardi, sortie des films en France) calculée automatiquement, voir
-        CinemaController::index(). --}}
+        {{-- "Panorama" de la semaine (demande client, 19/09/2026 ; redevenue
+        une vraie page dédiée le 05/10/2026, voir CinemaController::panorama()
+        et TECHNICAL_DOCUMENTATION.md §68) — teaser + lien vers la liste
+        alphabétique complète, semaine cinéma (mercredi à mardi, sortie des
+        films en France) calculée automatiquement. --}}
         <div class="mt-10 flex flex-col gap-2 border-b border-ink-100 pb-3 sm:flex-row sm:items-baseline sm:justify-between">
             <h2 class="font-heading text-xl font-bold text-brand-700 sm:text-2xl">
-                <span class="inline-block rounded-lg bg-brand-50 px-3 py-1">Panorama</span>
+                <a href="/cinema/panorama" class="inline-block rounded-lg bg-brand-50 px-3 py-1 hover:bg-brand-100">Panorama</a>
             </h2>
             <p class="text-sm font-medium text-ink-500">
                 Films à l'affiche du {{ $weekStart->translatedFormat('d F Y') }} au {{ $weekEnd->translatedFormat('d F Y') }}
