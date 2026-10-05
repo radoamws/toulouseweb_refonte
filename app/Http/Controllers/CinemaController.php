@@ -29,7 +29,15 @@ class CinemaController extends Controller
             ->paginate(24)
             ->withQueryString();
 
-        $cinemas = Cinema::where('is_active', true)->orderBy('name')->get();
+        // Demande client (05/10/2026) : restaurer l'entrée "par salle" (2
+        // colonnes "Toulouse et complexes"/"Toiles de banlieues") comme
+        // contenu principal de /cinema — préférée par le client à la grille
+        // de films seule ("l'entrée par salle est plus pertinente que
+        // l'entrée par film car d'un seul coup d'oeil on peut se
+        // déterminer"). Voir Cinema::zone, backfillé depuis le legacy
+        // (migration add_zone_to_cinemas_table).
+        $complexeCinemas = Cinema::where('is_active', true)->where('zone', 'complexe')->orderBy('name')->get();
+        $banlieueCinemas = Cinema::where('is_active', true)->where('zone', 'banlieue')->orderBy('name')->get();
 
         // "Les plus commentés" (demande client, 19/09/2026 — bonne pratique
         // des sites de cinéma type AlloCiné) : agrégats calculés en base
@@ -50,17 +58,20 @@ class CinemaController extends Controller
 
         $this->recordPageView($request);
 
+        $weekDays = $this->cinemaWeekDays();
+
         return view('cinema.index', [
             'movies' => $movies,
-            'cinemas' => $cinemas,
+            'complexeCinemas' => $complexeCinemas,
+            'banlieueCinemas' => $banlieueCinemas,
             'mostCommented' => $mostCommented,
             // "Panorama" de la semaine (demande client, 19/09/2026, exemple
             // donné : "du 16 Septembre 2026 au 22 septembre 2026" — un
             // mercredi à mardi, PAS la semaine civile lundi→dimanche du
             // calendrier agenda) : convention de l'industrie du cinéma en
             // France, où les nouveaux films sortent le mercredi.
-            'weekStart' => now()->startOfWeek(\Carbon\Carbon::WEDNESDAY),
-            'weekEnd' => now()->endOfWeek(\Carbon\Carbon::TUESDAY),
+            'weekStart' => $weekDays->first(),
+            'weekEnd' => $weekDays->last(),
             // Fiche "menu" migrée (bug réel corrigé le 08/09/2026, voir
             // docblock équivalent sur EventController::renderIndex()) —
             // '/cinema' n'avait ici aucun repli du tout (toujours []).
@@ -181,8 +192,31 @@ class CinemaController extends Controller
         return view('cinema.salle', [
             'cinema' => $cinema,
             'related' => $related,
+            // Demande client (05/10/2026) : grille jour par jour (mercredi à
+            // mardi, horaires en ordre chronologique) plutôt qu'une liste de
+            // badges d'horaires mélangés — voir resources/views/cinema/salle.blade.php.
+            'weekDays' => $this->cinemaWeekDays(),
             'seo' => $cinema->resolveSeo(),
         ]);
+    }
+
+    /**
+     * Les 7 jours de la semaine cinéma en cours (mercredi à mardi,
+     * convention française de sortie des films, voir index()), sous forme de
+     * dates Carbon réelles pour l'affichage ("mer. 07/10") — PAS les 7
+     * entiers 0-6 de `ScreeningTime::weekday`, qui restent le seul critère de
+     * regroupement réel des horaires (un gabarit hebdomadaire récurrent, pas
+     * une date calendaire, voir resources/views/components/cinema/screening-time.blade.php).
+     * `$day->dayOfWeek` (Carbon) donne directement l'entier à utiliser pour
+     * retrouver les horaires de ce jour dans cette même convention.
+     *
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Carbon>
+     */
+    private function cinemaWeekDays(): \Illuminate\Support\Collection
+    {
+        $start = now()->startOfWeek(\Carbon\Carbon::WEDNESDAY);
+
+        return collect(range(0, 6))->map(fn (int $i) => $start->copy()->addDays($i));
     }
 
     // Le filtre "séance actuellement valide" (bug DATE-vs-DATETIME trouvé et

@@ -41,6 +41,12 @@ class CinemaResource extends Resource
                 Forms\Components\TextInput::make('address')
                     ->maxLength(255)
                     ->default(null),
+                Forms\Components\Select::make('zone')
+                    ->label('Zone')
+                    ->options(['complexe' => 'Toulouse et complexes', 'banlieue' => 'Toiles de banlieues'])
+                    ->helperText("Détermine la colonne d'affichage de cette salle sur /cinema.")
+                    ->required()
+                    ->default('complexe'),
                 Forms\Components\TextInput::make('lat')
                     ->numeric()
                     ->default(null),
@@ -71,6 +77,11 @@ class CinemaResource extends Resource
                 Tables\Columns\TextColumn::make('address')
                     ->searchable()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('zone')
+                    ->label('Zone')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state) => $state === 'banlieue' ? 'Toiles de banlieues' : 'Toulouse et complexes')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('lat')
                     ->numeric()
                     ->sortable(),
@@ -99,7 +110,8 @@ class CinemaResource extends Resource
                     ->toggleable(),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('zone')
+                    ->options(['complexe' => 'Toulouse et complexes', 'banlieue' => 'Toiles de banlieues']),
             ])
             ->actions([
                 // Lancement manuel du scraper AlloCiné pour CETTE salle

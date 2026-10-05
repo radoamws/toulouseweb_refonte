@@ -15,7 +15,7 @@ class Cinema extends Model implements HasCloudflarePurgeUrls
 {
     use HasSlug, HasSeoMeta, Trackable;
 
-    protected $fillable = ['name', 'slug', 'address', 'lat', 'lng', 'external_url', 'is_active', 'legacy_id'];
+    protected $fillable = ['name', 'slug', 'address', 'zone', 'lat', 'lng', 'external_url', 'is_active', 'legacy_id'];
 
     protected $casts = ['is_active' => 'boolean'];
 

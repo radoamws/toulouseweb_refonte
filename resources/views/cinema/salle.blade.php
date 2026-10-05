@@ -31,6 +31,20 @@
     $screeningsByMovie = $cinema->screenings->groupBy('movie.title');
 @endphp
 
+@php
+    // Associe chaque ScreeningTime à sa Screening parente SANS requête
+    // supplémentaire (lazy-load évité : `times` est déjà eager-loadée mais
+    // pas `times.screening` — on a déjà la Screening sous la main ici) pour
+    // que <x-cinema.screening-time> (qui a besoin de `screening->end_date`
+    // pour désactiver un lien expiré) reste réutilisable telle quelle dans
+    // la grille jour par jour ci-dessous.
+    $weekdayEntries = $screeningsByMovie->map(
+        fn ($screenings) => $screenings
+            ->flatMap(fn ($screening) => $screening->times->map(fn ($time) => ['screening' => $screening, 'time' => $time]))
+            ->groupBy(fn ($entry) => (int) $entry['time']->weekday)
+    );
+@endphp
+
 <x-layouts.app :seo="$seo">
     @push('head')
         <script type="application/ld+json">{!! json_encode($jsonLd) !!}</script>
@@ -48,46 +62,72 @@
         @if ($screeningsByMovie->isEmpty())
             <p class="mt-3 text-ink-500">Aucune séance programmée actuellement.</p>
         @else
-            <div class="mt-4 space-y-6">
-                @foreach ($screeningsByMovie as $movieTitle => $screenings)
-                    @php $movie = $screenings->first()->movie; @endphp
-                    {{-- Demande client (14/09/2026) : affichage plus attirant — l'affiche du
-                    film sous son titre, et les horaires (l'info la plus consultée) dans une
-                    colonne large à gauche plutôt qu'un simple bloc de texte pleine largeur. --}}
-                    <div class="rounded-2xl border border-ink-100 bg-white p-5 shadow-sm">
-                        {{-- Bug réel trouvé et corrigé (15/09/2026, demande client) : ni ce
-                        lien ni celui de l'affiche ci-dessous n'étaient suivis — naviguer
-                        vers une fiche film depuis une salle n'apparaissait jamais dans les
-                        stats de l'admin. --}}
-                        <a href="/cinema/films/{{ $movie?->slug }}" data-track="movie:{{ $movie?->id }}:cinema_salle" class="block font-heading font-semibold text-ink-900 hover:text-brand-700">
-                            {{ $movieTitle }}
-                        </a>
-                        <div class="mt-3 sm:flex sm:items-start sm:gap-6">
-                            <div class="sm:order-1 sm:flex-1">
-                                @foreach ($screenings as $screening)
-                                    <div class="flex flex-wrap gap-2 text-sm">
-                                        {{-- Horaire cliquable vers la réservation sur le vrai site source
-                                        (demande client — "2e scraping" du legacy, autoUpdateCinemaAllocineLiens/Liens2,
-                                        voir docblock d'AllocineDriver::extractBookingUrl()) quand un lien a
-                                        été capturé ET que la séance a encore une occurrence future
-                                        (demande client, 22/09/2026 — voir x-cinema.screening-time) ;
-                                        simple badge non cliquable sinon. --}}
-                                        @foreach ($screening->times as $time)
-                                            <x-cinema.screening-time :screening="$screening" :time="$time" />
-                                        @endforeach
+            {{-- Demande client (05/10/2026) : "j'avais accès à une grille jour
+            par jour et non une liste de film qui ne sont pas placés en ordre
+            chronologique [...] l'entrée par salle est plus pertinente" —
+            restaure le tableau "1 film par ligne x 7 jours" de l'ancienne
+            version du site (mercredi à mardi, ordre chronologique réel),
+            avec une miniature compacte pour garder une hauteur de ligne
+            raisonnable (demande explicite : pas de défilement excessif). --}}
+            <p class="mt-1 text-sm text-ink-500">
+                Semaine du {{ $weekDays->first()->translatedFormat('d F') }} au {{ $weekDays->last()->translatedFormat('d F Y') }}
+            </p>
+            <div class="mt-4 overflow-x-auto">
+                <table class="w-full min-w-[800px] border-separate border-spacing-0 text-sm">
+                    <thead>
+                        <tr>
+                            <th class="sticky left-0 z-10 bg-white px-3 py-2 text-left font-heading text-ink-900">Films</th>
+                            @foreach ($weekDays as $day)
+                                <th class="px-2 py-2 text-center font-heading text-xs font-semibold uppercase text-ink-700">
+                                    {{ $day->translatedFormat('D') }}<br>{{ $day->format('d/m') }}
+                                </th>
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($screeningsByMovie as $movieTitle => $screenings)
+                            @php $movie = $screenings->first()->movie; @endphp
+                            <tr class="border-t border-ink-100 align-top">
+                                <td class="sticky left-0 z-10 bg-white py-3 pr-4">
+                                    <div class="flex items-start gap-3">
+                                        {{-- Miniature volontairement petite (demande client) : juste assez
+                                        pour identifier le film visuellement sans alourdir la ligne. --}}
+                                        <a href="/cinema/films/{{ $movie?->slug }}" data-track="movie:{{ $movie?->id }}:cinema_salle"
+                                           class="block aspect-[2/3] w-12 shrink-0 overflow-hidden rounded bg-ink-100">
+                                            <x-ui.entity-image :src="$movie?->poster_url" :alt="$movieTitle" />
+                                        </a>
+                                        <div class="min-w-[10rem]">
+                                            <a href="/cinema/films/{{ $movie?->slug }}" data-track="movie:{{ $movie?->id }}:cinema_salle"
+                                               class="font-heading font-semibold text-ink-900 hover:text-brand-700">
+                                                {{ $movieTitle }}
+                                            </a>
+                                            @if ($movie)
+                                                <p class="mt-0.5 text-xs text-ink-500">
+                                                    {{ collect([$movie->genres, $movie->duration_minutes ? $movie->duration_minutes.' min' : null, $movie->director, $movie->distributor])->filter()->implode(' · ') }}
+                                                </p>
+                                            @endif
+                                        </div>
                                     </div>
+                                </td>
+                                @foreach ($weekDays as $day)
+                                    <td class="px-2 py-3 text-center">
+                                        <div class="flex flex-col items-center gap-1">
+                                            {{-- Horaire cliquable vers la réservation sur le vrai site source
+                                            (demande client — "2e scraping" du legacy, autoUpdateCinemaAllocineLiens/Liens2,
+                                            voir docblock d'AllocineDriver::extractBookingUrl()) quand un lien a
+                                            été capturé ET que la séance a encore une occurrence future
+                                            (demande client, 22/09/2026 — voir x-cinema.screening-time) ;
+                                            simple badge non cliquable sinon. --}}
+                                            @foreach ($weekdayEntries[$movieTitle]->get($day->dayOfWeek, collect())->sortBy(fn ($entry) => $entry['time']->time) as $entry)
+                                                <x-cinema.screening-time :screening="$entry['screening']" :time="$entry['time']" />
+                                            @endforeach
+                                        </div>
+                                    </td>
                                 @endforeach
-                            </div>
-                            @if ($movie)
-                                <div class="mt-4 shrink-0 sm:order-2 sm:mt-0 sm:w-32">
-                                    <a href="/cinema/films/{{ $movie->slug }}" data-track="movie:{{ $movie->id }}:cinema_salle" class="block aspect-[2/3] w-full overflow-hidden rounded-lg bg-ink-100">
-                                        <x-ui.entity-image :src="$movie->poster_url" :alt="$movieTitle" class="transition hover:scale-105" />
-                                    </a>
-                                </div>
-                            @endif
-                        </div>
-                    </div>
-                @endforeach
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
         @endif
 

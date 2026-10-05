@@ -11,15 +11,32 @@
             </form>
         </div>
 
-        @if ($cinemas->isNotEmpty())
-            <div class="mt-6 flex flex-wrap gap-2">
-                @foreach ($cinemas as $cinema)
-                    {{-- Bug réel trouvé et corrigé (15/09/2026, demande client) : ce lien
-                    n'était suivi nulle part — naviguer vers une salle depuis /cinema
-                    n'apparaissait jamais dans les stats de l'admin. --}}
-                    <a href="/cinema/salles/{{ $cinema->slug }}" data-track="cinema:{{ $cinema->id }}:cinema_listing" class="rounded-full bg-ink-50 px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-100">
-                        {{ $cinema->name }}
-                    </a>
+        {{-- Demande client (05/10/2026) : "l'entrée par salle est plus
+        pertinente que l'entrée par film car d'un seul coup d'oeil on peut se
+        déterminer" — restaure les 2 colonnes "Toulouse et complexes"/"Toiles
+        de banlieues" de l'ancienne version du site comme contenu principal
+        de la page (avant la grille de films), chaque salle gardant son
+        `data-track` (demande client du 15/09/2026 — suivi dans les stats
+        admin, non régressé par ce changement). --}}
+        @if ($complexeCinemas->isNotEmpty() || $banlieueCinemas->isNotEmpty())
+            <div class="mt-8 grid gap-6 sm:grid-cols-2">
+                @foreach ([['label' => 'Toulouse et complexes', 'cinemas' => $complexeCinemas], ['label' => 'Toiles de banlieues', 'cinemas' => $banlieueCinemas]] as $column)
+                    @if ($column['cinemas']->isNotEmpty())
+                        <div>
+                            <h2 class="font-heading text-sm font-bold uppercase tracking-wide text-brand-700">{{ $column['label'] }}</h2>
+                            <div class="mt-3 space-y-2">
+                                @foreach ($column['cinemas'] as $cinema)
+                                    <a href="/cinema/salles/{{ $cinema->slug }}" data-track="cinema:{{ $cinema->id }}:cinema_listing"
+                                       class="block rounded-xl border border-ink-100 bg-white px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                                        <p class="font-heading font-semibold text-ink-900">{{ $cinema->name }}</p>
+                                        @if ($cinema->address)
+                                            <p class="mt-0.5 text-sm text-ink-500">{{ $cinema->address }}</p>
+                                        @endif
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
                 @endforeach
             </div>
         @endif
@@ -61,7 +78,8 @@
         @if ($movies->isEmpty())
             <p class="mt-10 text-ink-500">Aucun film à l'affiche pour le moment.</p>
         @else
-            <div class="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
+            <h3 class="mt-10 font-heading text-base font-semibold text-ink-900">Tous les films à l'affiche</h3>
+            <div class="mt-3 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
                 @foreach ($movies as $movie)
                     <a href="/cinema/films/{{ $movie->slug }}" data-track="movie:{{ $movie->id }}:cinema_listing"
                        class="group block overflow-hidden rounded-xl border border-ink-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
