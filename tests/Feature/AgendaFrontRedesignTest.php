@@ -24,23 +24,39 @@ class AgendaFrontRedesignTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * ⚠️ Dates figées (`Carbon::setTestNow`) : des dates en dur NON figées
+     * (`2026-10-03`/`2026-10-05`) rendaient ce test dépendant de l'horloge
+     * réelle — il échouait dès que "aujourd'hui" dépassait le `end_date` de
+     * l'événement (`scopeUpcoming()` l'exclut alors de la liste), ce qui
+     * s'est produit en CI le 06/10/2026 sans aucun rapport avec le code
+     * testé. Même précaution que les autres tests de ce fichier portant sur
+     * des dates (voir plus bas, "événement du jour même"/"se termine
+     * aujourd'hui").
+     */
     public function test_event_card_shows_start_and_end_date(): void
     {
-        Event::create([
-            'title' => 'Festival de rue', 'slug' => 'festival-de-rue', 'status' => 'published',
-            'start_date' => '2026-10-03', 'end_date' => '2026-10-05',
-        ]);
-        // Un événement d'un seul jour n'affiche pas de flèche "→" inutile.
-        Event::create([
-            'title' => 'Concert unique', 'slug' => 'concert-unique', 'status' => 'published',
-            'start_date' => '2026-10-10', 'end_date' => '2026-10-10',
-        ]);
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 10, 1));
 
-        $response = $this->get('/agenda')->assertOk();
+        try {
+            Event::create([
+                'title' => 'Festival de rue', 'slug' => 'festival-de-rue', 'status' => 'published',
+                'start_date' => '2026-10-03', 'end_date' => '2026-10-05',
+            ]);
+            // Un événement d'un seul jour n'affiche pas de flèche "→" inutile.
+            Event::create([
+                'title' => 'Concert unique', 'slug' => 'concert-unique', 'status' => 'published',
+                'start_date' => '2026-10-10', 'end_date' => '2026-10-10',
+            ]);
 
-        $response->assertSee('03 oct. 2026 → 05 oct. 2026', false);
-        $response->assertDontSee('10 oct. 2026 → 10 oct. 2026', false);
-        $response->assertSee('10 oct. 2026');
+            $response = $this->get('/agenda')->assertOk();
+
+            $response->assertSee('03 oct. 2026 → 05 oct. 2026', false);
+            $response->assertDontSee('10 oct. 2026 → 10 oct. 2026', false);
+            $response->assertSee('10 oct. 2026');
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
     }
 
     /** Le calendrier est toujours visible, plus besoin d'un onglet séparé pour le faire apparaître. */
