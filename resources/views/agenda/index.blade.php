@@ -145,9 +145,13 @@
                                     <h3 class="font-heading text-base font-semibold leading-snug text-ink-900 group-hover:text-brand-700">
                                         {{ $event->title }}
                                     </h3>
-                                    {{-- Début ET fin de l'événement (demande client, 18/09/2026). --}}
+                                    {{-- Début ET fin de l'événement (demande client, 18/09/2026). Lieu
+                                    mis en évidence en gras (demande client, 05/10/2026 — capture à
+                                    l'appui : difficile à repérer au milieu de la date sinon). --}}
                                     <p class="mt-auto text-sm text-ink-500">
-                                        {{ $event->event_date_range }}{{ $event->area ? ' · '.$event->area->name : '' }}
+                                        {{ $event->event_date_range }}@if ($event->area)
+                                            · <span class="font-semibold text-ink-700">{{ $event->area->name }}</span>
+                                        @endif
                                     </p>
                                 </div>
                             </a>
