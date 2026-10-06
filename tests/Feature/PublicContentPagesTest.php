@@ -13,6 +13,7 @@ use App\Models\Movie;
 use App\Models\Screening;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -678,6 +679,101 @@ class PublicContentPagesTest extends TestCase
         $response->assertSee('href="/cinema/films/alpha-movie-panorama"', false);
         $response->assertSee('href="/cinema/films/alpha-movie-panorama#avis"', false);
         $response->assertSee('href="/cinema/films/alpha-movie-panorama#seances"', false);
+    }
+
+    /**
+     * Demande client (05/10/2026) : "mettre la présentation en tableau comme
+     * dans les salles" — la section "Séances" de la fiche film (groupée par
+     * salle) passe de blocs à une grille jour par jour, même logique que
+     * /cinema/salles/{slug} (lignes = salles ici, pas films).
+     */
+    public function test_movie_seances_section_renders_as_a_day_by_day_table(): void
+    {
+        $cinema = Cinema::create(['name' => 'Gaumont Table Film', 'slug' => 'gaumont-table-film', 'is_active' => true]);
+        $movie = Movie::create(['title' => 'Film Tableau', 'slug' => 'film-tableau']);
+        $screening = Screening::create(['cinema_id' => $cinema->id, 'movie_id' => $movie->id, 'start_date' => now()->subDay(), 'end_date' => now()->addWeek()]);
+        $screening->times()->create(['weekday' => 3, 'time' => '20:30:00']);
+
+        $response = $this->get('/cinema/films/film-tableau')->assertOk();
+        $response->assertSee('<table', false);
+        $response->assertSee('Gaumont Table Film');
+        $response->assertSee('Mercredi 20:30');
+        $response->assertSee('data-track="cinema:'.$cinema->id.':cinema_movie_seances"', false);
+    }
+
+    /**
+     * Demande client (05/10/2026) : flèches de navigation semaine
+     * précédente/suivante sur la grille salle — `?week=` est un offset
+     * relatif (voir CinemaController::cinemaWeekDays()). Date figée sur un
+     * mardi (fin de la semaine cinéma en cours) pour un scénario
+     * déterministe indépendant du jour réel d'exécution.
+     */
+    public function test_salle_week_navigation_shows_a_different_weeks_screenings(): void
+    {
+        Carbon::setTestNow(Carbon::create(2026, 10, 6));
+
+        try {
+            $cinema = Cinema::create(['name' => 'Gaumont Semaine', 'slug' => 'gaumont-semaine-nav', 'is_active' => true]);
+
+            $lastWeekMovie = Movie::create(['title' => 'Film Semaine Dernière', 'slug' => 'film-semaine-derniere']);
+            Screening::create(['cinema_id' => $cinema->id, 'movie_id' => $lastWeekMovie->id, 'start_date' => '2026-09-23', 'end_date' => '2026-09-29']);
+
+            $thisWeekMovie = Movie::create(['title' => 'Film Semaine Courante', 'slug' => 'film-semaine-courante']);
+            Screening::create(['cinema_id' => $cinema->id, 'movie_id' => $thisWeekMovie->id, 'start_date' => '2026-09-30', 'end_date' => '2026-10-06']);
+
+            $current = $this->get('/cinema/salles/gaumont-semaine-nav')->assertOk();
+            $current->assertSee('Film Semaine Courante')->assertDontSee('Film Semaine Dernière');
+            $current->assertSee('href="?week=-1"', false);
+            $current->assertSee('href="?week=1"', false);
+
+            $previous = $this->get('/cinema/salles/gaumont-semaine-nav?week=-1')->assertOk();
+            $previous->assertSee('Film Semaine Dernière')->assertDontSee('Film Semaine Courante');
+            $previous->assertSee('href="?week=-2"', false);
+            $previous->assertSee('href="?week=0"', false);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    /** Même navigation semaine que la grille salle, appliquée à /cinema/panorama. */
+    public function test_panorama_week_navigation_shows_a_different_weeks_movies(): void
+    {
+        Carbon::setTestNow(Carbon::create(2026, 10, 6));
+
+        try {
+            $cinema = Cinema::create(['name' => 'Gaumont Panorama Nav', 'slug' => 'gaumont-panorama-nav', 'is_active' => true]);
+
+            $lastWeekMovie = Movie::create(['title' => 'Panorama Semaine Dernière', 'slug' => 'panorama-semaine-derniere']);
+            Screening::create(['cinema_id' => $cinema->id, 'movie_id' => $lastWeekMovie->id, 'start_date' => '2026-09-23', 'end_date' => '2026-09-29']);
+
+            $thisWeekMovie = Movie::create(['title' => 'Panorama Semaine Courante', 'slug' => 'panorama-semaine-courante']);
+            Screening::create(['cinema_id' => $cinema->id, 'movie_id' => $thisWeekMovie->id, 'start_date' => '2026-09-30', 'end_date' => '2026-10-06']);
+
+            $current = $this->get('/cinema/panorama')->assertOk();
+            $current->assertSee('Panorama Semaine Courante')->assertDontSee('Panorama Semaine Dernière');
+
+            $previous = $this->get('/cinema/panorama?week=-1')->assertOk();
+            $previous->assertSee('Panorama Semaine Dernière')->assertDontSee('Panorama Semaine Courante');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    /**
+     * ⚠️ Même raisonnement que la pagination (`?page=`, 11/09/2026) : le
+     * contenu d'une autre semaine est réellement différent, Google doit
+     * pouvoir indexer chaque semaine séparément plutôt que tout fusionner
+     * sur le canonical de la semaine en cours.
+     */
+    public function test_salle_and_panorama_pages_self_canonicalize_with_week_param(): void
+    {
+        $cinema = Cinema::create(['name' => 'Gaumont Canonical', 'slug' => 'gaumont-canonical-week', 'is_active' => true]);
+
+        $this->get('/cinema/salles/gaumont-canonical-week?week=-2')->assertOk()
+            ->assertSee('<link rel="canonical" href="'.url('/cinema/salles/gaumont-canonical-week?week=-2').'">', false);
+
+        $this->get('/cinema/panorama?week=1')->assertOk()
+            ->assertSee('<link rel="canonical" href="'.url('/cinema/panorama?week=1').'">', false);
     }
 
     public function test_cinema_salle_show_lists_other_active_cinemas(): void

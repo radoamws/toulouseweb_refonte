@@ -90,6 +90,10 @@ class CinemaController extends Controller
             'screenings' => fn ($q) => $q->currentlyValid()->with(['cinema', 'language', 'types', 'times']),
             'publishedComments' => fn ($q) => $q->latest(),
         ]);
+        // Grille jour par jour (demande client, 05/10/2026 — même
+        // présentation que /cinema/salles/{slug}), toujours la semaine en
+        // cours (pas de navigation ici, non demandée sur cette page).
+        $weekDays = $this->cinemaWeekDays();
 
         $screeningsByCinema = $movie->screenings->groupBy('cinema.name');
         $commentsCount = $movie->publishedComments->count();
@@ -109,6 +113,7 @@ class CinemaController extends Controller
         return view('cinema.movie', [
             'movie' => $movie,
             'screeningsByCinema' => $screeningsByCinema,
+            'weekDays' => $weekDays,
             'commentsCount' => $commentsCount,
             'averageRating' => $averageRating,
             'related' => $related,
@@ -175,8 +180,27 @@ class CinemaController extends Controller
             return $this->redirectOrAbort($request->path());
         }
 
+        // Navigation semaine précédente/suivante (demande client, 05/10/2026)
+        // — `?week=` est un OFFSET relatif (entier signé), jamais une date
+        // brute : garde les liens Précédent/Suivant triviaux à construire
+        // (offset±1) et évite d'exposer/parser un format de date en query
+        // string. `validOn()` (généralisation de `currentlyValid()`, voir
+        // Screening::scopeValidOn()) sélectionne les séances de la semaine
+        // demandée, passée ou future, pas seulement celle d'aujourd'hui.
+        //
+        // ⚠️ Semaine en cours (offset 0) : référence `now()`, PAS le mercredi
+        // de la semaine affichée. En donnée réelle les deux coïncident presque
+        // toujours (une Screening est toujours créée avec `start_date` = le
+        // mercredi de SA semaine de scraping), mais `now()` reste la
+        // référence correcte pour "actuellement en salle" — une séance dont
+        // la fenêtre démarre après ce mercredi mais avant aujourd'hui (ex.
+        // avant-première ajoutée en cours de semaine) doit rester visible.
+        $weekOffset = (int) $request->integer('week');
+        $weekDays = $this->cinemaWeekDays($weekOffset);
+        $referenceDate = $weekOffset === 0 ? now() : $weekDays->first();
+
         $cinema->load([
-            'screenings' => fn ($q) => $q->currentlyValid()->with(['movie', 'language', 'times']),
+            'screenings' => fn ($q) => $q->validOn($referenceDate)->with(['movie', 'language', 'times']),
         ]);
 
         // Maillage interne (brief §13, SEO/GEO) — autres salles actives,
@@ -195,7 +219,8 @@ class CinemaController extends Controller
             // Demande client (05/10/2026) : grille jour par jour (mercredi à
             // mardi, horaires en ordre chronologique) plutôt qu'une liste de
             // badges d'horaires mélangés — voir resources/views/cinema/salle.blade.php.
-            'weekDays' => $this->cinemaWeekDays(),
+            'weekDays' => $weekDays,
+            'weekOffset' => $weekOffset,
             'seo' => $cinema->resolveSeo(),
         ]);
     }
@@ -211,8 +236,16 @@ class CinemaController extends Controller
      */
     public function panorama(Request $request): View
     {
+        // Navigation semaine précédente/suivante (demande client, 05/10/2026)
+        // — même mécanique offset que showCinema(), voir son commentaire
+        // (notamment le choix de `now()` plutôt que le mercredi de la
+        // semaine pour l'offset 0).
+        $weekOffset = (int) $request->integer('week');
+        $weekDays = $this->cinemaWeekDays($weekOffset);
+        $referenceDate = $weekOffset === 0 ? now() : $weekDays->first();
+
         $movies = Movie::query()
-            ->whereHas('screenings', fn (Builder $q) => $q->currentlyValid())
+            ->whereHas('screenings', fn (Builder $q) => $q->validOn($referenceDate))
             ->withCount('publishedComments')
             ->orderBy('title')
             ->paginate(50)
@@ -222,26 +255,31 @@ class CinemaController extends Controller
 
         return view('cinema.panorama', [
             'movies' => $movies,
-            'weekDays' => $this->cinemaWeekDays(),
+            'weekDays' => $weekDays,
+            'weekOffset' => $weekOffset,
             'seo' => Page::where('key', 'seo-cinema-panorama')->first()?->resolveSeo() ?? [],
         ]);
     }
 
     /**
-     * Les 7 jours de la semaine cinéma en cours (mercredi à mardi,
-     * convention française de sortie des films, voir index()), sous forme de
-     * dates Carbon réelles pour l'affichage ("mer. 07/10") — PAS les 7
-     * entiers 0-6 de `ScreeningTime::weekday`, qui restent le seul critère de
+     * Les 7 jours d'une semaine cinéma (mercredi à mardi, convention
+     * française de sortie des films, voir index()), sous forme de dates
+     * Carbon réelles pour l'affichage ("mer. 07/10") — PAS les 7 entiers 0-6
+     * de `ScreeningTime::weekday`, qui restent le seul critère de
      * regroupement réel des horaires (un gabarit hebdomadaire récurrent, pas
      * une date calendaire, voir resources/views/components/cinema/screening-time.blade.php).
      * `$day->dayOfWeek` (Carbon) donne directement l'entier à utiliser pour
      * retrouver les horaires de ce jour dans cette même convention.
      *
+     * `$offset` (demande client, 05/10/2026 — navigation semaine précédente/
+     * suivante sur la grille salle/panorama) décale d'autant de semaines
+     * entières ; 0 (défaut) = la semaine en cours.
+     *
      * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Carbon>
      */
-    private function cinemaWeekDays(): \Illuminate\Support\Collection
+    private function cinemaWeekDays(int $offset = 0): \Illuminate\Support\Collection
     {
-        $start = now()->startOfWeek(\Carbon\Carbon::WEDNESDAY);
+        $start = now()->startOfWeek(\Carbon\Carbon::WEDNESDAY)->addWeeks($offset);
 
         return collect(range(0, 6))->map(fn (int $i) => $start->copy()->addDays($i));
     }

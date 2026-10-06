@@ -31,11 +31,21 @@
     // lui aussi sans pagination). Or le contenu de la page 2 est
     // RÉELLEMENT différent de la page 1 (d'autres fiches) — Google
     // recommande qu'une telle page s'auto-canonicalise. Volontairement
-    // limité à `?page=` SANS `?q=` : une page de résultats de RECHERCHE
-    // paginée continue de canonicaliser vers la page sans filtre (déjà
-    // correct, évite d'indexer une infinité de variantes de recherche).
-    if (request()->filled('page') && ! request()->filled('q')) {
-        $seo['canonical_url'] = url()->current().'?page='.request()->query('page');
+    // limité à `?page=`/`?week=` SANS `?q=` : une page de résultats de
+    // RECHERCHE paginée continue de canonicaliser vers la page sans filtre
+    // (déjà correct, évite d'indexer une infinité de variantes de
+    // recherche). `?week=` (demande client, 05/10/2026 — navigation semaine
+    // précédente/suivante sur /cinema/salles/{slug} et /cinema/panorama)
+    // suit exactement le même raisonnement que `?page=` : le contenu d'une
+    // autre semaine est réellement différent, pas un doublon à fusionner.
+    if (! request()->filled('q')) {
+        $paginationParams = collect(['page', 'week'])
+            ->filter(fn ($key) => request()->filled($key))
+            ->mapWithKeys(fn ($key) => [$key => request()->query($key)]);
+
+        if ($paginationParams->isNotEmpty()) {
+            $seo['canonical_url'] = url()->current().'?'.http_build_query($paginationParams->all());
+        }
     }
 @endphp
 <!DOCTYPE html>

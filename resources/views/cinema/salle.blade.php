@@ -59,8 +59,26 @@
         @endif
 
         <h2 class="mt-8 font-heading text-xl font-bold text-ink-900">Films à l'affiche</h2>
+
+        {{-- Navigation semaine précédente/suivante (demande client, 05/10/2026)
+        — toujours visible, même sans aucune séance cette semaine-là, pour
+        pouvoir revenir en arrière sans modifier l'URL à la main. --}}
+        <div class="mt-1 flex items-center justify-between gap-3">
+            <a href="?week={{ $weekOffset - 1 }}" data-track="cinema:{{ $cinema->id }}:cinema_salle_week_prev" class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-ink-600 hover:bg-ink-50 hover:text-brand-700" aria-label="Semaine précédente">
+                <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 010 1.06L9.06 10l3.73 3.71a.75.75 0 11-1.06 1.06l-4.25-4.24a.75.75 0 010-1.06l4.25-4.24a.75.75 0 011.06 0z" clip-rule="evenodd" /></svg>
+                <span class="hidden sm:inline">Semaine précédente</span>
+            </a>
+            <p class="text-center text-sm font-medium text-ink-500">
+                Semaine du {{ $weekDays->first()->translatedFormat('d F') }} au {{ $weekDays->last()->translatedFormat('d F Y') }}
+            </p>
+            <a href="?week={{ $weekOffset + 1 }}" data-track="cinema:{{ $cinema->id }}:cinema_salle_week_next" class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-ink-600 hover:bg-ink-50 hover:text-brand-700" aria-label="Semaine suivante">
+                <span class="hidden sm:inline">Semaine suivante</span>
+                <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 010-1.06L10.94 10 7.21 6.29a.75.75 0 111.06-1.06l4.25 4.24a.75.75 0 010 1.06l-4.25 4.24a.75.75 0 01-1.06 0z" clip-rule="evenodd" /></svg>
+            </a>
+        </div>
+
         @if ($screeningsByMovie->isEmpty())
-            <p class="mt-3 text-ink-500">Aucune séance programmée actuellement.</p>
+            <p class="mt-3 text-ink-500">Aucune séance programmée pour cette semaine.</p>
         @else
             {{-- Demande client (05/10/2026) : "j'avais accès à une grille jour
             par jour et non une liste de film qui ne sont pas placés en ordre
@@ -69,9 +87,6 @@
             version du site (mercredi à mardi, ordre chronologique réel),
             avec une miniature compacte pour garder une hauteur de ligne
             raisonnable (demande explicite : pas de défilement excessif). --}}
-            <p class="mt-1 text-sm text-ink-500">
-                Semaine du {{ $weekDays->first()->translatedFormat('d F') }} au {{ $weekDays->last()->translatedFormat('d F Y') }}
-            </p>
             <div class="mt-4 overflow-x-auto">
                 {{-- Demande client (05/10/2026, 2e retour) : "difficile à lire
                 en alignement" — bordures de couleur sur chaque cellule +

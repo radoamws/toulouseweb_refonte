@@ -67,33 +67,66 @@
         @if ($screeningsByCinema->isEmpty())
             <p class="mt-3 text-ink-500">Aucune séance programmée actuellement.</p>
         @else
-            <div class="mt-4 space-y-6">
-                @foreach ($screeningsByCinema as $cinemaName => $screenings)
-                    <div class="rounded-2xl border border-ink-100 bg-white p-5 shadow-sm">
-                        <p class="font-heading font-semibold text-ink-900">{{ $cinemaName }}</p>
-                        @foreach ($screenings as $screening)
-                            <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                                @if ($screening->language)
-                                    <x-ui.badge color="ink">{{ $screening->language->name }}</x-ui.badge>
-                                @endif
-                                @foreach ($screening->types as $type)
-                                    <x-ui.badge>{{ $type->name }}</x-ui.badge>
+            {{-- Demande client (05/10/2026) : même présentation en tableau que
+            /cinema/salles/{slug} (lignes = salles ici, colonnes = jours),
+            plutôt qu'un bloc par salle avec les horaires en vrac. --}}
+            <div class="mt-4 overflow-x-auto">
+                <table class="w-full min-w-[640px] border-separate border-spacing-0 text-sm">
+                    <thead>
+                        <tr>
+                            <th class="sticky left-0 z-10 border border-brand-200 bg-brand-50 px-2 py-2 text-left font-heading text-ink-900 sm:px-3">Salle</th>
+                            @foreach ($weekDays as $day)
+                                <th class="border border-brand-200 bg-brand-50 px-2 py-2 text-center font-heading text-xs font-semibold uppercase text-ink-700">
+                                    {{ $day->translatedFormat('D') }}<br>{{ $day->format('d/m') }}
+                                </th>
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($screeningsByCinema as $cinemaName => $screenings)
+                            @php
+                                $cinema = $screenings->first()->cinema;
+                                $rowBg = $loop->iteration % 2 === 0 ? 'bg-ink-50' : 'bg-white';
+                                // Langues/types distincts toutes séances confondues pour cette
+                                // salle (ex. VF ET VO du même film) — affichés une seule fois
+                                // sous le nom de la salle plutôt que répétés par séance.
+                                $badges = $screenings
+                                    ->flatMap(fn ($s) => collect([$s->language?->name])->merge($s->types->pluck('name')))
+                                    ->filter()
+                                    ->unique();
+                                $entriesByWeekday = $screenings
+                                    ->flatMap(fn ($screening) => $screening->times->map(fn ($time) => ['screening' => $screening, 'time' => $time]))
+                                    ->groupBy(fn ($entry) => (int) $entry['time']->weekday);
+                            @endphp
+                            <tr class="{{ $rowBg }} align-top">
+                                <td class="sticky left-0 z-10 {{ $rowBg }} border border-ink-200 px-2 py-3 sm:px-3">
+                                    <a href="/cinema/salles/{{ $cinema?->slug }}" data-track="cinema:{{ $cinema?->id }}:cinema_movie_seances"
+                                       class="font-heading text-xs font-semibold text-ink-900 hover:text-brand-700 sm:text-sm">
+                                        {{ $cinemaName }}
+                                    </a>
+                                    @if ($badges->isNotEmpty())
+                                        <p class="mt-0.5 hidden text-xs text-ink-500 sm:block">{{ $badges->implode(' · ') }}</p>
+                                    @endif
+                                </td>
+                                @foreach ($weekDays as $day)
+                                    <td class="border border-ink-200 px-2 py-3 text-center">
+                                        <div class="flex flex-col items-center gap-1">
+                                            {{-- Horaire cliquable vers la réservation sur le vrai site source
+                                            (demande client — "2e scraping" du legacy, autoUpdateCinemaAllocineLiens/Liens2,
+                                            voir docblock d'AllocineDriver::extractBookingUrl()) quand un lien a
+                                            été capturé ET que la séance a encore une occurrence future
+                                            (demande client, 22/09/2026 — voir x-cinema.screening-time) ;
+                                            simple badge non cliquable sinon. --}}
+                                            @foreach ($entriesByWeekday->get($day->dayOfWeek, collect())->sortBy(fn ($entry) => $entry['time']->time) as $entry)
+                                                <x-cinema.screening-time :screening="$entry['screening']" :time="$entry['time']" />
+                                            @endforeach
+                                        </div>
+                                    </td>
                                 @endforeach
-                                <div class="flex flex-wrap gap-2">
-                                    {{-- Horaire cliquable vers la réservation sur le vrai site source
-                                    (demande client — "2e scraping" du legacy, autoUpdateCinemaAllocineLiens/Liens2,
-                                    voir docblock d'AllocineDriver::extractBookingUrl()) quand un lien a
-                                    été capturé ET que la séance a encore une occurrence future
-                                    (demande client, 22/09/2026 — voir x-cinema.screening-time) ;
-                                    simple badge non cliquable sinon. --}}
-                                    @foreach ($screening->times as $time)
-                                        <x-cinema.screening-time :screening="$screening" :time="$time" />
-                                    @endforeach
-                                </div>
-                            </div>
+                            </tr>
                         @endforeach
-                    </div>
-                @endforeach
+                    </tbody>
+                </table>
             </div>
         @endif
 

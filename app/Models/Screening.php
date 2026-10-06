@@ -70,10 +70,26 @@ class Screening extends Model
      */
     public function scopeCurrentlyValid(Builder|Relation $query): Builder|Relation
     {
-        $today = now()->toDateString();
+        return $query->validOn(now());
+    }
+
+    /**
+     * Généralisée depuis `scopeCurrentlyValid()` ci-dessus (05/10/2026,
+     * demande client — navigation semaine précédente/suivante sur la grille
+     * salle/panorama) : même logique DATE-vs-DATETIME, mais sur une date
+     * arbitraire plutôt que figée sur "maintenant". Une semaine cinéma
+     * donnée a pour `start_date`/`end_date` le mercredi/mardi de SA PROPRE
+     * semaine de scraping (voir AllocineDriver::currentProgrammingWeek()) —
+     * interroger avec le mercredi de la semaine affichée sélectionne donc
+     * exactement les séances de cette semaine-là, passée ou future, sans
+     * recouvrement avec une autre semaine.
+     */
+    public function scopeValidOn(Builder|Relation $query, $date): Builder|Relation
+    {
+        $date = \Illuminate\Support\Carbon::parse($date)->toDateString();
 
         return $query
-            ->where(fn ($q) => $q->whereNull('start_date')->orWhere('start_date', '<=', $today))
-            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $today));
+            ->where(fn ($q) => $q->whereNull('start_date')->orWhere('start_date', '<=', $date))
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $date));
     }
 }
