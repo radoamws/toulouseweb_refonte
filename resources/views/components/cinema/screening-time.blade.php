@@ -1,4 +1,12 @@
-@props(['screening', 'time'])
+{{-- `showLabel` (défaut true) : demande client (07/10/2026) — dans une
+grille jour par jour (grilles salle/film), le jour est déjà porté par l'en-
+tête de colonne (`<th scope="col">`, voir resources/views/cinema/salle.blade.php
+et cinema/movie.blade.php) ; répéter "Jeudi" dans chaque cellule de la
+colonne "Jeudi" est redondant. `showLabel="false"` n'affiche alors que
+l'heure — le jour reste correctement associé à la cellule pour un lecteur
+d'écran via l'en-tête de colonne, pas perdu, juste non dupliqué visuellement.
+Le `title` (infobulle) garde toujours le jour, dans les 2 cas. --}}
+@props(['screening', 'time', 'showLabel' => true])
 
 @php
     // Désactive le lien si aucune occurrence future de ce jour de la semaine
@@ -31,10 +39,10 @@
         data-track="screening_time:{{ $time->id }}:cinema_booking_click"
         title="Réserver — {{ $label }}"
         class="rounded-lg bg-ink-50 px-2 py-1 text-ink-700 underline decoration-dotted underline-offset-2 transition hover:bg-brand-50 hover:text-brand-700"
-    >{{ $label }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}</a>
+    >{{ $showLabel ? $label.' ' : '' }}{{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}</a>
 @else
     <span
         class="rounded-lg bg-ink-50 px-2 py-1 text-ink-400"
         title="{{ $isPast ? 'Séance passée' : $label }}"
-    >{{ $label }} {{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}</span>
+    >{{ $showLabel ? $label.' ' : '' }}{{ \Illuminate\Support\Str::of($time->time)->limit(5, '') }}</span>
 @endif

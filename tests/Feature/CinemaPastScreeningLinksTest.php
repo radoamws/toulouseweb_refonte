@@ -68,8 +68,11 @@ class CinemaPastScreeningLinksTest extends TestCase
 
         $response = $this->get('/cinema/films/film-b-past-2')->assertOk();
         $response->assertDontSee('href="https://example.test/expire"', false);
-        // Reste visible en lecture seule (badge), juste plus cliquable.
-        $response->assertSee('Mercredi 20:30');
+        // Reste visible en lecture seule (badge), juste plus cliquable. Pas
+        // de libellé de jour dans la grille (demande client, 07/10/2026) —
+        // seule l'heure est affichée, le jour est porté par l'en-tête de
+        // colonne.
+        $response->assertSee('20:30');
     }
 
     public function test_todays_weekday_remains_clickable(): void

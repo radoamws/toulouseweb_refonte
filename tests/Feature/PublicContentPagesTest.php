@@ -577,13 +577,25 @@ class PublicContentPagesTest extends TestCase
         // weekday=0 => Dimanche (PHP date('w')/Carbon dayOfWeek), jamais "Lundi".
         $screening->times()->create(['weekday' => 0, 'time' => '18:00:00']);
         // weekday=1 => Lundi, jamais "Mardi".
-        $screening->times()->create(['weekday' => 1, 'time' => '18:00:00']);
+        $screening->times()->create(['weekday' => 1, 'time' => '19:15:00']);
 
         foreach (['/cinema/films/sunday-show', '/cinema/salles/cgr-blagnac-2'] as $url) {
-            $response = $this->get($url)->assertOk();
-            $response->assertSee('Dimanche 18:00');
-            $response->assertSee('Lundi 18:00');
-            $response->assertDontSee('Mardi 18:00');
+            $html = $this->get($url)->assertOk()->getContent();
+
+            // Grille "1 ligne x 7 jours" (mer./jeu./ven./sam./dim./lun./mar.,
+            // voir CinemaController::cinemaWeekDays()) : les <td> de l'unique
+            // ligne de données apparaissent dans cet ordre fixe, après la
+            // cellule film/salle (index 0). Depuis le 07/10/2026 (demande
+            // client), le badge horaire n'affiche plus le nom du jour
+            // (déjà porté par l'en-tête de colonne) — on vérifie donc le bon
+            // jour par POSITION de cellule, plus par texte de libellé.
+            preg_match_all('/<td[^>]*>(.*?)<\/td>/s', $html, $matches);
+            $cells = $matches[1];
+
+            $this->assertStringContainsString('18:00', $cells[5] ?? ''); // dim.
+            $this->assertStringContainsString('19:15', $cells[6] ?? ''); // lun.
+            $this->assertStringNotContainsString('18:00', $cells[7] ?? ''); // mar.
+            $this->assertStringNotContainsString('19:15', $cells[7] ?? ''); // mar.
         }
     }
 
@@ -697,7 +709,12 @@ class PublicContentPagesTest extends TestCase
         $response = $this->get('/cinema/films/film-tableau')->assertOk();
         $response->assertSee('<table', false);
         $response->assertSee('Gaumont Table Film');
-        $response->assertSee('Mercredi 20:30');
+        // Pas de libellé de jour dans la cellule (demande client,
+        // 07/10/2026) — seule l'heure, le jour est porté par l'en-tête de
+        // colonne (voir test_cinema_screening_time_weekday_label_matches_legacy_convention
+        // pour la vérification de la bonne colonne).
+        $response->assertSee('20:30');
+        $response->assertDontSee('Mercredi 20:30');
         $response->assertSee('data-track="cinema:'.$cinema->id.':cinema_movie_seances"', false);
     }
 

@@ -100,7 +100,7 @@
                         <tr>
                             <th class="sticky left-0 z-10 border border-brand-200 bg-brand-50 px-2 py-2 text-left font-heading text-ink-900 sm:px-3">Films</th>
                             @foreach ($weekDays as $day)
-                                <th class="border border-brand-200 bg-brand-50 px-2 py-2 text-center font-heading text-xs font-semibold uppercase text-ink-700">
+                                <th scope="col" class="border border-brand-200 bg-brand-50 px-2 py-2 text-center font-heading text-xs font-semibold uppercase text-ink-700">
                                     {{ $day->translatedFormat('D') }}<br>{{ $day->format('d/m') }}
                                 </th>
                             @endforeach
@@ -145,7 +145,10 @@
                                             (demande client, 22/09/2026 — voir x-cinema.screening-time) ;
                                             simple badge non cliquable sinon. --}}
                                             @foreach ($weekdayEntries[$movieTitle]->get($day->dayOfWeek, collect())->sortBy(fn ($entry) => $entry['time']->time) as $entry)
-                                                <x-cinema.screening-time :screening="$entry['screening']" :time="$entry['time']" />
+                                                {{-- showLabel=false (demande client, 07/10/2026) : le jour est
+                                                déjà porté par l'en-tête de colonne, inutile de le répéter dans
+                                                chaque cellule. --}}
+                                                <x-cinema.screening-time :screening="$entry['screening']" :time="$entry['time']" :show-label="false" />
                                             @endforeach
                                         </div>
                                     </td>
