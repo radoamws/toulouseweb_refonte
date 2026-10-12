@@ -95,9 +95,12 @@
                 {{-- Navigation jour précédent/suivant (brief §6 : "simple et rapide") --}}
                 @if ($date)
                     <div class="mb-6 flex items-center gap-3 text-sm">
-                        <x-ui.button :href="request()->fullUrlWithQuery(['date' => $date->copy()->subDay()->format('Y-m-d')])" variant="ghost" size="sm">&larr; Veille</x-ui.button>
+                        {{-- rel="nofollow" (demande client, 12/10/2026 — Search
+                        Console) : même raison que la navigation du calendrier,
+                        voir agenda/partials/calendar.blade.php. --}}
+                        <x-ui.button :href="request()->fullUrlWithQuery(['date' => $date->copy()->subDay()->format('Y-m-d')])" rel="nofollow" variant="ghost" size="sm">&larr; Veille</x-ui.button>
                         <span class="font-medium text-ink-700">{{ $date->translatedFormat('l d F Y') }}</span>
-                        <x-ui.button :href="request()->fullUrlWithQuery(['date' => $date->copy()->addDay()->format('Y-m-d')])" variant="ghost" size="sm">Lendemain &rarr;</x-ui.button>
+                        <x-ui.button :href="request()->fullUrlWithQuery(['date' => $date->copy()->addDay()->format('Y-m-d')])" rel="nofollow" variant="ghost" size="sm">Lendemain &rarr;</x-ui.button>
                     </div>
                 @endif
 

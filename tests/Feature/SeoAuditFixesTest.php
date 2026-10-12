@@ -268,4 +268,61 @@ class SeoAuditFixesTest extends TestCase
         $this->get('/annuaire?q=resto')->assertOk()
             ->assertSee('<link rel="canonical" href="'.url('/annuaire').'">', false);
     }
+
+    /**
+     * Demande client (12/10/2026, rapport Search Console) : le calendrier
+     * de /agenda (navigation mois précédent/suivant + clic sur un jour)
+     * génère un espace `?month=`/`?date=` virtuellement infini (jusqu'en
+     * 2033 dans le rapport réel) — chaque variante s'auto-canonicalisait
+     * (même logique que `?page=`) et devenait donc candidate à
+     * l'indexation. Seules les pages "propres" (catégorie/lieu/recherche,
+     * contenu réellement fini) doivent rester indexables ; les variantes
+     * filtrées par date doivent passer en noindex (mais `follow`, pour ne
+     * pas couper le crawl des vraies fiches événement liées depuis ces
+     * pages). Voir EventController::renderIndex().
+     */
+    public function test_agenda_pages_are_indexable_except_date_filtered_variants(): void
+    {
+        $theatre = EventCategory::create(['name' => 'Théâtre', 'slug' => 'theatre-seo-robots', 'color' => '#3a9973']);
+        $area = \App\Models\Area::create(['name' => 'Zénith Robots', 'slug' => 'zenith-seo-robots']);
+
+        // Pages "propres" (demande client) : indexables.
+        foreach ([
+            '/agenda',
+            '/agenda/theatre-seo-robots',
+            '/agenda?area='.$area->id,
+            '/agenda?date=&q=&area='.$area->id,
+        ] as $url) {
+            $this->get($url)->assertOk()
+                ->assertSee('<meta name="robots" content="index,follow">', false);
+        }
+
+        // Variantes filtrées par date (demande client) : jamais indexables.
+        foreach ([
+            '/agenda?month=2027-07&page=17&date=2027-07-19',
+            '/agenda/theatre-seo-robots?month=2033-06&page=8&date=2033-06-09',
+            '/agenda?month=2033-11&page=22&date=2033-12-07',
+            '/agenda?month=2027-07', // mois seul, sans date précise : même axe infini
+        ] as $url) {
+            $this->get($url)->assertOk()
+                ->assertSee('<meta name="robots" content="noindex,follow">', false);
+        }
+    }
+
+    /**
+     * Complément au test ci-dessus : réduit aussi la DÉCOUVERTE (pas
+     * seulement l'indexation) de cet espace infini — la navigation du
+     * calendrier elle-même ne doit pas inciter un crawler à s'y enfoncer.
+     */
+    public function test_agenda_calendar_navigation_links_are_nofollow(): void
+    {
+        $response = $this->get('/agenda')->assertOk();
+
+        $response->assertSee('aria-label="Mois précédent"', false);
+        preg_match('/<a\s[^>]*aria-label="Mois précédent"[^>]*>/', $response->getContent(), $prev);
+        preg_match('/<a\s[^>]*aria-label="Mois suivant"[^>]*>/', $response->getContent(), $next);
+
+        $this->assertStringContainsString('rel="nofollow"', $prev[0] ?? '');
+        $this->assertStringContainsString('rel="nofollow"', $next[0] ?? '');
+    }
 }

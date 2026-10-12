@@ -122,6 +122,23 @@ class EventController extends Controller
         // — même correctif que ListingController::index()).
         $seo = $category ? $category->resolveSeo() : (Page::where('key', 'seo-menu-agenda')->first()?->resolveSeo() ?? []);
 
+        // Demande client (12/10/2026, Search Console) : "autorise les
+        // indexations pour les pages principales [...] par contre, ne pas
+        // demander les indexations pour les pages filtrées par date" — le
+        // calendrier (navigation mois précédent/suivant + clic sur un jour,
+        // voir agenda/partials/calendar.blade.php) génère un espace de
+        // combinaisons `?month=`/`?date=` virtuellement infini (des pages
+        // vues jusqu'en 2033 dans le rapport GSC) : chaque variante
+        // s'auto-canonicalisait (même logique que `?page=`, §11/09/2026)
+        // et finissait donc candidate à l'indexation. `area`/`q`/`page` seuls
+        // restent indexables (contenu réellement filtré et fini) — seule la
+        // présence de `month`/`date` (l'axe temporel, non borné) déclenche le
+        // noindex. `follow` conservé : les vraies fiches événement liées
+        // depuis ces pages doivent rester atteignables par le crawl.
+        if ($request->filled('month') || $request->filled('date')) {
+            $seo['robots'] = 'noindex,follow';
+        }
+
         // Calendrier toujours affiché, en plus de la liste — plus de bascule
         // liste/calendrier séparée (demande client, 18/09/2026 : "il y a la
         // liste et le calendrier au choix, mais le calendrier doit être sur

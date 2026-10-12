@@ -99,6 +99,17 @@ jobs:
       #  - public/storage       : lien symbolique créé par `storage:link`, jamais recréé
       #                           par rsync (sinon --delete le supprimerait à chaque déploi)
       #  - public/hot           : marqueur du serveur de dev Vite, ne doit jamais exister en prod
+      #  - public/sitemap.xml   : ⚠️ bug réel trouvé et corrigé (07/10/2026, signalé par le
+      #                           client — sitemap "impossible à récupérer" dans Search
+      #                           Console) : ce fichier est gitignored (régénéré par
+      #                           `sitemap:generate`, voir son docblock), donc ABSENT du
+      #                           checkout CI — sans cette exclusion, `--delete` le
+      #                           supprimait du serveur à CHAQUE déploiement, bien plus
+      #                           vite que le WebCron (au mieux quotidien sur cet
+      #                           hébergement, voir RunWebCron) ne pouvait le régénérer.
+      #                           Même logique que public/storage ci-dessus : un fichier
+      #                           généré côté serveur ne doit jamais être resynchronisé
+      #                           depuis le squelette du dépôt qui ne le contient pas.
       # storage/framework/* N'EST PAS exclu : ce sont des caches éphémères
       # (vues compilées, sessions fichiers, cache de framework) que Laravel
       # régénère à la demande — les resynchroniser depuis le squelette du
@@ -115,6 +126,7 @@ jobs:
             --exclude='storage/logs' \
             --exclude='public/storage' \
             --exclude='public/hot' \
+            --exclude='public/sitemap.xml' \
             -e "ssh -p ${{ secrets.DEPLOY_SSH_PORT }} -o StrictHostKeyChecking=accept-new" \
             ./ "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
 

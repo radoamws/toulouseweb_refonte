@@ -14,8 +14,13 @@ client, 18/09/2026 : "le calendrier doit être sur la liste et en petit" —
 plus de bascule liste/calendrier séparée, voir agenda/index.blade.php). --}}
 <div class="rounded-2xl border border-ink-100 bg-white p-3 shadow-sm">
     <div class="flex items-center justify-between">
+        {{-- rel="nofollow" (demande client, 12/10/2026 — Search Console) :
+        navigation mois précédent/suivant, pas du contenu — un espace de
+        combinaisons `?month=` virtuellement infini sinon, voir docblock de
+        EventController::renderIndex(). --}}
         <a
             href="{{ request()->fullUrlWithQuery(['month' => $prevMonth->format('Y-m'), 'date' => null]) }}"
+            rel="nofollow"
             class="rounded-lg p-1 text-ink-400 hover:bg-ink-50 hover:text-ink-700"
             aria-label="Mois précédent"
         >
@@ -26,6 +31,7 @@ plus de bascule liste/calendrier séparée, voir agenda/index.blade.php). --}}
 
         <a
             href="{{ request()->fullUrlWithQuery(['month' => $nextMonth->format('Y-m'), 'date' => null]) }}"
+            rel="nofollow"
             class="rounded-lg p-1 text-ink-400 hover:bg-ink-50 hover:text-ink-700"
             aria-label="Mois suivant"
         >
@@ -54,6 +60,7 @@ plus de bascule liste/calendrier séparée, voir agenda/index.blade.php). --}}
                  à une bannière/catégorie/fiche/film réels. --}}
             <a
                 href="{{ request()->fullUrlWithQuery(['date' => $day->format('Y-m-d')]) }}"
+                rel="nofollow"
                 class="relative flex aspect-square flex-col items-center justify-center rounded-md text-[11px] transition
                     {{ ! $inMonth ? 'text-ink-300' : 'text-ink-700' }}
                     {{ $isSelected ? 'bg-brand-600 text-white' : ($isToday ? 'border border-brand-400 font-semibold' : 'hover:bg-ink-50') }}"
