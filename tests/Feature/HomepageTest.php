@@ -126,6 +126,42 @@ class HomepageTest extends TestCase
     }
 
     /**
+     * Demande client (12/10/2026) : "Catégories populaires" de la home —
+     * Restaurants remplace Antiquités-Brocantes, en 2e position (juste après
+     * "A emporter"). `categories.order` n'avait jamais été personnalisé en
+     * production avant la migration `reorder_homepage_top_categories`
+     * (données réelles, pas de code à tester côté migration elle-même) —
+     * testé ici au niveau comportemental : HomeController trie déjà
+     * correctement par `order` (code inchangé), seules les VALEURS
+     * importent.
+     */
+    public function test_homepage_shows_restaurants_second_instead_of_antiques_brocantes(): void
+    {
+        $sequence = [
+            'A emporter' => 1,
+            'Restaurants' => 2,
+            'A faire le dimanche' => 3,
+            'Ameublement' => 4,
+            'Animaux' => 5,
+            'Anniversaires' => 6,
+            'Art et culture' => 7,
+            'Associations' => 8,
+        ];
+        foreach ($sequence as $name => $order) {
+            Category::create(['name' => $name, 'slug' => \Illuminate\Support\Str::slug($name), 'level' => 0, 'is_active' => true, 'order' => $order]);
+        }
+        // Simule l'état réel post-migration (toutes les catégories non
+        // concernées bump à 999, voir reorder_homepage_top_categories) — ne
+        // doit plus apparaître dans le top 8 (`HomeController::index()`,
+        // limit(8)).
+        Category::create(['name' => 'Antiquités-Brocantes', 'slug' => 'antiquites-brocantes-home-test', 'level' => 0, 'is_active' => true, 'order' => 999]);
+
+        $response = $this->get('/')->assertOk();
+        $response->assertSeeTextInOrder(array_keys($sequence));
+        $response->assertDontSee('Antiquités-Brocantes');
+    }
+
+    /**
      * ⚠️ Bug réel trouvé et corrigé (11/09/2026, audit UI/UX) : la home
      * proposait un film sans AUCUNE séance actuellement valide (vérifié en
      * direct : la home affichait "The Fabelmans" — 2022 — alors que /cinema
