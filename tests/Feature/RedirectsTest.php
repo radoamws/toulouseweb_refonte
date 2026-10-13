@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Category;
 use App\Models\MissedRedirect;
+use App\Models\Movie;
+use App\Models\News;
 use App\Models\Redirect;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -98,5 +101,74 @@ class RedirectsTest extends TestCase
         $this->get('/agenda/ancien-evenement')->assertRedirect('/agenda/nouvel-evenement');
         $this->get('/cinema/films/ancien-film')->assertRedirect('/cinema/films/nouveau-film');
         $this->get('/actualites/ancienne-actu')->assertRedirect('/actualites/nouvelle-actu');
+    }
+
+    /**
+     * Demande client (13/10/2026, rapport Search Console "Introuvable (404)",
+     * ~1000 URLs) : formes d'URL legacy confirmées (`/film/...`, `/news/...`,
+     * arborescence annuaire imbriquée), reconnues par
+     * `RedirectFallbackController::resolveLegacyPattern()` UNIQUEMENT quand
+     * la cible existe réellement — jamais une redirection devinée.
+     */
+    public function test_legacy_film_url_redirects_to_the_new_movie_page(): void
+    {
+        Movie::create(['title' => 'Cocorico', 'slug' => 'cocorico']);
+
+        $this->get('/film/cocorico')->assertRedirect('/cinema/films/cocorico')->assertStatus(301);
+    }
+
+    public function test_legacy_film_salle_and_commentaire_urls_redirect_to_the_matching_anchor(): void
+    {
+        Movie::create(['title' => 'Garance', 'slug' => 'garance']);
+
+        $this->get('/film/garance/salle')->assertRedirect('/cinema/films/garance#seances');
+        $this->get('/film/garance/commentaire')->assertRedirect('/cinema/films/garance#avis');
+    }
+
+    public function test_legacy_film_url_stays_404_when_the_movie_no_longer_exists(): void
+    {
+        $this->get('/film/film-jamais-migre')->assertNotFound();
+        $this->get('/film/film-jamais-migre/salle')->assertNotFound();
+    }
+
+    public function test_legacy_news_url_redirects_to_actualites(): void
+    {
+        News::create(['title' => 'Exposition', 'slug' => 'exposition-vercellotti', 'body' => 'Contenu.']);
+
+        $this->get('/news/exposition-vercellotti')->assertRedirect('/actualites/exposition-vercellotti');
+    }
+
+    /**
+     * Ancienne arborescence annuaire imbriquée (`/annuaire/cat/scat`, voir
+     * old/client-app/nuxt.config.js) ET ses raccourcis thématiques
+     * (`/sports/sous-categorie`) — seul le DERNIER segment (la catégorie la
+     * plus précise) détermine la cible.
+     */
+    public function test_legacy_nested_annuaire_url_redirects_to_the_deepest_existing_category(): void
+    {
+        Category::create(['name' => 'Spa', 'slug' => 'spa', 'level' => 2, 'is_active' => true]);
+
+        $this->get('/annuaire/beaute-spa-sauna/spa')->assertRedirect('/annuaire/spa');
+    }
+
+    public function test_legacy_theme_shortcut_url_redirects_to_the_matching_category(): void
+    {
+        Category::create(['name' => 'Insolite', 'slug' => 'insolite', 'level' => 2, 'is_active' => true]);
+
+        $this->get('/sports/insolite')->assertRedirect('/annuaire/insolite');
+    }
+
+    public function test_legacy_nested_url_stays_404_when_the_last_segment_matches_no_category(): void
+    {
+        $this->get('/annuaire/categorie-disparue/sous-categorie-disparue')->assertNotFound();
+    }
+
+    /** Un `film`/`news` mort ne doit JAMAIS retomber sur la règle générique "dernier segment = catégorie". */
+    public function test_legacy_film_url_is_never_caught_by_the_generic_category_rule(): void
+    {
+        Category::create(['name' => 'Cocorico', 'slug' => 'cocorico', 'level' => 0, 'is_active' => true]);
+
+        // Aucun Movie "cocorico" — ne doit PAS rediriger vers /annuaire/cocorico.
+        $this->get('/film/cocorico')->assertNotFound();
     }
 }
