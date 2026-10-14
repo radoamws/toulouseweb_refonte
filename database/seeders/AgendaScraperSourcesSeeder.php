@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\ScraperSource;
 use App\Services\Scraping\Agenda\ArdeiDriver;
 use App\Services\Scraping\Agenda\BijouDriver;
+use App\Services\Scraping\Agenda\BikiniDriver;
 use App\Services\Scraping\Agenda\CasinoBarriereDriver;
 use App\Services\Scraping\Agenda\EscaleDriver;
 use App\Services\Scraping\Agenda\GaronneDriver;
@@ -14,6 +15,7 @@ use App\Services\Scraping\Agenda\LeventDesSignesDriver;
 use App\Services\Scraping\Agenda\MetropoleDriver;
 use App\Services\Scraping\Agenda\OdyssudDriver;
 use App\Services\Scraping\Agenda\TheatreDeLaCiteDriver;
+use App\Services\Scraping\Agenda\TheatreOrchestreCapitoleDriver;
 use App\Services\Scraping\Agenda\ZenithDriver;
 use Illuminate\Database\Seeder;
 
@@ -115,6 +117,39 @@ class AgendaScraperSourcesSeeder extends Seeder
                 'config' => [
                     'api_url' => 'https://le-bijou.soticket.net/api/v2/shows?offset=0&limit=100&next=1',
                     'area_slug' => 'le-bijou',
+                ],
+            ],
+            // Brief roadmap "contenu" (14/10/2026, demande client — "driver
+            // Le Bikini, code legacy à adapter") : voir docblock de
+            // BikiniDriver pour pourquoi le point JSON Next.js du legacy a
+            // été abandonné au profit d'un scraping HTML direct.
+            'Le Bikini' => [
+                'driver' => BikiniDriver::class,
+                'config' => [
+                    'listing_url' => 'https://lebikini.com/programmation/',
+                    'area_slug' => 'le-bikini',
+                    'event_category_slug' => 'concerts',
+                ],
+            ],
+            // Brief roadmap "contenu" (14/10/2026, demande client — "driver
+            // Halle aux Grains/Théâtre du Capitole, scraping sur-mesure") :
+            // même driver pour les 2 (voir son docblock — même plugin
+            // WordPress constaté en direct sur les 2 sites), 2 sources
+            // distinctes pour 2 salles bien distinctes.
+            'Halle aux Grains (ONCT)' => [
+                'driver' => TheatreOrchestreCapitoleDriver::class,
+                'config' => [
+                    'listing_url' => 'https://onct.toulouse.fr/agenda/',
+                    'area_slug' => 'halle-aux-grains',
+                    'event_category_slug' => 'concerts',
+                ],
+            ],
+            'Opéra national du Capitole' => [
+                'driver' => TheatreOrchestreCapitoleDriver::class,
+                'config' => [
+                    'listing_url' => 'https://opera.toulouse.fr/agenda/',
+                    'area_slug' => 'theatre-du-capitole',
+                    'event_category_slug' => 'concerts',
                 ],
             ],
             'Aria (Cornebarrieu)' => [
