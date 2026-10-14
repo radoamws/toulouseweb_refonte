@@ -36,6 +36,14 @@ Schedule::command('scrape:events')->dailyAt('05:30')->withoutOverlapping();
 // des vrais chemins legacy manquants.
 Schedule::command('redirects:audit')->weekly();
 
+// Lignes Tisséo (brief roadmap "contenu", 14/10/2026) — hebdomadaire
+// seulement : un résumé par ligne (premier/dernier départ, fréquence
+// indicative, arrêts), pas un horaire temps réel, voir docblock de
+// ImportTisseoGtfs. Les horaires réels changent rarement d'une semaine à
+// l'autre ; un réimport quotidien (comme le flux GTFS source lui-même)
+// n'apporterait aucune valeur pour un coût de traitement inutile.
+Schedule::command('transport:import-tisseo-gtfs')->weekly();
+
 // "Gestion des contenus expirés"/"événements passés" (brief §13, SEO/GEO) —
 // garde `status` cohérent côté admin, voir docblock de MarkExpiredContent
 // (le filtrage public par date, lui, ne dépend pas de cette commande).

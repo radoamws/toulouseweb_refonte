@@ -10,6 +10,9 @@
         ['label' => 'Agenda', 'href' => '/agenda'],
         ['label' => 'Théâtre', 'href' => '/agenda/theatre'],
         ['label' => 'Annonces', 'href' => '/annonces'],
+        // Lignes de transport Tisséo (brief roadmap "contenu", 14/10/2026,
+        // demande client : "ajoute un menu transport").
+        ['label' => 'Transports', 'href' => '/transports'],
         ['label' => 'Contact', 'href' => '/contact'],
     ];
     // Demande client (05/10/2026) : sous-menu "Panorama" sous "Cinéma" — la

@@ -44,9 +44,21 @@ class GenerateSitemapTest extends TestCase
         $this->artisan('sitemap:generate')->assertSuccessful();
 
         $xml = file_get_contents(public_path('sitemap.xml'));
-        foreach (['/annuaire', '/agenda', '/cinema', '/actualites', '/annonces', '/contact'] as $path) {
+        foreach (['/annuaire', '/agenda', '/cinema', '/actualites', '/annonces', '/contact', '/transports'] as $path) {
             $this->assertStringContainsString('<loc>'.url($path).'</loc>', $xml);
         }
+    }
+
+    public function test_includes_active_transport_lines(): void
+    {
+        \App\Models\TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => []]);
+        \App\Models\TransportLine::create(['gtfs_route_id' => 'r2', 'name' => 'Ligne fermée', 'slug' => 'ligne-fermee', 'type' => 'bus', 'stops' => [], 'is_active' => false]);
+
+        $this->artisan('sitemap:generate')->assertSuccessful();
+
+        $xml = file_get_contents(public_path('sitemap.xml'));
+        $this->assertStringContainsString(url('/transports/metro-a'), $xml);
+        $this->assertStringNotContainsString(url('/transports/ligne-fermee'), $xml);
     }
 
     public function test_includes_published_content(): void

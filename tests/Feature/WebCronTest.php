@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -100,6 +101,14 @@ class WebCronTest extends TestCase
 
     public function test_redirects_audit_only_runs_on_sunday(): void
     {
+        // `transport:import-tisseo-gtfs` tourne aussi le dimanche (même
+        // garde que redirects:audit, voir RunWebCron) — sans ce fake, le
+        // dimanche ferait un VRAI téléchargement du flux GTFS Tisséo (16 Mo)
+        // à chaque run de ce test. Un échec de téléchargement suffit ici :
+        // le test ne porte que sur redirects:audit, pas sur le résultat de
+        // l'import.
+        Http::fake(['https://data.toulouse-metropole.fr/explore/dataset/tisseo-gtfs/*' => Http::response(null, 503)]);
+
         $this->travelTo(now()->next(\Carbon\Carbon::MONDAY));
         Artisan::call('webcron:run');
         $this->assertStringNotContainsString('Aucune 404 récurrente', Artisan::output());

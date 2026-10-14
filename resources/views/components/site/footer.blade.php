@@ -39,6 +39,7 @@
                     <li><a href="/cinema" class="hover:text-white">Cinéma</a></li>
                     <li><a href="/annuaire" class="hover:text-white">Annuaire</a></li>
                     <li><a href="/annonces" class="hover:text-white">Annonces</a></li>
+                    <li><a href="/transports" class="hover:text-white">Transports</a></li>
                 </ul>
             </div>
             <div>

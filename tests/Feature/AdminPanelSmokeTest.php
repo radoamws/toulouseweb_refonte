@@ -96,7 +96,7 @@ class AdminPanelSmokeTest extends TestCase
             'classifieds', 'classified-categories',
             'news', 'news-categories',
             'sliders', 'contact-messages', 'partner-sites',
-            'redirects', 'missed-redirects', 'scraper-sources', 'users', 'roles',
+            'redirects', 'missed-redirects', 'scraper-sources', 'transport-lines', 'users', 'roles',
         ])->mapWithKeys(fn (string $slug) => [$slug => ["/admin/{$slug}"]])->all();
     }
 }

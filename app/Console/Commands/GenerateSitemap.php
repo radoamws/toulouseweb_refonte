@@ -10,6 +10,7 @@ use App\Models\EventCategory;
 use App\Models\Listing;
 use App\Models\Movie;
 use App\Models\News;
+use App\Models\TransportLine;
 use Illuminate\Console\Command;
 use Spatie\Sitemap\Sitemap;
 use Spatie\Sitemap\Tags\Url;
@@ -49,9 +50,16 @@ class GenerateSitemap extends Command
         $sitemap = Sitemap::create()
             ->add(Url::create('/')->setPriority(1.0)->setChangeFrequency(Url::CHANGE_FREQUENCY_DAILY));
 
-        foreach (['/annuaire', '/agenda', '/cinema', '/actualites', '/annonces', '/contact'] as $path) {
+        foreach (['/annuaire', '/agenda', '/cinema', '/actualites', '/annonces', '/contact', '/transports'] as $path) {
             $sitemap->add(Url::create($path)->setPriority(0.8)->setChangeFrequency(Url::CHANGE_FREQUENCY_DAILY));
         }
+
+        // Lignes Tisséo (brief roadmap "contenu", 14/10/2026) — contenu
+        // stable (régénéré hebdomadairement, voir ImportTisseoGtfs),
+        // priorité modeste (contenu utilitaire, pas la vitrine du site).
+        TransportLine::where('is_active', true)->each(
+            fn (TransportLine $t) => $sitemap->add(Url::create("/transports/{$t->slug}")->setLastModificationDate($t->updated_at)->setPriority(0.4))
+        );
 
         Category::where('is_active', true)->each(
             fn (Category $c) => $sitemap->add(Url::create("/annuaire/{$c->slug}")->setLastModificationDate($c->updated_at)->setPriority(0.7))

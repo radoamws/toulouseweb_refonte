@@ -65,6 +65,11 @@ class RunWebCron extends Command
         // dimanche, plutôt que de le lancer tous les jours sans distinction.
         if (now()->isSunday()) {
             $this->call('redirects:audit');
+            // Lignes Tisséo (brief roadmap "contenu", 14/10/2026) — même
+            // raisonnement hebdomadaire que redirects:audit juste au-dessus,
+            // voir Schedule::command('transport:import-tisseo-gtfs') dans
+            // routes/console.php.
+            $this->call('transport:import-tisseo-gtfs');
         }
 
         return self::SUCCESS;

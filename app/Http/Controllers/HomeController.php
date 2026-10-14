@@ -10,6 +10,8 @@ use App\Models\Movie;
 use App\Models\News;
 use App\Models\Page;
 use App\Models\Slider;
+use App\Models\TransportLine;
+use App\Services\Weather\OpenMeteoService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -22,7 +24,7 @@ use Illuminate\View\View;
  */
 class HomeController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, OpenMeteoService $weather): View
     {
         $page = Page::where('key', 'home')->first();
 
@@ -33,6 +35,11 @@ class HomeController extends Controller
         return view('home', [
             'seo' => $page?->resolveSeo() ?? [],
             'slides' => Slider::activeOn('home')->with('placements')->get(),
+            // Météo + qualité de l'air (brief roadmap "contenu", 14/10/2026,
+            // demande client) — widget purement informatif, `null` si
+            // Open-Meteo est indisponible (voir OpenMeteoService::current()),
+            // jamais d'erreur remontée à la home pour ça.
+            'weather' => $weather->current(),
             // Tri par date de publication la plus récente (demande client,
             // 12/09/2026) — `COALESCE` plutôt qu'un simple `latest('published_at')` :
             // un article publié sans `published_at` renseigné (rare, 1/234
@@ -58,6 +65,16 @@ class HomeController extends Controller
             'latestClassifieds' => Classified::query()->where('status', 'published')->latest()->limit(4)->get(),
             'topCategories' => Category::query()->where('level', 0)->where('is_active', true)
                 ->orderBy('order')->limit(8)->get(),
+            // Carrousel transports (brief roadmap "contenu", 14/10/2026,
+            // demande client) — un slide par mode, compte réel de lignes
+            // actives par type plutôt que des noms de lignes en dur (reste
+            // juste même si l'import Tisséo change le détail des lignes,
+            // voir ImportTisseoGtfs). Pas affiché du tout si aucune ligne
+            // n'a encore été importée (pas de bloc vide/trompeur).
+            'transportLineCounts' => TransportLine::where('is_active', true)
+                ->selectRaw('type, count(*) as aggregate')
+                ->groupBy('type')
+                ->pluck('aggregate', 'type'),
         ]);
     }
 }

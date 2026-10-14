@@ -11,6 +11,7 @@ use App\Http\Controllers\LlmsTxtController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\NewsletterSubscriptionController;
 use App\Http\Controllers\RedirectFallbackController;
+use App\Http\Controllers\TransportController;
 use App\Http\Controllers\WebCronController;
 use Illuminate\Support\Facades\Route;
 
@@ -78,6 +79,11 @@ Route::get('/annonces/{slug}', [ClassifiedController::class, 'bySlug'])->name('a
 
 // Contact (brief §11).
 Route::get('/contact', [ContactController::class, 'show'])->name('contact.show');
+
+// Lignes de transport Tisséo (brief roadmap "contenu", 14/10/2026) — voir
+// App\Console\Commands\ImportTisseoGtfs et TransportController.
+Route::get('/transports', [TransportController::class, 'index'])->name('transports.index');
+Route::get('/transports/{slug}', [TransportController::class, 'show'])->name('transports.show');
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact.store');
 
 // Newsletter (demande client, 12/09/2026, voir TECHNICAL_DOCUMENTATION.md §36).

@@ -17,6 +17,14 @@
     (header, footer, agenda/cinéma/annuaire/annonces/actualités). --}}
     <div class="mx-auto max-w-[96rem] space-y-16 px-4 py-12 sm:px-6 lg:px-6 lg:py-16">
 
+        {{-- Météo + transports côte à côte (demande client, 14/10/2026) : 2
+        blocs "info pratique du quotidien" de poids visuel comparable, pas de
+        raison de les empiler en pleine largeur l'un sous l'autre. --}}
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <x-site.weather-widget :weather="$weather" />
+            <x-site.transport-carousel :counts="$transportLineCounts" />
+        </div>
+
         {{-- Catégories importantes de l'annuaire --}}
         @if ($topCategories->isNotEmpty())
             <section aria-label="Catégories populaires">
