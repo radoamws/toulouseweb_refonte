@@ -65,4 +65,45 @@ class TransportLinesTest extends TestCase
     {
         $this->get('/transports/ceci-n-existe-pas')->assertNotFound();
     }
+
+    /**
+     * Demande client (14/10/2026) : "ajoute un filtre/recherche par Arrêts
+     * desservis" — `stops` est un JSON par ligne (pas de table séparée),
+     * filtré en PHP (voir docblock de TransportController::index()).
+     */
+    public function test_search_finds_lines_serving_a_matching_stop(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => ['Basso Cambo', 'Capitole']]);
+        TransportLine::create(['gtfs_route_id' => 'r2', 'name' => 'Bus 13', 'slug' => 'bus-13', 'type' => 'bus', 'stops' => ['Jean Jaurès']]);
+        TransportLine::create(['gtfs_route_id' => 'r3', 'name' => 'Bus 20', 'slug' => 'bus-20', 'type' => 'bus', 'stops' => ['Basso Cambo']]);
+
+        $response = $this->get('/transports?q=Capitole')->assertOk();
+        $response->assertSee('Métro A')->assertDontSee('Bus 13')->assertDontSee('Bus 20');
+    }
+
+    /** Insensible à la casse et aux correspondances partielles (ex. "jean" doit trouver "Jean Jaurès"). */
+    public function test_search_is_case_insensitive_and_matches_partial_stop_names(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Bus 13', 'slug' => 'bus-13', 'type' => 'bus', 'stops' => ['Place Jean Jaurès']]);
+
+        $this->get('/transports?q=jean')->assertOk()->assertSee('Bus 13');
+        $this->get('/transports?q=JEAN JAURÈS')->assertOk()->assertSee('Bus 13');
+    }
+
+    public function test_search_shows_a_message_when_no_line_serves_the_requested_stop(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => ['Basso Cambo']]);
+
+        $response = $this->get('/transports?q=Gare+Matabiau')->assertOk();
+        $response->assertSee('Aucune ligne ne dessert un arrêt correspondant')->assertDontSee('Métro A');
+    }
+
+    public function test_search_matches_lines_across_several_types(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => ['Jean Jaurès']]);
+        TransportLine::create(['gtfs_route_id' => 'r2', 'name' => 'Bus 13', 'slug' => 'bus-13', 'type' => 'bus', 'stops' => ['Jean Jaurès']]);
+
+        $response = $this->get('/transports?q=Jean Jaurès')->assertOk();
+        $response->assertSee('Métro A')->assertSee('Bus 13');
+    }
 }
