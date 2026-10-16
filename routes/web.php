@@ -83,6 +83,8 @@ Route::get('/contact', [ContactController::class, 'show'])->name('contact.show')
 // Lignes de transport Tisséo (brief roadmap "contenu", 14/10/2026) — voir
 // App\Console\Commands\ImportTisseoGtfs et TransportController.
 Route::get('/transports', [TransportController::class, 'index'])->name('transports.index');
+// Avant {slug} : sinon "itineraire" serait capturé comme un slug de ligne.
+Route::get('/transports/itineraire', [TransportController::class, 'journey'])->name('transports.journey');
 Route::get('/transports/{slug}', [TransportController::class, 'show'])->name('transports.show');
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact.store');
 

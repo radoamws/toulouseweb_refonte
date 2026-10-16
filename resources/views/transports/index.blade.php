@@ -13,6 +13,16 @@
                 <x-ui.button type="submit" variant="outline" size="sm">Chercher</x-ui.button>
             </form>
         </div>
+
+        {{-- Itinéraire entre 2 arrêts (demande client, 16/10/2026 — "un peu
+        comme dans tisseo.fr"), mis en avant comme sur la home de tisseo.fr. --}}
+        <a href="/transports/itineraire" class="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-brand-200 bg-brand-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5">
+            <div>
+                <p class="font-heading font-semibold text-brand-900">Chercher un itinéraire entre 2 arrêts</p>
+                <p class="text-sm text-brand-700">Quelles lignes relient directement un arrêt à un autre ?</p>
+            </div>
+            <span class="shrink-0 text-xl text-brand-700" aria-hidden="true">→</span>
+        </a>
         <p class="mt-2 text-ink-600">
             Métro, tramway, téléphérique Téléo et bus Tisséo — premier/dernier départ, fréquence indicative et arrêts desservis.
             Horaires théoriques, issus de l'open data Tisséo ; pour le temps réel, direction
