@@ -44,6 +44,15 @@ Schedule::command('redirects:audit')->weekly();
 // n'apporterait aucune valeur pour un coût de traitement inutile.
 Schedule::command('transport:import-tisseo-gtfs')->weekly();
 
+// Horaires détaillés par arrêt pour la recherche d'itinéraire avec
+// correspondance (brief roadmap "contenu", 16/10/2026) — hebdomadaire,
+// VOLONTAIREMENT à un jour/horaire différent de transport:import-tisseo-gtfs
+// ci-dessus (benchmark réel : ~30s rien que pour l'insertion des horaires,
+// voir docblock de ImportTisseoSchedule). En production, ce découplage se
+// traduit par un 2e WebCron séparé (App\Http\Controllers\WebCronTransportController) ;
+// cette ligne ne sert qu'en local (`php artisan schedule:work`).
+Schedule::command('transport:import-tisseo-schedule')->weeklyOn(3, '03:00');
+
 // "Gestion des contenus expirés"/"événements passés" (brief §13, SEO/GEO) —
 // garde `status` cohérent côté admin, voir docblock de MarkExpiredContent
 // (le filtrage public par date, lui, ne dépend pas de cette commande).

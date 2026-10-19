@@ -4,12 +4,13 @@
 
         <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">Itinéraire entre 2 arrêts</h1>
         <p class="mt-2 text-ink-600">
-            Trouvez les lignes de bus, métro, tramway ou téléphérique qui relient directement 2 arrêts à Toulouse.
+            Trouvez les lignes de bus, métro, tramway ou téléphérique qui relient 2 arrêts à Toulouse, en direct ou avec 1 correspondance.
         </p>
 
         {{-- Recherche d'itinéraire (demande client, 16/10/2026 — "un peu comme
-        dans tisseo.fr") : limitée aux trajets DIRECTS, voir docblock de
-        TransportController::journey(). GET + `from`/`to` : partageable,
+        dans tisseo.fr") : trajets directs ET avec 1 correspondance, sur les
+        vrais horaires par arrêt (voir docblock de
+        TransportController::journey()). GET + `from`/`to` : partageable,
         revenir en arrière fonctionne. --}}
         <form method="GET" class="mt-6 rounded-2xl border border-ink-100 bg-white p-4 shadow-sm sm:p-6">
             <div class="grid gap-3 sm:grid-cols-[1fr_auto_1fr]">
@@ -45,58 +46,81 @@
         </form>
 
         @if ($from !== '' && $to !== '')
-            <div class="mt-8">
-                @if ($results->isEmpty())
+            <div class="mt-8 space-y-10">
+                @if ($direct->isEmpty() && $transfers->isEmpty())
                     <div class="rounded-2xl border border-ink-100 bg-white p-6 text-center shadow-sm">
-                        <p class="text-ink-700">Aucune ligne ne relie directement « {{ $from }} » à « {{ $to }} ».</p>
+                        <p class="text-ink-700">Aucun trajet trouvé entre « {{ $from }} » et « {{ $to }} » (direct ou avec 1 correspondance).</p>
                         <p class="mt-2 text-sm text-ink-500">
-                            Essayez un autre nom d'arrêt, ou cherchez un trajet avec correspondance sur
+                            Essayez un autre nom d'arrêt, ou cherchez un trajet avec plusieurs correspondances sur
                             <a href="https://www.tisseo.fr" target="_blank" rel="noopener" class="text-brand-700 underline decoration-dotted underline-offset-2">tisseo.fr</a>.
                         </p>
                     </div>
                 @else
-                    <p class="text-sm text-ink-600">
-                        {{ $results->count() }} ligne(s) relient directement ces 2 arrêts.
-                    </p>
-                    <ul class="mt-4 space-y-3">
-                        @foreach ($results as $result)
-                            @php $line = $result['line']; @endphp
-                            <li>
-                                <a
-                                    href="/transports/{{ $line->slug }}"
-                                    data-track="transport_line:{{ $line->id }}:transports_journey"
-                                    class="flex items-center justify-between gap-4 rounded-2xl border border-ink-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                                >
-                                    <div class="flex items-center gap-3">
-                                        <span class="h-6 w-6 shrink-0 rounded-full" style="background-color: #{{ $line->color ?? 'cc0000' }};" aria-hidden="true"></span>
-                                        <div>
-                                            <p class="font-heading font-semibold text-ink-900">{{ $line->name }}</p>
-                                            <p class="text-xs text-ink-500">
-                                                {{ $result['from_stop'] }} → {{ $result['to_stop'] }}
-                                                @if ($result['reversed'])
-                                                    <span class="text-ink-400">(sens retour)</span>
+                    @if ($direct->isNotEmpty())
+                        <section>
+                            <h2 class="font-heading text-lg font-semibold text-ink-900">Trajets directs</h2>
+                            <ul class="mt-4 space-y-3">
+                                @foreach ($direct as $result)
+                                    @php $line = $result['line']; @endphp
+                                    <li>
+                                        <a
+                                            href="/transports/{{ $line->slug }}"
+                                            data-track="transport_line:{{ $line->id }}:transports_journey"
+                                            class="flex items-center justify-between gap-4 rounded-2xl border border-ink-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                                        >
+                                            <div class="flex items-center gap-3">
+                                                <span class="h-6 w-6 shrink-0 rounded-full" style="background-color: #{{ $line->color ?? 'cc0000' }};" aria-hidden="true"></span>
+                                                <p class="font-heading font-semibold text-ink-900">{{ $line->name }}</p>
+                                            </div>
+                                            <div class="text-right text-xs text-ink-500">
+                                                <p>{{ $result['stops_between'] }} arrêt(s)</p>
+                                                @if ($line->frequency_minutes)
+                                                    <p>~{{ $line->frequency_minutes }} min de fréquence</p>
                                                 @endif
-                                            </p>
+                                            </div>
+                                        </a>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </section>
+                    @endif
+
+                    @if ($transfers->isNotEmpty())
+                        <section>
+                            <h2 class="font-heading text-lg font-semibold text-ink-900">Avec 1 correspondance</h2>
+                            <ul class="mt-4 space-y-3">
+                                @foreach ($transfers as $result)
+                                    <li class="rounded-2xl border border-ink-100 bg-white p-4 shadow-sm">
+                                        <div class="flex flex-wrap items-center gap-2 text-sm">
+                                            <span class="inline-flex items-center gap-1.5 rounded-full bg-ink-50 px-2.5 py-1 font-medium text-ink-800">
+                                                <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background-color: #{{ $result['first_line']->color ?? 'cc0000' }};" aria-hidden="true"></span>
+                                                {{ $result['first_line']->name }}
+                                            </span>
+                                            <span class="text-ink-400">→</span>
+                                            <span class="font-medium text-ink-700">{{ $result['transfer_stop'] }}</span>
+                                            <span class="text-ink-400">→</span>
+                                            <span class="inline-flex items-center gap-1.5 rounded-full bg-ink-50 px-2.5 py-1 font-medium text-ink-800">
+                                                <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background-color: #{{ $result['second_line']->color ?? 'cc0000' }};" aria-hidden="true"></span>
+                                                {{ $result['second_line']->name }}
+                                            </span>
                                         </div>
-                                    </div>
-                                    <div class="text-right text-xs text-ink-500">
-                                        <p>{{ $result['stops_between'] }} arrêt(s)</p>
-                                        @if ($line->frequency_minutes)
-                                            <p>~{{ $line->frequency_minutes }} min de fréquence</p>
-                                        @endif
-                                    </div>
-                                </a>
-                            </li>
-                        @endforeach
-                    </ul>
+                                        <p class="mt-2 text-xs text-ink-500">
+                                            {{ $result['first_stops'] }} arrêt(s) jusqu'à la correspondance, puis {{ $result['second_stops'] }} arrêt(s)
+                                            ({{ $result['total_stops'] }} au total).
+                                        </p>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </section>
+                    @endif
                 @endif
             </div>
         @endif
 
         <p class="mt-8 text-xs text-ink-400">
-            Trajets directs uniquement (une seule ligne, sans changement), calculés à partir de l'open data Tisséo
-            (horaires théoriques d'un mercredi type, licence ODbL) — pas de temps réel. Pour les itinéraires avec
-            correspondance et le temps réel, direction <a href="https://www.tisseo.fr" target="_blank" rel="noopener" class="underline decoration-dotted underline-offset-2 hover:text-brand-700">tisseo.fr</a>.
+            Trajets directs et avec 1 correspondance, calculés à partir de l'open data Tisséo (horaires théoriques
+            d'un mercredi type, licence ODbL) — pas de temps réel. Pour les itinéraires avec plusieurs
+            correspondances et le temps réel, direction <a href="https://www.tisseo.fr" target="_blank" rel="noopener" class="underline decoration-dotted underline-offset-2 hover:text-brand-700">tisseo.fr</a>.
             Vous pouvez aussi <a href="/transports" class="underline decoration-dotted underline-offset-2 hover:text-brand-700">chercher les lignes desservant un seul arrêt</a>.
         </p>
     </div>

@@ -13,6 +13,7 @@ use App\Http\Controllers\NewsletterSubscriptionController;
 use App\Http\Controllers\RedirectFallbackController;
 use App\Http\Controllers\TransportController;
 use App\Http\Controllers\WebCronController;
+use App\Http\Controllers\WebCronTransportController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class.'@index')->name('home');
@@ -102,6 +103,13 @@ Route::get('/newsletter/desinscription/{token}', [NewsletterSubscriptionControll
 Route::get('/webcron/{token}', WebCronController::class)
     ->middleware('throttle:10,1')
     ->name('webcron.run');
+
+// 2e WebCron séparé (brief roadmap "contenu", 16/10/2026) — voir docblock de
+// WebCronTransportController pour pourquoi il ne doit SURTOUT PAS être
+// fusionné avec le précédent.
+Route::get('/webcron-transport/{token}', WebCronTransportController::class)
+    ->middleware('throttle:10,1')
+    ->name('webcron.transport');
 
 // Redirections 301 administrables (brief §15) — dernier recours, seulement
 // consulté quand aucune route ci-dessus ne correspond.

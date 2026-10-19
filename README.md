@@ -213,6 +213,19 @@ Solution retenue : `App\Console\Commands\RunWebCron` (`php artisan webcron:run`)
 
 `WEBCRON_SECRET` : générer une vraie valeur en production avec `php artisan tinker --execute="echo Str::random(40);"`, jamais la valeur d'exemple du `.env.example`.
 
+### 2e tâche planifiée — itinéraire transports avec correspondance (16/10/2026)
+
+`transport:import-tisseo-schedule` (horaires détaillés par arrêt, utilisés par la recherche d'itinéraire sur `/transports/itineraire`) est VOLONTAIREMENT exposé par une **URL WebCron séparée** de la précédente, voir docblock de `App\Http\Controllers\WebCronTransportController` : benchmark réel (16/10/2026) mesurant ~236 000 lignes importées par semaine et un coût d'insertion non négligeable — l'empiler dans la même requête HTTP que `webcron:run` (déjà : sitemap + scraping cinéma + ~15 sources agenda) ferait courir un risque réel de dépassement de la limite d'exécution PHP-FPM.
+
+**À configurer dans le manager Infomaniak, EN PLUS de la tâche précédente** ("Planificateur de tâches" → "Planifier une tâche") :
+1. **Nom de la tâche** : libre, ex. `Transport ToulouseWeb (horaires)`.
+2. **URL à exécuter** : domaine du site + `/webcron-transport/<WEBCRON_TRANSPORT_SECRET>` (valeur exacte du `.env` de production, DIFFÉRENTE de `WEBCRON_SECRET`).
+3. **Fréquence : une fois par semaine, à un horaire DIFFÉRENT** de la tâche principale (ex. mercredi 03:00 du matin, plutôt que 08:00 tous les jours) — c'est tout l'intérêt de la séparation : ne jamais tourner dans la même fenêtre que `webcron:run`.
+
+`WEBCRON_TRANSPORT_SECRET` : générer une vraie valeur différente de `WEBCRON_SECRET`, même commande que ci-dessus.
+
+Après le tout premier déploiement de cette fonctionnalité, lancer l'import une première fois manuellement par SSH (`php artisan transport:import-tisseo-schedule`) plutôt que d'attendre le premier déclenchement du nouveau WebCron — les tables restent vides tant que cette commande n'a pas tourné au moins une fois.
+
 ### Checklist avant bascule DNS / mise en ligne définitive
 
 - [ ] `APP_ENV=production` et `APP_DEBUG=false` (jamais de stack trace exposée, brief §18).
@@ -276,7 +289,7 @@ ssh-keygen -t ed25519 -C "deploy-toulouseweb" -f deploy_key -N ""
   ```
 - [ ] Données de production transférées une fois vers la base vide déjà créée (le CI/CD ne déploie que du CODE, jamais de données) : export de la base locale déjà migrée/vérifiée (`mysqldump toulouseweb > dump.sql`) puis import dans la base Infomaniak (`mysql` en SSH, ou l'outil d'import du manager Infomaniak).
 - [ ] Médias déjà résolus (`storage/app/public/...`, voir §22/§23) transférés une fois par `rsync`/`scp` séparé vers `<DEPLOY_PATH>/storage/app/public/` sur le serveur (le rsync du CI exclut délibérément `storage/app`, voir ci-dessus).
-- [ ] `WEBCRON_SECRET` renseigné dans le `.env` de production (`php artisan tinker --execute="echo Str::random(40);"` pour en générer un) — voir section "Tâche planifiée (WebCron Infomaniak)" ci-dessous pour l'enregistrer côté manager.
+- [ ] `WEBCRON_SECRET` et `WEBCRON_TRANSPORT_SECRET` renseignés dans le `.env` de production (`php artisan tinker --execute="echo Str::random(40);"` pour en générer un, valeurs DIFFÉRENTES) — voir sections "Tâche planifiée (WebCron Infomaniak)" et "2e tâche planifiée — itinéraire transports" ci-dessous pour les enregistrer côté manager.
 - [ ] Premier push sur `main` (ou déclenchement manuel) : suivre l'exécution dans l'onglet "Actions" du dépôt.
 
 **Rollback** : `git revert <commit>` + push sur `main` (redéploie automatiquement l'état précédent), ou ré-exécuter manuellement le workflow sur un commit/tag antérieur (bouton "Run workflow", champ "Use workflow from"). Les migrations de ce projet sont additives — un rollback de code reste presque toujours compatible avec le schéma déjà en place, voir `TECHNICAL_DOCUMENTATION.md` §14.

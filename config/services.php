@@ -74,6 +74,20 @@ return [
     ],
 
     /*
+     * 2e WebCron, SÉPARÉ du précédent (brief roadmap "contenu", 16/10/2026 —
+     * itinéraire avec correspondance) : `transport:import-tisseo-schedule`
+     * est volontairement déclenché par une URL et un jeton différents, à un
+     * horaire différent dans le manager Infomaniak — voir docblock de
+     * App\Http\Controllers\WebCronTransportController (benchmark réel :
+     * ~30s rien que pour l'insertion des horaires, risque de dépassement de
+     * la limite d'exécution PHP-FPM si empilé dans la même requête que
+     * RunWebCron).
+     */
+    'webcron_transport' => [
+        'secret' => env('WEBCRON_TRANSPORT_SECRET'),
+    ],
+
+    /*
      * Destinataires des notifications internes (nouveau contenu à modérer
      * depuis un formulaire public — contact, annonce, événement, fiche
      * annuaire, actualité). Demande client, voir App\Support\AdminNotifier
