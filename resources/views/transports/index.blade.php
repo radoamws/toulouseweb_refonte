@@ -18,8 +18,8 @@
         comme dans tisseo.fr"), mis en avant comme sur la home de tisseo.fr. --}}
         <a href="/transports/itineraire" class="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-brand-200 bg-brand-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5">
             <div>
-                <p class="font-heading font-semibold text-brand-900">Chercher un itinéraire entre 2 arrêts</p>
-                <p class="text-sm text-brand-700">Quelles lignes relient directement un arrêt à un autre ?</p>
+                <p class="font-heading font-semibold text-brand-900">Chercher un itinéraire entre 2 arrêts, rues ou quartiers</p>
+                <p class="text-sm text-brand-700">Pas besoin de connaître l'arrêt : une adresse suffit.</p>
             </div>
             <span class="shrink-0 text-xl text-brand-700" aria-hidden="true">→</span>
         </a>

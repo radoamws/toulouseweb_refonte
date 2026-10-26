@@ -7,6 +7,7 @@ use App\Models\TransportStop;
 use App\Models\TransportStopTime;
 use App\Models\TransportTrip;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -172,6 +173,12 @@ class TransportLinesTest extends TestCase
         TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => []]);
         $this->createSchedule('r1', 't1', ['Basso Cambo', 'Capitole']);
 
+        // "Gare Matabiau" ne correspond à aucun arrêt de la fixture -> repli
+        // géocodage (voir TransportController::resolveStopIds()) : simulé
+        // "introuvable" pour isoler ce test du vrai réseau (sinon la vraie
+        // API BAN résoudrait cette adresse réelle, hors-sujet ici).
+        Http::fake(['https://api-adresse.data.gouv.fr/search/*' => Http::response(['type' => 'FeatureCollection', 'features' => []], 200)]);
+
         $response = $this->get('/transports/itineraire?from=Basso+Cambo&to=Gare+Matabiau')->assertOk();
         $response->assertSee('Aucun trajet trouvé')->assertDontSee('Métro A');
     }
@@ -296,5 +303,65 @@ class TransportLinesTest extends TestCase
         $response = $this->get('/transports/itineraire?from=Basso+Cambo&to=Balma+Gramont')->assertOk();
         $response->assertSee('Trajets directs')->assertSee('Métro A');
         $response->assertSee('Avec 1 correspondance')->assertSee('Bus 13')->assertSee('Tram T1');
+    }
+
+    private function fakeGeocode(string $label, float $lat, float $lon): void
+    {
+        Http::fake(['https://api-adresse.data.gouv.fr/search/*' => Http::response([
+            'type' => 'FeatureCollection',
+            'features' => [[
+                'type' => 'Feature',
+                'geometry' => ['type' => 'Point', 'coordinates' => [$lon, $lat]],
+                'properties' => ['label' => $label],
+            ]],
+        ], 200)]);
+    }
+
+    /**
+     * "le client veut que le choix entre 2 rues se fasse, pas juste entre 2
+     * arrêts de bus [...] des fois les gens veulent juste aller entre 2
+     * quartiers sans savoir l'arrêt" (demande client, 26/10/2026) — repli
+     * géocodage quand aucun arrêt ne correspond au nom tapé, voir
+     * TransportController::resolveStopIds().
+     */
+    public function test_journey_falls_back_to_geocoding_an_address_when_no_stop_name_matches(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => []]);
+        $this->createSchedule('r1', 't1', ['Capitole', 'Jean Jaurès']);
+        TransportStop::where('name', 'Capitole')->update(['lat' => 43.6045, 'lon' => 1.4442]);
+        TransportStop::where('name', 'Jean Jaurès')->update(['lat' => 43.6075, 'lon' => 1.4495]);
+
+        // ~60m de l'arrêt Capitole — pas un nom d'arrêt, une adresse.
+        $this->fakeGeocode('Rue Alsace Lorraine 31000 Toulouse', 43.6043, 1.4449);
+
+        $response = $this->get('/transports/itineraire?from=Rue+Alsace+Lorraine&to=Jean+Jaurès')->assertOk();
+        $response->assertSee('Métro A');
+        $response->assertSee('arrêt(s) le(s) plus proche(s)');
+        $response->assertSee('Capitole');
+    }
+
+    public function test_journey_shows_a_specific_message_when_the_geocoded_address_has_no_nearby_stop(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => []]);
+        $this->createSchedule('r1', 't1', ['Capitole', 'Jean Jaurès']);
+        TransportStop::where('name', 'Capitole')->update(['lat' => 43.6045, 'lon' => 1.4442]);
+        TransportStop::where('name', 'Jean Jaurès')->update(['lat' => 43.6075, 'lon' => 1.4495]);
+
+        // Très loin de tout arrêt de la fixture (plusieurs dizaines de km).
+        $this->fakeGeocode('Adresse isolée 31000 Toulouse', 43.50, 1.30);
+
+        $response = $this->get('/transports/itineraire?from=Adresse+isolee&to=Jean+Jaurès')->assertOk();
+        $response->assertSee('Adresse trouvée, mais aucun arrêt à moins de 1,5 km');
+    }
+
+    public function test_journey_shows_the_generic_message_when_the_address_cannot_be_geocoded(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => []]);
+        $this->createSchedule('r1', 't1', ['Capitole', 'Jean Jaurès']);
+
+        Http::fake(['https://api-adresse.data.gouv.fr/search/*' => Http::response(['type' => 'FeatureCollection', 'features' => []], 200)]);
+
+        $response = $this->get('/transports/itineraire?from=Nimporte+quoi+xyz&to=Jean+Jaurès')->assertOk();
+        $response->assertSee('Aucun trajet trouvé');
     }
 }

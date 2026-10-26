@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Page;
 use App\Models\TransportLine;
 use App\Models\TransportStop;
+use App\Services\Geocoding\AddressGeocoder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -53,15 +54,21 @@ class TransportController extends Controller
     }
 
     /**
-     * Recherche d'itinéraire entre 2 arrêts (brief roadmap "contenu",
-     * demande client 16/10/2026 — "un peu comme dans tisseo.fr"), sur les
-     * VRAIS horaires par arrêt (voir App\Console\Commands\ImportTisseoSchedule) :
-     * trajets directs ET avec 1 correspondance. Remplace l'ancienne version
-     * (substring sur `transport_lines.stops`, un seul sens par ligne) par
-     * une recherche relationnelle sur `transport_stop_times` — benchmarké en
-     * réel le 16/10/2026 (~700-800ms par recherche avec les index en place,
-     * voir docblock de ImportTisseoSchedule), 2 requêtes bornées pour la
-     * correspondance (pas de N+1 par arrêt candidat).
+     * Recherche d'itinéraire entre 2 arrêts OU adresses/rues/quartiers
+     * (brief roadmap "contenu", demande client 16/10/2026 puis 26/10/2026 —
+     * "le client veut que le choix entre 2 rues se fasse, pas juste entre 2
+     * arrêts de bus [...] des fois les gens veulent juste aller entre 2
+     * quartiers sans savoir l'arrêt"), sur les VRAIS horaires par arrêt
+     * (voir App\Console\Commands\ImportTisseoSchedule) : trajets directs ET
+     * avec 1 correspondance. Benchmarké en réel le 16/10/2026 (~700-800ms
+     * par recherche avec les index en place).
+     *
+     * Résolution en cascade (voir resolveStopIds()) : d'abord un nom
+     * d'arrêt exact, puis un substring, puis — seulement si AUCUN arrêt ne
+     * correspond — un géocodage d'adresse (App\Services\Geocoding\AddressGeocoder)
+     * suivi d'une recherche des arrêts les plus proches du point obtenu.
+     * Le géocodage n'est donc jamais appelé pour le cas le plus courant
+     * (nom d'arrêt tapé/choisi dans l'autocomplete), seulement en repli.
      */
     public function journey(Request $request): View
     {
@@ -70,11 +77,13 @@ class TransportController extends Controller
 
         $direct = collect();
         $transfers = collect();
+        $fromResolution = null;
+        $toResolution = null;
 
         if ($from !== '' && $to !== '') {
             $allStops = TransportStop::query()->get(['id', 'name']);
-            $fromIds = $this->stopIdsMatching($allStops, $from);
-            $toIds = $this->stopIdsMatching($allStops, $to);
+            [$fromIds, $fromResolution] = $this->resolveStopIds($allStops, $from);
+            [$toIds, $toResolution] = $this->resolveStopIds($allStops, $to);
 
             if ($fromIds !== [] && $toIds !== []) {
                 // Chargées une seule fois, réutilisées pour les 2 recherches
@@ -99,9 +108,76 @@ class TransportController extends Controller
             'to' => $to,
             'direct' => $direct,
             'transfers' => $transfers,
+            'fromResolution' => $fromResolution,
+            'toResolution' => $toResolution,
             'stopNames' => $stopNames,
             'seo' => [],
         ]);
+    }
+
+    /**
+     * @return array{0: list<int>, 1: array{label: string, stop_names: list<string>}|null}
+     *         le 2e élément n'est non-null QUE si la résolution est passée
+     *         par le géocodage (jamais pour un nom d'arrêt direct) — sert à
+     *         afficher "« Rue Alsace Lorraine » → arrêt le plus proche :
+     *         Capitole" dans la vue, pour que l'utilisateur comprenne quel
+     *         arrêt réel a été utilisé.
+     */
+    private function resolveStopIds(Collection $allStops, string $query): array
+    {
+        $stopIds = $this->stopIdsMatching($allStops, $query);
+        if ($stopIds !== []) {
+            return [$stopIds, null];
+        }
+
+        $geocoded = app(AddressGeocoder::class)->geocode($query);
+        if (! $geocoded) {
+            return [[], null];
+        }
+
+        $nearestIds = $this->nearestStopIds($geocoded['lat'], $geocoded['lon']);
+        $stopNames = $nearestIds === [] ? [] : TransportStop::whereIn('id', $nearestIds)->pluck('name')->unique()->values()->all();
+
+        return [$nearestIds, ['label' => $geocoded['label'], 'stop_names' => $stopNames]];
+    }
+
+    /**
+     * Arrêts les plus proches d'un point (formule de Haversine, calculée en
+     * PHP — portable SQLite/MySQL, pas de fonctions trigonométriques SQL
+     * communes aux deux moteurs, même raisonnement que le tri par type de
+     * index()). ~5731 arrêts au total : un passage en mémoire reste
+     * largement suffisant (quelques dizaines de ms).
+     *
+     * Rayon de 1,5 km par défaut : distance raisonnable à pied jusqu'à un
+     * arrêt en zone urbaine — au-delà, mieux vaut ne proposer aucun arrêt
+     * que d'en suggérer un trop éloigné pour être pertinent.
+     *
+     * @return list<int>
+     */
+    private function nearestStopIds(float $lat, float $lon, int $limit = 3, float $maxKm = 1.5): array
+    {
+        return TransportStop::query()
+            ->whereNotNull('lat')->whereNotNull('lon')
+            ->get(['id', 'lat', 'lon'])
+            ->map(fn ($stop) => [
+                'id' => $stop->id,
+                'distance' => $this->haversineKm($lat, $lon, (float) $stop->lat, (float) $stop->lon),
+            ])
+            ->filter(fn ($s) => $s['distance'] <= $maxKm)
+            ->sortBy('distance')
+            ->take($limit)
+            ->pluck('id')
+            ->all();
+    }
+
+    private function haversineKm(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadiusKm = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLon / 2) ** 2;
+
+        return $earthRadiusKm * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 
     /**

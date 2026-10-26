@@ -2,22 +2,24 @@
     <div class="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
         <x-ui.breadcrumb :items="[['label' => 'Transports', 'href' => '/transports'], ['label' => 'Itinéraire']]" />
 
-        <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">Itinéraire entre 2 arrêts</h1>
+        <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">Itinéraire entre 2 arrêts, rues ou quartiers</h1>
         <p class="mt-2 text-ink-600">
-            Trouvez les lignes de bus, métro, tramway ou téléphérique qui relient 2 arrêts à Toulouse, en direct ou avec 1 correspondance.
+            Trouvez les lignes de bus, métro, tramway ou téléphérique qui relient 2 points à Toulouse, en direct ou avec 1 correspondance.
+            Pas besoin de connaître l'arrêt : une adresse, une rue ou un quartier fonctionnent aussi.
         </p>
 
         {{-- Recherche d'itinéraire (demande client, 16/10/2026 — "un peu comme
-        dans tisseo.fr") : trajets directs ET avec 1 correspondance, sur les
-        vrais horaires par arrêt (voir docblock de
-        TransportController::journey()). GET + `from`/`to` : partageable,
-        revenir en arrière fonctionne. --}}
+        dans tisseo.fr" — puis 26/10/2026 — "le choix entre 2 rues, pas juste
+        entre 2 arrêts de bus") : trajets directs ET avec 1 correspondance,
+        sur les vrais horaires par arrêt, avec repli géocodage d'adresse
+        (voir docblock de TransportController::journey()). GET + `from`/`to` :
+        partageable, revenir en arrière fonctionne. --}}
         <form method="GET" class="mt-6 rounded-2xl border border-ink-100 bg-white p-4 shadow-sm sm:p-6">
             <div class="grid gap-3 sm:grid-cols-[1fr_auto_1fr]">
                 <div>
-                    <label for="journey-from" class="text-xs font-medium uppercase tracking-wide text-ink-400">Arrêt de départ</label>
+                    <label for="journey-from" class="text-xs font-medium uppercase tracking-wide text-ink-400">Départ</label>
                     <input id="journey-from" type="search" name="from" value="{{ $from }}" list="transport-stops" autocomplete="off"
-                        placeholder="Ex. Capitole" required
+                        placeholder="Arrêt, rue ou quartier (ex. Capitole, rue Alsace Lorraine…)" required
                         class="mt-1 w-full rounded-full border border-ink-200 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none">
                 </div>
                 <button type="button" title="Inverser le départ et l'arrivée"
@@ -26,9 +28,9 @@
                     ⇄
                 </button>
                 <div>
-                    <label for="journey-to" class="text-xs font-medium uppercase tracking-wide text-ink-400">Arrêt d'arrivée</label>
+                    <label for="journey-to" class="text-xs font-medium uppercase tracking-wide text-ink-400">Arrivée</label>
                     <input id="journey-to" type="search" name="to" value="{{ $to }}" list="transport-stops" autocomplete="off"
-                        placeholder="Ex. Jean Jaurès" required
+                        placeholder="Arrêt, rue ou quartier (ex. Jean Jaurès, Saint-Cyprien…)" required
                         class="mt-1 w-full rounded-full border border-ink-200 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none">
                 </div>
             </div>
@@ -45,13 +47,39 @@
             </div>
         </form>
 
+        @php
+            // "Résolution" = la recherche est passée par le géocodage d'une
+            // adresse/rue (pas un nom d'arrêt direct), voir docblock de
+            // TransportController::resolveStopIds(). `stop_names` vide =
+            // adresse trouvée mais aucun arrêt à moins de 1,5 km (cas
+            // distinct d'un simple "aucun trajet", voir plus bas).
+            $noNearbyStop = ($fromResolution && empty($fromResolution['stop_names']))
+                || ($toResolution && empty($toResolution['stop_names']));
+        @endphp
+
         @if ($from !== '' && $to !== '')
             <div class="mt-8 space-y-10">
-                @if ($direct->isEmpty() && $transfers->isEmpty())
+                @if ($fromResolution || $toResolution)
+                    <div class="space-y-1 text-sm text-ink-500">
+                        @if ($fromResolution && $fromResolution['stop_names'] !== [])
+                            <p>« {{ $fromResolution['label'] }} » → arrêt(s) le(s) plus proche(s) : {{ implode(', ', $fromResolution['stop_names']) }}</p>
+                        @endif
+                        @if ($toResolution && $toResolution['stop_names'] !== [])
+                            <p>« {{ $toResolution['label'] }} » → arrêt(s) le(s) plus proche(s) : {{ implode(', ', $toResolution['stop_names']) }}</p>
+                        @endif
+                    </div>
+                @endif
+
+                @if ($noNearbyStop)
+                    <div class="rounded-2xl border border-ink-100 bg-white p-6 text-center shadow-sm">
+                        <p class="text-ink-700">Adresse trouvée, mais aucun arrêt à moins de 1,5 km.</p>
+                        <p class="mt-2 text-sm text-ink-500">Essayez un arrêt ou une adresse plus proche du réseau Tisséo.</p>
+                    </div>
+                @elseif ($direct->isEmpty() && $transfers->isEmpty())
                     <div class="rounded-2xl border border-ink-100 bg-white p-6 text-center shadow-sm">
                         <p class="text-ink-700">Aucun trajet trouvé entre « {{ $from }} » et « {{ $to }} » (direct ou avec 1 correspondance).</p>
                         <p class="mt-2 text-sm text-ink-500">
-                            Essayez un autre nom d'arrêt, ou cherchez un trajet avec plusieurs correspondances sur
+                            Essayez un autre nom d'arrêt/adresse, ou cherchez un trajet avec plusieurs correspondances sur
                             <a href="https://www.tisseo.fr" target="_blank" rel="noopener" class="text-brand-700 underline decoration-dotted underline-offset-2">tisseo.fr</a>.
                         </p>
                     </div>
@@ -119,8 +147,9 @@
 
         <p class="mt-8 text-xs text-ink-400">
             Trajets directs et avec 1 correspondance, calculés à partir de l'open data Tisséo (horaires théoriques
-            d'un mercredi type, licence ODbL) — pas de temps réel. Pour les itinéraires avec plusieurs
-            correspondances et le temps réel, direction <a href="https://www.tisseo.fr" target="_blank" rel="noopener" class="underline decoration-dotted underline-offset-2 hover:text-brand-700">tisseo.fr</a>.
+            d'un mercredi type, licence ODbL) — pas de temps réel. Les adresses/rues sont résolues via la Base
+            Adresse Nationale (adresse.data.gouv.fr), puis ramenées à l'arrêt le plus proche. Pour les itinéraires
+            avec plusieurs correspondances et le temps réel, direction <a href="https://www.tisseo.fr" target="_blank" rel="noopener" class="underline decoration-dotted underline-offset-2 hover:text-brand-700">tisseo.fr</a>.
             Vous pouvez aussi <a href="/transports" class="underline decoration-dotted underline-offset-2 hover:text-brand-700">chercher les lignes desservant un seul arrêt</a>.
         </p>
     </div>
