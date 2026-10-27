@@ -13,6 +13,25 @@
     RewriteCond %{HTTP:x-xsrf-token} .
     RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
+    # Canonicalisation www -> apex (demande client, audit Search Console
+    # 26-27/10/2026 : "www.toulouseweb.com" répondait 200 au lieu de
+    # rediriger, malgré une balise canonique correcte — un simple hint
+    # <link rel="canonical"> est plus faible/plus lent à faire consolider
+    # par Google qu'une vraie redirection 301, contrairement à une
+    # différence de contenu réel (pagination) qui, elle, ne doit jamais être
+    # redirigée (voir resources/views/components/layouts/app.blade.php).
+    RewriteCond %{HTTP_HOST} ^www\.toulouseweb\.com$ [NC]
+    RewriteRule ^(.*)$ https://toulouseweb.com/$1 [L,R=301,QSA]
+
+    # Canonicalisation /index.php -> / (même audit) : les anciens liens/
+    # sitemaps du site legacy pointaient directement vers index.php, qui
+    # répondait 200 au lieu de rediriger. `THE_REQUEST` (jamais réécrit,
+    # contrairement à REQUEST_URI) évite toute boucle avec la règle "Send
+    # Requests To Front Controller" plus bas, qui réécrit en interne vers
+    # index.php sans jamais passer par cette condition.
+    RewriteCond %{THE_REQUEST} ^[A-Z]+\ /index\.php[?\ ] [NC]
+    RewriteRule ^index\.php$ / [L,R=301,QSA]
+
     # Redirect Trailing Slashes If Not A Folder...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
