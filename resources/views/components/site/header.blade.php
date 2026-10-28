@@ -71,17 +71,24 @@
             @endif
         </a>
 
-        <nav class="hidden items-center gap-1 lg:flex" aria-label="Navigation principale">
+        {{-- Seuil relevé à `2xl` (1536px) plutôt que `lg` (demande client,
+        28/10/2026 — agrandir/mettre en gras le menu) : mesuré en réel
+        (Playwright, plusieurs largeurs) que les 8 entrées + logo + bouton
+        "Publier" en texte plus grand/gras débordent réellement en dessous de
+        1536px (ex. 1366/1440, résolutions très courantes) — pas qu'un
+        risque théorique. En dessous de ce seuil, le menu mobile (hamburger,
+        déjà fonctionnel) prend le relais plutôt qu'une barre tronquée. --}}
+        <nav class="hidden items-center gap-2 2xl:flex" aria-label="Navigation principale">
             <div class="relative" @mouseleave="annuaireOpen = false">
                 <button
                     type="button"
                     @click="annuaireOpen = !annuaireOpen"
                     @mouseenter="annuaireOpen = true"
-                    class="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-ink-700 hover:bg-brand-50 hover:text-brand-700"
+                    class="flex items-center gap-1.5 rounded-lg border border-[#CC0000] bg-[#CC0000]/85 px-4 py-2.5 text-base font-semibold text-white hover:bg-[#CC0000]"
                     :aria-expanded="annuaireOpen.toString()"
                 >
                     Annuaire
-                    <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180': annuaireOpen }" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <svg class="h-5 w-5 transition-transform" :class="{ 'rotate-180': annuaireOpen }" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                     </svg>
                 </button>
@@ -115,11 +122,11 @@
                     type="button"
                     @click="cinemaOpen = !cinemaOpen"
                     @mouseenter="cinemaOpen = true"
-                    class="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-ink-700 hover:bg-brand-50 hover:text-brand-700"
+                    class="flex items-center gap-1.5 rounded-lg border border-[#CC0000] bg-[#CC0000]/85 px-4 py-2.5 text-base font-semibold text-white hover:bg-[#CC0000]"
                     :aria-expanded="cinemaOpen.toString()"
                 >
                     Cinéma
-                    <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180': cinemaOpen }" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <svg class="h-5 w-5 transition-transform" :class="{ 'rotate-180': cinemaOpen }" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                     </svg>
                 </button>
@@ -141,13 +148,13 @@
             </div>
 
             @foreach ($primaryNav as $item)
-                <a href="{{ $item['href'] }}" class="rounded-lg px-3 py-2 text-sm font-medium text-ink-700 hover:bg-brand-50 hover:text-brand-700">
+                <a href="{{ $item['href'] }}" class="rounded-lg border border-[#CC0000] bg-[#CC0000]/85 px-4 py-2.5 text-base font-semibold text-white hover:bg-[#CC0000]">
                     {{ $item['label'] }}
                 </a>
             @endforeach
         </nav>
 
-        <div class="relative hidden shrink-0 lg:block" @mouseleave="publishOpen = false">
+        <div class="relative hidden shrink-0 2xl:block" @mouseleave="publishOpen = false">
             <button
                 type="button"
                 @click="publishOpen = !publishOpen"
@@ -176,7 +183,7 @@
         <button
             type="button"
             @click="mobileOpen = !mobileOpen"
-            class="inline-flex items-center justify-center rounded-lg p-2 text-ink-700 hover:bg-ink-50 lg:hidden"
+            class="inline-flex items-center justify-center rounded-lg p-2 text-ink-700 hover:bg-ink-50 2xl:hidden"
             :aria-expanded="mobileOpen.toString()"
             aria-label="Ouvrir le menu"
         >
@@ -189,7 +196,7 @@
         </button>
     </div>
 
-    <nav x-show="mobileOpen" x-cloak x-transition class="border-t border-ink-100 px-4 pb-4 lg:hidden" aria-label="Navigation mobile">
+    <nav x-show="mobileOpen" x-cloak x-transition class="border-t border-ink-100 px-4 pb-4 2xl:hidden" aria-label="Navigation mobile">
         <p class="mt-3 px-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Annuaire</p>
         @foreach ($annuaireNav as $item)
             <a href="{{ $item['href'] }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50">{{ $item['label'] }}</a>

@@ -28,25 +28,25 @@
         {{-- Catégories importantes de l'annuaire --}}
         @if ($topCategories->isNotEmpty())
             <section aria-label="Catégories populaires">
-                <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+                <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
                     @foreach ($topCategories as $category)
                         <a
                             href="/annuaire/{{ $category->slug }}"
                             data-track="category:{{ $category->id }}:homepage_grid"
-                            class="flex flex-col items-center gap-2 rounded-2xl border border-ink-100 bg-white p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
+                            class="flex flex-col items-center gap-1.5 rounded-xl border border-ink-100 bg-white p-3 text-center transition hover:border-brand-200"
                         >
-                            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-ink-50 text-ink-500">
                                 @if ($category->icon_url)
                                     {{-- Icône définie dans l'admin (CategoryResource, brief) — repli sur
                                     l'icône générique par défaut ci-dessous si non renseignée. --}}
-                                    <img src="{{ $category->icon_url }}" alt="" class="h-5 w-5 object-contain" loading="lazy">
+                                    <img src="{{ $category->icon_url }}" alt="" class="h-4 w-4 object-contain" loading="lazy">
                                 @else
-                                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 1015 0 7.5 7.5 0 00-15 0z" />
                                     </svg>
                                 @endif
                             </span>
-                            <span class="text-sm font-medium text-ink-800">{{ $category->name }}</span>
+                            <span class="text-xs text-ink-600">{{ $category->name }}</span>
                         </a>
                     @endforeach
                 </div>
