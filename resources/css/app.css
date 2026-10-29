@@ -44,6 +44,13 @@
     --color-accent-400: #edbb5c;
     --color-accent-500: #e3a62f;
     --color-accent-600: #c48a1c;
+
+    /* Seuil dédié au menu principal (demande client, 29/10/2026 : "le menu
+    ne doit passer en hamburger qu'en dessous de 1200px") — aucun breakpoint
+    Tailwind standard ne tombe pile sur 1200px (xl=1280px, légèrement trop
+    haut pour la demande). Variant `nav:` généré automatiquement par ce
+    token, voir resources/views/components/site/header.blade.php. */
+    --breakpoint-nav: 75rem;
 }
 
 /* Évite le flash de contenu non initialisé pour les blocs pilotés par Alpine.js */
