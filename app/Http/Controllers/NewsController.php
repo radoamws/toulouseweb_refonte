@@ -161,21 +161,34 @@ class NewsController extends Controller
             'excerpt' => ['nullable', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:5000'],
             'submitter_email' => ['required', 'email', 'max:255'],
+            // Fenêtre de validité de l'événement décrit (demande client,
+            // 29/10/2026 : date de début/fin obligatoires sur le formulaire
+            // public, le reste des "informations pratiques" restant
+            // facultatif) — voir App\Models\News pour la distinction avec
+            // `published_at` et le piège DATE vs DATETIME déjà documenté là-bas.
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'schedule' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'price' => ['nullable', 'string', 'max:255'],
+            'website' => ['nullable', 'url', 'max:255'],
             // Upload d'image sécurisé (demande client, 01/10/2026) — même
             // garde-fou que les autres dépôts publics (voir
             // EventController::store() : App\Rules\GenuineImage inspecte le
             // contenu réel du fichier, pas seulement l'extension déclarée).
             'image' => ['nullable', 'file', 'image', 'mimes:jpeg,png,webp', 'max:4096', new GenuineImage()],
             // Honeypot anti-spam (brief §18) : champ invisible, un vrai
-            // visiteur ne le remplit jamais.
-            'website' => ['size:0'],
+            // visiteur ne le remplit jamais. Nommé différemment de `website`
+            // (champ réel du formulaire depuis le 29/10/2026) — même pattern
+            // que ListingController::store() (`url_verification`).
+            'url_verification' => ['size:0'],
             'recaptcha_token' => Recaptcha::rules('actualite'),
         ]);
 
         // Le slug est généré automatiquement depuis `title` par HasSlug
         // (voir App\Models\News) — pas besoin de le fournir ici.
         $news = News::create([
-            ...collect($validated)->except(['website', 'image', 'recaptcha_token'])->all(),
+            ...collect($validated)->except(['url_verification', 'image', 'recaptcha_token'])->all(),
             'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
         ]);
 

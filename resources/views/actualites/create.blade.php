@@ -12,8 +12,8 @@
 
             {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}
             <div class="absolute -left-[9999px]" aria-hidden="true">
-                <label for="website">Laisser vide</label>
-                <input type="text" name="website" id="website" tabindex="-1" autocomplete="off">
+                <label for="url_verification">Laisser vide</label>
+                <input type="text" name="url_verification" id="url_verification" tabindex="-1" autocomplete="off">
             </div>
 
             <div>
@@ -47,6 +47,51 @@
                 <textarea name="body" id="body" rows="8" required
                     class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">{{ old('body') }}</textarea>
                 <x-ui.field-error name="body" />
+            </div>
+
+            <div class="grid gap-5 sm:grid-cols-2">
+                <div>
+                    <label for="start_date" class="block text-sm font-medium text-ink-700">Date de début *</label>
+                    <input type="date" name="start_date" id="start_date" required value="{{ old('start_date') }}"
+                        class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                    <x-ui.field-error name="start_date" />
+                </div>
+                <div>
+                    <label for="end_date" class="block text-sm font-medium text-ink-700">Date de fin *</label>
+                    <input type="date" name="end_date" id="end_date" required value="{{ old('end_date') }}"
+                        class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                    <x-ui.field-error name="end_date" />
+                </div>
+            </div>
+
+            <div class="grid gap-5 sm:grid-cols-2">
+                <div>
+                    <label for="schedule" class="block text-sm font-medium text-ink-700">Horaire</label>
+                    <input type="text" name="schedule" id="schedule" value="{{ old('schedule') }}" placeholder="Ex. 14h-18h"
+                        class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                    <x-ui.field-error name="schedule" />
+                </div>
+                <div>
+                    <label for="address" class="block text-sm font-medium text-ink-700">Adresse</label>
+                    <input type="text" name="address" id="address" value="{{ old('address') }}"
+                        class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                    <x-ui.field-error name="address" />
+                </div>
+            </div>
+
+            <div class="grid gap-5 sm:grid-cols-2">
+                <div>
+                    <label for="price" class="block text-sm font-medium text-ink-700">Tarif</label>
+                    <input type="text" name="price" id="price" value="{{ old('price') }}" placeholder="Gratuit, 12€…"
+                        class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                    <x-ui.field-error name="price" />
+                </div>
+                <div>
+                    <label for="website" class="block text-sm font-medium text-ink-700">Site web</label>
+                    <input type="url" name="website" id="website" value="{{ old('website') }}" placeholder="https://"
+                        class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                    <x-ui.field-error name="website" />
+                </div>
             </div>
 
             <div>

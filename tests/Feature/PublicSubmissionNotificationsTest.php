@@ -242,7 +242,9 @@ class PublicSubmissionNotificationsTest extends TestCase
             'excerpt' => 'À ne pas manquer',
             'body' => 'Tous les détails de cette brocante...',
             'submitter_email' => 'proposant@example.com',
-            'website' => '',
+            'start_date' => '2026-11-01',
+            'end_date' => '2026-11-02',
+            'url_verification' => '',
         ])->assertRedirect(route('actualites.index'));
 
         $news = News::firstOrFail();
@@ -269,8 +271,10 @@ class PublicSubmissionNotificationsTest extends TestCase
             'title' => 'Une brocante ce week-end',
             'body' => 'Tous les détails de cette brocante...',
             'submitter_email' => 'proposant@example.com',
+            'start_date' => '2026-11-01',
+            'end_date' => '2026-11-02',
             'image' => UploadedFile::fake()->image('brocante.jpg', 400, 300),
-            'website' => '',
+            'url_verification' => '',
         ])->assertRedirect(route('actualites.index'));
 
         $news = News::firstOrFail();
@@ -287,8 +291,10 @@ class PublicSubmissionNotificationsTest extends TestCase
             'title' => 'Une brocante ce week-end',
             'body' => 'Tous les détails de cette brocante...',
             'submitter_email' => 'proposant@example.com',
+            'start_date' => '2026-11-01',
+            'end_date' => '2026-11-02',
             'image' => UploadedFile::fake()->create('malware.jpg', 10, 'image/jpeg'),
-            'website' => '',
+            'url_verification' => '',
         ])->assertSessionHasErrors('image');
 
         $this->assertDatabaseCount('news', 0);
@@ -303,8 +309,10 @@ class PublicSubmissionNotificationsTest extends TestCase
             'title' => 'Spam',
             'body' => 'Spam',
             'submitter_email' => 'bot@example.com',
-            'website' => 'http://spam.example', // honeypot rempli
-        ])->assertSessionHasErrors('website');
+            'start_date' => '2026-11-01',
+            'end_date' => '2026-11-02',
+            'url_verification' => 'http://spam.example', // honeypot rempli
+        ])->assertSessionHasErrors('url_verification');
 
         $this->assertDatabaseCount('news', 0);
     }
