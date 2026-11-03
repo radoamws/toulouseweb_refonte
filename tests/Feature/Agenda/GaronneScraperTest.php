@@ -103,23 +103,39 @@ class GaronneScraperTest extends TestCase
         $this->assertStringNotContainsString('Martin-Salvan', $event->title);
     }
 
+    /**
+     * ⚠️ Bug de test réel trouvé et corrigé (03/11/2026, CI en échec une fois
+     * passé début novembre) : aucune année n'est donnée dans la fixture HTML
+     * ("07" / "15 Oct"), donc l'année est déduite de `now()` au moment du
+     * test (voir ParsesFrenchDates::parseSingleFrenchDate()) — sans figer le
+     * temps, ce test devenait FAUX dès que l'horloge réelle dépassait
+     * octobre (le mois "10" devenait alors "antérieur au mois courant",
+     * l'heuristique bascule sur l'année suivante). Même pattern que
+     * LeventDesSignesScraperTest::test_end_date_without_a_year_inherits...().
+     */
     public function test_two_date_nodes_share_the_month_of_the_second_node(): void
     {
-        $source = $this->makeSource();
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 9, 1));
 
-        Http::fake([
-            'theatregaronne.com/saison' => Http::response($this->listingHtml('carte--theatre', 'Les Gaulois', '/spectacle/2026-2027/les-gaulois')),
-            'theatregaronne.com/spectacle/2026-2027/les-gaulois' => Http::response(
-                '<html><body><div class="delta--dates"><time>07</time><time>15 Oct</time></div></body></html>'
-            ),
-        ]);
+        try {
+            $source = $this->makeSource();
 
-        $this->artisan('scrape:events', ['--source' => $source->id])->run();
+            Http::fake([
+                'theatregaronne.com/saison' => Http::response($this->listingHtml('carte--theatre', 'Les Gaulois', '/spectacle/2026-2027/les-gaulois')),
+                'theatregaronne.com/spectacle/2026-2027/les-gaulois' => Http::response(
+                    '<html><body><div class="delta--dates"><time>07</time><time>15 Oct</time></div></body></html>'
+                ),
+            ]);
 
-        $event = Event::where('external_ref', 'les-gaulois')->first();
-        $this->assertNotNull($event);
-        $this->assertSame('2026-10-07', $event->start_date->format('Y-m-d'));
-        $this->assertSame('2026-10-15', $event->end_date->format('Y-m-d'));
+            $this->artisan('scrape:events', ['--source' => $source->id])->run();
+
+            $event = Event::where('external_ref', 'les-gaulois')->first();
+            $this->assertNotNull($event);
+            $this->assertSame('2026-10-07', $event->start_date->format('Y-m-d'));
+            $this->assertSame('2026-10-15', $event->end_date->format('Y-m-d'));
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
     }
 
     /**

@@ -49,29 +49,42 @@ class OdyssudScraperTest extends TestCase
         HTML;
     }
 
+    /**
+     * ⚠️ Même bug de test que GaronneScraperTest (03/11/2026) : aucune année
+     * dans la fixture ("12 décembre"), donc déduite de `now()` — sans figer
+     * le temps, ce test deviendrait faux dès que l'année réelle dépasse 2026
+     * (voir ParsesFrenchDates::parseSingleFrenchDate() : l'année de base vient
+     * directement de `now()->year`, pas seulement la comparaison de mois).
+     */
     public function test_three_spans_with_empty_first_span_is_a_single_date(): void
     {
-        // Constaté en direct : le site laisse parfois le 1er <span> vide
-        // (pictogramme sans texte) quand il n'y a qu'UNE seule date, pas une
-        // plage — le legacy suppose à tort 3 spans = toujours une plage.
-        $source = $this->makeSource();
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::create(2026, 11, 1));
 
-        Http::fake([
-            'odyssud.com/spectacles/normal' => Http::response($this->listingHtml('/spectacles/cirque/hourvari')),
-            'odyssud.com/spectacles/cirque/hourvari' => Http::response(
-                '<html><body><div class="duration"><div class="duration-day"><span></span></div>'
-                .'<div class="duration-day"><span></span></div>'
-                .'<div class="duration-day"><span>12 décembre</span></div></div>'
-                .'<div class="field field--name-discipline">Danse</div></body></html>'
-            ),
-        ]);
+        try {
+            // Constaté en direct : le site laisse parfois le 1er <span> vide
+            // (pictogramme sans texte) quand il n'y a qu'UNE seule date, pas une
+            // plage — le legacy suppose à tort 3 spans = toujours une plage.
+            $source = $this->makeSource();
 
-        $this->artisan('scrape:events', ['--source' => $source->id])->run();
+            Http::fake([
+                'odyssud.com/spectacles/normal' => Http::response($this->listingHtml('/spectacles/cirque/hourvari')),
+                'odyssud.com/spectacles/cirque/hourvari' => Http::response(
+                    '<html><body><div class="duration"><div class="duration-day"><span></span></div>'
+                    .'<div class="duration-day"><span></span></div>'
+                    .'<div class="duration-day"><span>12 décembre</span></div></div>'
+                    .'<div class="field field--name-discipline">Danse</div></body></html>'
+                ),
+            ]);
 
-        $event = Event::where('external_ref', 'hourvari')->first();
-        $this->assertNotNull($event);
-        $this->assertSame('2026-12-12', $event->start_date->format('Y-m-d'));
-        $this->assertSame('2026-12-12', $event->end_date->format('Y-m-d'));
+            $this->artisan('scrape:events', ['--source' => $source->id])->run();
+
+            $event = Event::where('external_ref', 'hourvari')->first();
+            $this->assertNotNull($event);
+            $this->assertSame('2026-12-12', $event->start_date->format('Y-m-d'));
+            $this->assertSame('2026-12-12', $event->end_date->format('Y-m-d'));
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
         $this->assertTrue($event->categories->contains('slug', 'danse'));
     }
 
