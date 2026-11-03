@@ -74,6 +74,8 @@ class TransportController extends Controller
     {
         $from = trim((string) $request->string('from'));
         $to = trim((string) $request->string('to'));
+        $fromCoords = $this->floatPair($request, 'from_lat', 'from_lon');
+        $toCoords = $this->floatPair($request, 'to_lat', 'to_lon');
 
         $direct = collect();
         $transfers = collect();
@@ -82,8 +84,8 @@ class TransportController extends Controller
 
         if ($from !== '' && $to !== '') {
             $allStops = TransportStop::query()->get(['id', 'name']);
-            [$fromIds, $fromResolution] = $this->resolveStopIds($allStops, $from);
-            [$toIds, $toResolution] = $this->resolveStopIds($allStops, $to);
+            [$fromIds, $fromResolution] = $this->resolveStopIds($allStops, $from, ...$fromCoords);
+            [$toIds, $toResolution] = $this->resolveStopIds($allStops, $to, ...$toCoords);
 
             if ($fromIds !== [] && $toIds !== []) {
                 // Chargées une seule fois, réutilisées pour les 2 recherches
@@ -95,12 +97,6 @@ class TransportController extends Controller
             }
         }
 
-        // Autocomplete : tous les arrêts RÉELS du réseau (stops.txt complet),
-        // pas seulement ceux d'un trajet représentatif par ligne comme
-        // l'ancienne version — dédupliqué par graphie exacte (une seule
-        // source GTFS, pas de variantes orthographiques à normaliser ici).
-        $stopNames = TransportStop::orderBy('name')->pluck('name')->unique()->values();
-
         $this->recordPageView($request);
 
         return view('transports.journey', [
@@ -110,7 +106,6 @@ class TransportController extends Controller
             'transfers' => $transfers,
             'fromResolution' => $fromResolution,
             'toResolution' => $toResolution,
-            'stopNames' => $stopNames,
             'seo' => [],
         ]);
     }
@@ -122,9 +117,26 @@ class TransportController extends Controller
      *         afficher "« Rue Alsace Lorraine » → arrêt le plus proche :
      *         Capitole" dans la vue, pour que l'utilisateur comprenne quel
      *         arrêt réel a été utilisé.
+     *
+     * `$lat`/`$lon` : coordonnées déjà connues quand le visiteur a choisi une
+     * suggestion "Rue" de l'autocomplétion (voir autocomplete() et
+     * resources/views/transports/journey.blade.php) — on saute alors
+     * complètement la résolution par texte ET un nouvel appel à l'API BAN :
+     * plus rapide, et surtout plus FIABLE qu'un `geocode()` à l'aveugle
+     * (bug réel trouvé le 03/11/2026 : "Saint-Sernin" seul géocodé vers
+     * Pechbusque au lieu du quartier toulousain du même nom, voir docblock de
+     * AddressGeocoder::search()) — ici l'utilisateur a déjà tranché lui-même
+     * en cliquant la bonne suggestion, aucune ambiguïté ne subsiste.
      */
-    private function resolveStopIds(Collection $allStops, string $query): array
+    private function resolveStopIds(Collection $allStops, string $query, ?float $lat = null, ?float $lon = null): array
     {
+        if ($lat !== null && $lon !== null) {
+            $nearestIds = $this->nearestStopIds($lat, $lon);
+            $stopNames = $nearestIds === [] ? [] : TransportStop::whereIn('id', $nearestIds)->pluck('name')->unique()->values()->all();
+
+            return [$nearestIds, ['label' => $query, 'stop_names' => $stopNames]];
+        }
+
         $stopIds = $this->stopIdsMatching($allStops, $query);
         if ($stopIds !== []) {
             return [$stopIds, null];
@@ -142,6 +154,62 @@ class TransportController extends Controller
     }
 
     /**
+     * Lit une paire de coordonnées optionnelle depuis la query string
+     * (`from_lat`/`from_lon`, `to_lat`/`to_lon`) — absente ou invalide (non
+     * numérique) : `[null, null]`, pour ne jamais transmettre une coordonnée
+     * à moitié renseignée à resolveStopIds().
+     *
+     * @return array{0: float|null, 1: float|null}
+     */
+    private function floatPair(Request $request, string $latKey, string $lonKey): array
+    {
+        $lat = $request->query($latKey);
+        $lon = $request->query($lonKey);
+
+        if (! is_numeric($lat) || ! is_numeric($lon)) {
+            return [null, null];
+        }
+
+        return [(float) $lat, (float) $lon];
+    }
+
+    /**
+     * Autocomplétion en direct de la recherche d'itinéraire (demande client,
+     * 03/11/2026 — "un peu comme sur tisseo.fr [...] toutes les rues doivent
+     * être en base") : combine les arrêts Tisséo connus localement (déjà
+     * complets, voir docblock de nearestStopIds()) et une recherche "rue" en
+     * direct sur la Base Adresse Nationale (AddressGeocoder::search()) —
+     * voir son docblock pour le vrai bug que cette liste de choix explicite
+     * corrige (une résolution à l'aveugle pouvait se tromper de commune).
+     *
+     * Longueur minimale de 3 caractères avant d'interroger quoi que ce soit
+     * (évite un aller-retour réseau vers l'API BAN, et un passage complet de
+     * la table `transport_stops`, sur 1-2 caractères qui ne filtreraient
+     * presque rien).
+     */
+    public function autocomplete(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $query = trim((string) $request->string('q'));
+
+        if (mb_strlen($query) < 3) {
+            return response()->json(['stops' => [], 'addresses' => []]);
+        }
+
+        $normalizedQuery = self::normalize($query);
+
+        $stops = TransportStop::orderBy('name')
+            ->pluck('name')
+            ->unique()
+            ->filter(fn (string $name) => str_contains(self::normalize($name), $normalizedQuery))
+            ->take(6)
+            ->values();
+
+        $addresses = app(AddressGeocoder::class)->search($query, 6);
+
+        return response()->json(['stops' => $stops, 'addresses' => $addresses]);
+    }
+
+    /**
      * Arrêts les plus proches d'un point (formule de Haversine, calculée en
      * PHP — portable SQLite/MySQL, pas de fonctions trigonométriques SQL
      * communes aux deux moteurs, même raisonnement que le tri par type de
@@ -152,19 +220,43 @@ class TransportController extends Controller
      * arrêt en zone urbaine — au-delà, mieux vaut ne proposer aucun arrêt
      * que d'en suggérer un trop éloigné pour être pertinent.
      *
+     * ⚠️ Bug réel trouvé et corrigé (03/11/2026, en comparant un trajet réel
+     * contre tisseo.fr — "Rue des Giroflées" → "Place Saint Sernin") :
+     * dédoublonné par NOM d'arrêt, PAS par `stop_id` brut. Un même poteau
+     * physique est quasi systématiquement éclaté en plusieurs `stop_id` GTFS
+     * tout proches les uns des autres (1 par ligne/quai/sens, même piège que
+     * documenté sur oneTransferConnections()) — ex. "Fontanelles" occupe à
+     * lui seul 3 `stop_id` à quelques mètres d'écart. Avant cette correction,
+     * `take($limit)` AVANT dédoublonnage pouvait épuiser toute la limite sur
+     * CE SEUL arrêt physique (toutes ses lignes desservies), sans jamais
+     * atteindre l'arrêt suivant à peine plus loin mais desservi par une
+     * AUTRE ligne (vérifié en réel : "Mascard" à 288 m, ligne L1, et "Jean
+     * Chaubet" à 544 m, ligne 23, tous deux dans le rayon de 1,5 km mais
+     * jamais considérés car les 3 `stop_id` les plus proches étaient tous
+     * "Fontanelles") — d'où des trajets directs réels manqués, alors que la
+     * correspondance (qui passait par "Fontanelles") était bien trouvée.
+     * Limite remontée à 10 (plutôt que 3) pour refléter la vraie densité
+     * d'arrêts différents en zone urbaine dense — vérifié en réel que 10
+     * suffit à retrouver "Jean Chaubet" (7e arrêt distinct le plus proche
+     * dans cet exemple) sans dégrader les temps de réponse (même
+     * raisonnement de volumétrie que le docblock ci-dessus : la liste
+     * d'identifiants reste de toute façon minuscule face aux ~5731 arrêts).
+     *
      * @return list<int>
      */
-    private function nearestStopIds(float $lat, float $lon, int $limit = 3, float $maxKm = 1.5): array
+    private function nearestStopIds(float $lat, float $lon, int $limit = 10, float $maxKm = 1.5): array
     {
         return TransportStop::query()
             ->whereNotNull('lat')->whereNotNull('lon')
-            ->get(['id', 'lat', 'lon'])
+            ->get(['id', 'name', 'lat', 'lon'])
             ->map(fn ($stop) => [
                 'id' => $stop->id,
+                'name' => $stop->name,
                 'distance' => $this->haversineKm($lat, $lon, (float) $stop->lat, (float) $stop->lon),
             ])
             ->filter(fn ($s) => $s['distance'] <= $maxKm)
             ->sortBy('distance')
+            ->unique('name')
             ->take($limit)
             ->pluck('id')
             ->all();
@@ -226,13 +318,60 @@ class TransportController extends Controller
             ->selectRaw('t.gtfs_route_id as route_id, MIN(b.stop_sequence - a.stop_sequence) as stops_between')
             ->groupBy('t.gtfs_route_id')
             ->get()
-            ->map(fn ($row) => isset($linesByRoute[$row->route_id]) ? [
-                'line' => $linesByRoute[$row->route_id],
-                'stops_between' => (int) $row->stops_between,
-            ] : null)
+            ->map(function ($row) use ($linesByRoute, $fromIds, $toIds) {
+                if (! isset($linesByRoute[$row->route_id])) {
+                    return null;
+                }
+
+                // Points d'arrêt réels de montée/descente (demande client,
+                // 03/11/2026 — "indique les différents points d'arrêt") :
+                // requête supplémentaire bornée à 1 par ligne déjà affichée
+                // (quelques lignes directes au total, voir docblock de la
+                // méthode), pas de surcoût significatif.
+                [$boardStop, $alightStop] = $this->boardAndAlightNames($fromIds, $toIds, $row->route_id);
+
+                return [
+                    'line' => $linesByRoute[$row->route_id],
+                    'board_stop' => $boardStop,
+                    'alight_stop' => $alightStop,
+                    'stops_between' => (int) $row->stops_between,
+                ];
+            })
             ->filter()
             ->sortBy('stops_between')
             ->values();
+    }
+
+    /**
+     * Nom réel de l'arrêt de montée (côté `$fromIds`) et de descente (côté
+     * `$toIds`) pour LA meilleure correspondance d'une ligne donnée (celle de
+     * `stops_between` minimal, déjà calculée par directConnections()) — voir
+     * son docblock pour pourquoi cette requête séparée plutôt qu'une colonne
+     * de plus dans le GROUP BY existant (éviterait de dupliquer une ligne en
+     * plusieurs lignes d'affichage quand plusieurs couples arrêt départ/
+     * arrivée sont valables, ex. un `$fromIds` à plusieurs arrêts proches).
+     *
+     * @param  list<int>  $fromIds
+     * @param  list<int>  $toIds
+     * @return array{0: string|null, 1: string|null}
+     */
+    private function boardAndAlightNames(array $fromIds, array $toIds, string $routeId): array
+    {
+        $row = DB::table('transport_stop_times as a')
+            ->join('transport_stop_times as b', 'a.transport_trip_id', '=', 'b.transport_trip_id')
+            ->join('transport_trips as t', 't.id', '=', 'a.transport_trip_id')
+            ->join('transport_stops as sa', 'sa.id', '=', 'a.transport_stop_id')
+            ->join('transport_stops as sb', 'sb.id', '=', 'b.transport_stop_id')
+            ->where('t.gtfs_route_id', $routeId)
+            ->whereIn('a.transport_stop_id', $fromIds)
+            ->whereIn('b.transport_stop_id', $toIds)
+            ->whereColumn('b.stop_sequence', '>', 'a.stop_sequence')
+            ->orderByRaw('b.stop_sequence - a.stop_sequence asc')
+            ->limit(1)
+            ->select('sa.name as board_stop', 'sb.name as alight_stop')
+            ->first();
+
+        return $row ? [$row->board_stop, $row->alight_stop] : [null, null];
     }
 
     /**
@@ -263,14 +402,24 @@ class TransportController extends Controller
      */
     private function oneTransferConnections(array $fromIds, array $toIds, Collection $linesByRoute): Collection
     {
+        // `so`/`sd` (stop origine / stop destination) : nom réel du point de
+        // montée initial et de descente final (demande client, 03/11/2026 —
+        // "indique les différents points d'arrêt") — ajoutés au GROUP BY
+        // existant plutôt que via une requête séparée par résultat : si
+        // `$fromIds`/`$toIds` contiennent plusieurs arrêts proches (cas
+        // courant d'une adresse géocodée, voir nearestStopIds()), chacun
+        // donne sa propre ligne de résultat, ce qui est le comportement
+        // voulu (on affiche le VRAI arrêt utilisable, jamais un nom choisi
+        // arbitrairement parmi plusieurs valides).
         $leg1 = DB::table('transport_stop_times as a')
             ->join('transport_stop_times as b', 'a.transport_trip_id', '=', 'b.transport_trip_id')
             ->join('transport_trips as t', 't.id', '=', 'a.transport_trip_id')
             ->join('transport_stops as s', 's.id', '=', 'b.transport_stop_id')
+            ->join('transport_stops as so', 'so.id', '=', 'a.transport_stop_id')
             ->whereIn('a.transport_stop_id', $fromIds)
             ->whereColumn('b.stop_sequence', '>', 'a.stop_sequence')
-            ->selectRaw('s.name as transfer_stop, t.gtfs_route_id as route_id, MIN(b.stop_sequence - a.stop_sequence) as stops_between')
-            ->groupBy('s.name', 't.gtfs_route_id')
+            ->selectRaw('s.name as transfer_stop, so.name as origin_stop, t.gtfs_route_id as route_id, MIN(b.stop_sequence - a.stop_sequence) as stops_between')
+            ->groupBy('s.name', 'so.name', 't.gtfs_route_id')
             ->get()
             ->groupBy('transfer_stop');
 
@@ -278,10 +427,11 @@ class TransportController extends Controller
             ->join('transport_stop_times as b', 'a.transport_trip_id', '=', 'b.transport_trip_id')
             ->join('transport_trips as t', 't.id', '=', 'a.transport_trip_id')
             ->join('transport_stops as s', 's.id', '=', 'a.transport_stop_id')
+            ->join('transport_stops as sd', 'sd.id', '=', 'b.transport_stop_id')
             ->whereIn('b.transport_stop_id', $toIds)
             ->whereColumn('b.stop_sequence', '>', 'a.stop_sequence')
-            ->selectRaw('s.name as transfer_stop, t.gtfs_route_id as route_id, MIN(b.stop_sequence - a.stop_sequence) as stops_between')
-            ->groupBy('s.name', 't.gtfs_route_id')
+            ->selectRaw('s.name as transfer_stop, sd.name as destination_stop, t.gtfs_route_id as route_id, MIN(b.stop_sequence - a.stop_sequence) as stops_between')
+            ->groupBy('s.name', 'sd.name', 't.gtfs_route_id')
             ->get()
             ->groupBy('transfer_stop');
 
@@ -306,6 +456,8 @@ class TransportController extends Controller
 
                     $results->push([
                         'transfer_stop' => $stopName,
+                        'origin_stop' => $first->origin_stop,
+                        'destination_stop' => $second->destination_stop,
                         'first_line' => $firstLine,
                         'first_stops' => (int) $first->stops_between,
                         'second_line' => $secondLine,

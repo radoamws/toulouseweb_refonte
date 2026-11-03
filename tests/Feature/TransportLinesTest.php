@@ -354,6 +354,50 @@ class TransportLinesTest extends TestCase
         $response->assertSee('Adresse trouvée, mais aucun arrêt à moins de 1,5 km');
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (03/11/2026, en comparant un trajet réel
+     * contre tisseo.fr) : un arrêt physique éclaté en plusieurs `stop_id`
+     * tout proches (ex. "Fontanelles", 3 quais/lignes) pouvait, à lui seul,
+     * épuiser toute la limite de nearestStopIds() AVANT dédoublonnage par
+     * nom — un arrêt à peine plus loin mais desservant une AUTRE ligne
+     * n'était alors jamais considéré, même largement dans le rayon de
+     * 1,5 km. Voir docblock de nearestStopIds().
+     */
+    public function test_journey_finds_a_direct_line_from_a_more_distant_stop_when_the_nearest_stop_has_several_platforms(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Bus L12', 'slug' => 'bus-l12', 'type' => 'bus', 'stops' => []]);
+        TransportLine::create(['gtfs_route_id' => 'r2', 'name' => 'Bus L1', 'slug' => 'bus-l1', 'type' => 'bus', 'stops' => []]);
+
+        $destination = TransportStop::create(['gtfs_stop_id' => 'dest', 'name' => 'Jean Jaurès', 'lat' => 43.6075, 'lon' => 1.4495]);
+
+        // 3 quais du MÊME arrêt physique ("Fontanelles") : celui réellement
+        // utilisé par la ligne L12 est placé PILE sur le point géocodé
+        // (distance 0), les 2 autres quais du même nom un peu plus loin
+        // (mais toujours plus proches que "Mascard") — sans aucun trajet,
+        // comme le quai id=1321 observé en réel (voir docblock de
+        // nearestStopIds()).
+        $fontanelles = TransportStop::create(['gtfs_stop_id' => 'f1', 'name' => 'Fontanelles', 'lat' => 43.601644, 'lon' => 1.480926]);
+        TransportStop::create(['gtfs_stop_id' => 'f2', 'name' => 'Fontanelles', 'lat' => 43.6021, 'lon' => 1.4809]);
+        TransportStop::create(['gtfs_stop_id' => 'f3', 'name' => 'Fontanelles', 'lat' => 43.6023, 'lon' => 1.4809]);
+        $trip1 = TransportTrip::create(['gtfs_trip_id' => 't1', 'gtfs_route_id' => 'r1']);
+        TransportStopTime::create(['transport_trip_id' => $trip1->id, 'transport_stop_id' => $fontanelles->id, 'stop_sequence' => 1, 'departure_time' => '08:00:00']);
+        TransportStopTime::create(['transport_trip_id' => $trip1->id, 'transport_stop_id' => $destination->id, 'stop_sequence' => 2, 'departure_time' => '08:10:00']);
+
+        // Un arrêt différent, un peu plus loin (~300 m) mais toujours dans le
+        // rayon de 1,5 km — dessert directement la ligne L1 vers la même
+        // destination.
+        $mascard = TransportStop::create(['gtfs_stop_id' => 'm1', 'name' => 'Mascard', 'lat' => 43.6040, 'lon' => 1.4820]);
+        $trip2 = TransportTrip::create(['gtfs_trip_id' => 't2', 'gtfs_route_id' => 'r2']);
+        TransportStopTime::create(['transport_trip_id' => $trip2->id, 'transport_stop_id' => $mascard->id, 'stop_sequence' => 1, 'departure_time' => '08:00:00']);
+        TransportStopTime::create(['transport_trip_id' => $trip2->id, 'transport_stop_id' => $destination->id, 'stop_sequence' => 2, 'departure_time' => '08:10:00']);
+
+        $this->fakeGeocode('Rue des Giroflées 31500 Toulouse', 43.601644, 1.480926);
+
+        $response = $this->get('/transports/itineraire?from=Rue+des+Giroflées&to=Jean+Jaurès')->assertOk();
+        $response->assertSee('Trajets directs');
+        $response->assertSee('Bus L12')->assertSee('Bus L1');
+    }
+
     public function test_journey_shows_the_generic_message_when_the_address_cannot_be_geocoded(): void
     {
         TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => []]);
@@ -363,5 +407,122 @@ class TransportLinesTest extends TestCase
 
         $response = $this->get('/transports/itineraire?from=Nimporte+quoi+xyz&to=Jean+Jaurès')->assertOk();
         $response->assertSee('Aucun trajet trouvé');
+    }
+
+    /**
+     * Demande client (03/11/2026) : "indique les différents points d'arrêt"
+     * pour un trajet direct, pas seulement le nombre d'arrêts — voir
+     * TransportController::boardAndAlightNames().
+     */
+    public function test_direct_journey_shows_the_real_board_and_alight_stop_names(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => []]);
+        $this->createSchedule('r1', 't1', ['Basso Cambo', 'Bellefontaine', 'Reynerie', 'Capitole']);
+
+        $response = $this->get('/transports/itineraire?from=Basso+Cambo&to=Capitole')->assertOk();
+        $response->assertSee('Basso Cambo → Capitole', false);
+    }
+
+    /**
+     * Même demande, pour un trajet avec 1 correspondance : la chaîne
+     * complète départ → ligne 1 → correspondance → ligne 2 → arrivée
+     * (capture tisseo.fr jointe à la demande, 4e capture).
+     */
+    public function test_transfer_journey_shows_the_full_chain_of_stop_names(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => []]);
+        TransportLine::create(['gtfs_route_id' => 'r2', 'name' => 'Bus 13', 'slug' => 'bus-13', 'type' => 'bus', 'stops' => []]);
+
+        $this->createSchedule('r1', 't1', ['Basso Cambo', 'Jean Jaurès']);
+        $this->createSchedule('r2', 't2', ['Jean Jaurès', 'Balma Gramont']);
+
+        $response = $this->get('/transports/itineraire?from=Basso+Cambo&to=Balma+Gramont')->assertOk();
+        $response->assertSeeInOrder(['Basso Cambo', 'Métro A', 'Jean Jaurès', 'Bus 13', 'Balma Gramont']);
+    }
+
+    /**
+     * Autocomplétion en direct (demande client 03/11/2026 — "un peu comme
+     * sur tisseo.fr [...] toutes les rues doivent être en base") : combine
+     * les arrêts Tisséo connus localement et une recherche "rue" en direct
+     * sur l'API BAN — voir TransportController::autocomplete().
+     */
+    public function test_autocomplete_returns_matching_stops_and_addresses(): void
+    {
+        TransportStop::create(['gtfs_stop_id' => 'sp:1', 'name' => 'Saint-Cyprien République']);
+        TransportStop::create(['gtfs_stop_id' => 'sp:2', 'name' => 'Jean Jaurès']);
+
+        $this->fakeGeocodeSearch([
+            ['label' => 'Rue des Giroflées 31500 Toulouse', 'lat' => 43.5, 'lon' => 1.4],
+            ['label' => '20 Rue des Giroflées 31500 Toulouse', 'lat' => 43.5001, 'lon' => 1.4001],
+        ]);
+
+        $response = $this->getJson('/transports/autocompletion?q=giroflées')->assertOk();
+        $response->assertJsonPath('stops', []);
+        $response->assertJsonCount(2, 'addresses');
+        $response->assertJsonPath('addresses.0.label', 'Rue des Giroflées 31500 Toulouse');
+    }
+
+    public function test_autocomplete_matches_stops_by_partial_accent_insensitive_name(): void
+    {
+        TransportStop::create(['gtfs_stop_id' => 'sp:1', 'name' => 'Saint-Cyprien République']);
+
+        $this->fakeGeocodeSearch([]);
+
+        $response = $this->getJson('/transports/autocompletion?q=cyprien')->assertOk();
+        $response->assertJsonPath('stops.0', 'Saint-Cyprien République');
+    }
+
+    public function test_autocomplete_requires_at_least_3_characters(): void
+    {
+        $response = $this->getJson('/transports/autocompletion?q=gi')->assertOk();
+        $response->assertExactJson(['stops' => [], 'addresses' => []]);
+    }
+
+    /**
+     * Demande client (03/11/2026) : quand le visiteur clique une suggestion
+     * "Rue" de l'autocomplétion, les coordonnées sont déjà connues — la
+     * recherche d'itinéraire doit les utiliser directement, SANS repasser
+     * par un nouveau géocodage (voir docblock de
+     * TransportController::resolveStopIds() pour le vrai bug que ce
+     * court-circuit évite : "Saint-Sernin" seul géocodé vers la mauvaise
+     * commune).
+     */
+    public function test_journey_uses_coordinates_from_a_chosen_address_suggestion_without_regeocoding(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => []]);
+        $this->createSchedule('r1', 't1', ['Capitole', 'Jean Jaurès']);
+        TransportStop::where('name', 'Capitole')->update(['lat' => 43.6045, 'lon' => 1.4442]);
+        TransportStop::where('name', 'Jean Jaurès')->update(['lat' => 43.6075, 'lon' => 1.4495]);
+
+        // Si un géocodage était déclenché malgré les coordonnées fournies, il
+        // échouerait (aucune réponse HTTP configurée) et le test échouerait.
+        Http::fake(['https://api-adresse.data.gouv.fr/search/*' => Http::response(null, 500)]);
+
+        $response = $this->get('/transports/itineraire?from=Rue+Alsace+Lorraine&from_lat=43.6043&from_lon=1.4449&to=Jean+Jaurès')->assertOk();
+        $response->assertSee('Métro A');
+        $response->assertSee('Capitole');
+        Http::assertNothingSent();
+    }
+
+    public function test_journey_ignores_incomplete_or_non_numeric_coordinates(): void
+    {
+        TransportLine::create(['gtfs_route_id' => 'r1', 'name' => 'Métro A', 'slug' => 'metro-a', 'type' => 'metro', 'stops' => []]);
+        $this->createSchedule('r1', 't1', ['Capitole', 'Jean Jaurès']);
+
+        $response = $this->get('/transports/itineraire?from=Capitole&from_lat=pas-un-nombre&to=Jean+Jaurès')->assertOk();
+        $response->assertSee('Métro A');
+    }
+
+    /** @param  list<array{label: string, lat: float, lon: float}>  $features */
+    private function fakeGeocodeSearch(array $features): void
+    {
+        Http::fake(['https://api-adresse.data.gouv.fr/search/*' => Http::response([
+            'type' => 'FeatureCollection',
+            'features' => array_map(fn (array $f) => [
+                'type' => 'Feature',
+                'geometry' => ['type' => 'Point', 'coordinates' => [$f['lon'], $f['lat']]],
+                'properties' => ['label' => $f['label']],
+            ], $features),
+        ], 200)]);
     }
 }

@@ -62,6 +62,76 @@ class AddressGeocoder
         return $result;
     }
 
+    /**
+     * Plusieurs résultats (autocomplétion "rue" en direct pendant la frappe,
+     * demande client 03/11/2026 — "un peu comme sur tisseo.fr" : voir
+     * TransportController::autocomplete()). Corrige le vrai défaut de
+     * geocode() (`limit=1`) constaté en réel ce jour-là : "Saint-Sernin" seul
+     * résolvait vers la commune de Pechbusque (15 km du centre, car BAN
+     * considère ce nom de lieu plus "important" que la simple rue éponyme du
+     * centre-ville) plutôt que vers le quartier Saint-Sernin de Toulouse —
+     * en laissant le visiteur choisir explicitement dans une liste (comme le
+     * fait Tisséo), ce risque de mauvaise résolution disparaît : on ne devine
+     * plus, on affiche les candidats réels et l'utilisateur tranche.
+     *
+     * @return list<array{label: string, lat: float, lon: float}>
+     */
+    public function search(string $query, int $limit = 6): array
+    {
+        $cacheKey = 'geocode-search:'.md5(Str::lower(trim($query)).':'.$limit);
+
+        $cached = Cache::get($cacheKey);
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $result = $this->fetchMany($query, $limit);
+        if ($result !== []) {
+            Cache::put($cacheKey, $result, now()->addDays(self::CACHE_DAYS));
+        }
+
+        return $result;
+    }
+
+    /** @return list<array{label: string, lat: float, lon: float}> */
+    private function fetchMany(string $query, int $limit): array
+    {
+        try {
+            $response = Http::timeout(5)->get(self::ENDPOINT, [
+                'q' => $query,
+                'lat' => self::BIAS_LAT,
+                'lon' => self::BIAS_LON,
+                'limit' => $limit,
+            ]);
+
+            if (! $response->successful()) {
+                return [];
+            }
+
+            return collect($response->json('features', []))
+                ->map(function ($feature) {
+                    if (! isset($feature['geometry']['coordinates'])) {
+                        return null;
+                    }
+
+                    [$lon, $lat] = $feature['geometry']['coordinates'];
+
+                    return [
+                        'label' => $feature['properties']['label'] ?? '',
+                        'lat' => (float) $lat,
+                        'lon' => (float) $lon,
+                    ];
+                })
+                ->filter()
+                ->values()
+                ->all();
+        } catch (\Throwable $e) {
+            Log::channel('single')->warning("AddressGeocoder — erreur réseau (search) : {$e->getMessage()}");
+
+            return [];
+        }
+    }
+
     /** @return array{lat: float, lon: float, label: string}|null */
     private function fetch(string $query): ?array
     {

@@ -84,8 +84,15 @@ Route::get('/contact', [ContactController::class, 'show'])->name('contact.show')
 // Lignes de transport Tisséo (brief roadmap "contenu", 14/10/2026) — voir
 // App\Console\Commands\ImportTisseoGtfs et TransportController.
 Route::get('/transports', [TransportController::class, 'index'])->name('transports.index');
-// Avant {slug} : sinon "itineraire" serait capturé comme un slug de ligne.
+// Avant {slug} : sinon "itineraire"/"autocompletion" seraient capturés comme un slug de ligne.
 Route::get('/transports/itineraire', [TransportController::class, 'journey'])->name('transports.journey');
+// Autocomplétion en direct (arrêts + rues, demande client 03/11/2026 — "un
+// peu comme sur tisseo.fr") : throttle dédié, appelée à chaque frappe
+// (debounce côté JS) et interroge l'API BAN en repli, voir
+// TransportController::autocomplete().
+Route::get('/transports/autocompletion', [TransportController::class, 'autocomplete'])
+    ->middleware('throttle:60,1')
+    ->name('transports.autocomplete');
 Route::get('/transports/{slug}', [TransportController::class, 'show'])->name('transports.show');
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact.store');
 
