@@ -58,9 +58,11 @@ class NewsletterResource extends Resource
                     ->label('Origine')
                     ->visible(fn (?Newsletter $record) => $record && $record->trigger_type)
                     ->content(fn (?Newsletter $record) => match ($record?->trigger_type) {
-                        'listing_published' => 'Brouillon généré automatiquement à la publication d\'une fiche annuaire.',
-                        'news_published' => 'Brouillon généré automatiquement à la publication d\'une actualité.',
-                        'classified_published' => 'Brouillon généré automatiquement à la publication d\'une annonce.',
+                        'listing_published' => 'Brouillon généré automatiquement à la publication d\'une fiche annuaire — fusionné dans le digest quotidien, jamais envoyé seul.',
+                        'news_published' => 'Brouillon généré automatiquement à la publication d\'une actualité — fusionné dans le digest quotidien, jamais envoyé seul.',
+                        'classified_published' => 'Brouillon généré automatiquement à la publication d\'une annonce — fusionné dans le digest quotidien, jamais envoyé seul.',
+                        'event_published' => 'Brouillon généré automatiquement au dépôt validé d\'un événement — fusionné dans le digest quotidien, jamais envoyé seul.',
+                        'entity_digest' => 'Digest quotidien envoyé automatiquement (annuaire/actualités/annonces/événements de la journée).',
                         'scraping_digest' => 'Brouillon généré automatiquement après un scraping agenda/cinéma.',
                         default => null,
                     }),
@@ -77,12 +79,15 @@ class NewsletterResource extends Resource
                     default => 'gray',
                 })->formatStateUsing(fn (string $state) => match ($state) {
                     'sent' => 'Envoyée',
+                    'merged' => 'Fusionnée dans un digest',
                     default => 'Brouillon',
                 }),
                 Tables\Columns\TextColumn::make('trigger_type')->label('Origine')->formatStateUsing(fn (?string $state) => match ($state) {
                     'listing_published' => 'Annuaire',
                     'news_published' => 'Actualité',
                     'classified_published' => 'Annonce',
+                    'event_published' => 'Événement',
+                    'entity_digest' => 'Digest quotidien',
                     'scraping_digest' => 'Scraping agenda/cinéma',
                     default => 'Manuelle',
                 })->badge()->color('gray'),
@@ -96,6 +101,7 @@ class NewsletterResource extends Resource
                 Tables\Filters\SelectFilter::make('status')->label('Statut')->options([
                     'draft' => 'Brouillon',
                     'sent' => 'Envoyée',
+                    'merged' => 'Fusionnée dans un digest',
                 ]),
             ])
             ->actions([
@@ -115,7 +121,7 @@ class NewsletterResource extends Resource
                     ->label('Envoyer à tous les abonnés')
                     ->icon('heroicon-o-envelope')
                     ->color('danger')
-                    ->visible(fn (Newsletter $record) => $record->status !== 'sent')
+                    ->visible(fn (Newsletter $record) => $record->status === 'draft')
                     ->requiresConfirmation()
                     ->modalHeading('Envoyer à tous les abonnés actifs ?')
                     ->modalDescription(fn () => NewsletterSubscriber::active()->count().' abonné(s) actif(s) recevront cet email. Cette action est irréversible.')

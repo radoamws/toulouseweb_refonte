@@ -72,6 +72,16 @@ class RunWebCron extends Command
             $this->call('transport:import-tisseo-gtfs');
         }
 
+        // Digest newsletter quotidien (demande client, 12/11/2026 — voir
+        // App\Services\Newsletter\EntityDigestSender) : construit le
+        // récapitulatif du jour PUIS le met en file via sendToAll(). Un
+        // second `queue:work` est nécessaire juste après — celui du tout
+        // début de cette méthode a déjà tourné AVANT que ce digest existe,
+        // le laisser sans ce second passage retarderait l'envoi réel d'un
+        // jour complet (jusqu'au prochain webcron).
+        $this->call('newsletter:send-entity-digest');
+        $this->call('queue:work', ['--stop-when-empty' => true]);
+
         return self::SUCCESS;
     }
 }

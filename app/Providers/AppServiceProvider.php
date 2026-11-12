@@ -67,24 +67,26 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Modèles dont le passage au statut "published" doit générer un
-     * BROUILLON de newsletter (demande client, 12/09/2026, voir
-     * App\Observers\NewsletterDraftObserver et
-     * TECHNICAL_DOCUMENTATION.md §36) — jamais d'envoi automatique, voir
-     * docblock de l'observer.
+     * BROUILLON de newsletter (demande client, 12/09/2026, étendu à Event
+     * le 12/11/2026, voir App\Observers\NewsletterDraftObserver et
+     * TECHNICAL_DOCUMENTATION.md §36) — jamais d'envoi direct depuis cette
+     * liste de modèles ; Event y figure malgré le volume des scrapés
+     * (plusieurs par jour) car l'observer filtre lui-même sur
+     * `source = 'user_submitted'`, même logique que
+     * SUBMITTER_SUBSCRIPTION_MODELS ci-dessous. Ces brouillons sont ensuite
+     * regroupés et envoyés une fois par jour par
+     * App\Services\Newsletter\EntityDigestSender (voir son docblock).
      */
     protected const NEWSLETTER_DRAFT_MODELS = [
-        Listing::class, News::class, Classified::class,
+        Listing::class, News::class, Classified::class, Event::class,
     ];
 
     /**
      * Modèles dont le passage au statut "published" doit abonner
      * automatiquement l'auteur du dépôt à la newsletter (demande client,
-     * 12/11/2026, voir App\Observers\SubmitterSubscriptionObserver) — Event
-     * y figure ici mais PAS dans NEWSLETTER_DRAFT_MODELS ci-dessus : un
-     * brouillon d'annonce par événement publié serait beaucoup trop
-     * fréquent (plusieurs scrapés par jour), alors que l'abonnement, lui,
-     * est filtré par l'observer sur `source = 'user_submitted'` et ne
-     * concerne donc jamais les événements scrapés.
+     * 12/11/2026, voir App\Observers\SubmitterSubscriptionObserver) —
+     * Event est filtré par l'observer sur `source = 'user_submitted'` et
+     * ne concerne donc jamais les événements scrapés.
      */
     protected const SUBMITTER_SUBSCRIPTION_MODELS = [
         Listing::class, News::class, Classified::class, Event::class,

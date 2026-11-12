@@ -12,9 +12,11 @@ use App\Models\News;
 use App\Models\NewsCategory;
 use App\Models\Newsletter;
 use App\Models\NewsletterSubscriber;
+use App\Services\Newsletter\EntityDigestSender;
 use App\Services\Newsletter\NewsletterSender;
 use App\Services\Newsletter\ScrapingDigestBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -295,6 +297,107 @@ class NewsletterTest extends TestCase
         $newsletter = Newsletter::firstOrFail();
         $this->assertSame('scraping_digest', $newsletter->trigger_type);
         $this->assertSame('draft', $newsletter->status);
+    }
+
+    public function test_publishing_a_user_submitted_event_creates_a_draft_newsletter(): void
+    {
+        $event = Event::create([
+            'title' => 'Concert digest', 'status' => 'pending', 'source' => 'user_submitted',
+            'start_date' => now()->addWeek(), 'description' => 'Un super concert',
+        ]);
+
+        $event->update(['status' => 'published']);
+
+        $newsletter = Newsletter::firstOrFail();
+        $this->assertSame('event_published', $newsletter->trigger_type);
+        $this->assertSame('draft', $newsletter->status);
+    }
+
+    /** Plusieurs événements scrapés par jour — jamais un brouillon chacun (voir docblock de l'observer). */
+    public function test_publishing_a_scraped_event_does_not_create_a_draft_newsletter(): void
+    {
+        $event = Event::create([
+            'title' => 'Concert scrapé digest', 'status' => 'pending', 'source' => 'scraped',
+            'start_date' => now()->addWeek(),
+        ]);
+
+        $event->update(['status' => 'published']);
+
+        $this->assertDatabaseCount('newsletters', 0);
+    }
+
+    /**
+     * Demande client (12/11/2026) : "faire un envoi automatique vers tous
+     * les abonnés... avec un template professionnel sans mon intervention"
+     * pour annonces/événements/annuaire/actus validés — voir
+     * App\Services\Newsletter\EntityDigestSender.
+     */
+    public function test_entity_digest_sender_merges_pending_drafts_into_one_digest(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants-digest', 'level' => 0, 'is_active' => true]);
+        $listing = Listing::create(['title' => 'Resto digest', 'tier' => 'free', 'status' => 'published']);
+        $listing->categories()->attach($category->id);
+
+        $event = Event::create([
+            'title' => 'Concert digest build', 'status' => 'published', 'source' => 'user_submitted',
+            'start_date' => now()->addWeek(),
+        ]);
+
+        $this->assertDatabaseCount('newsletters', 2);
+
+        $digest = app(EntityDigestSender::class)->build();
+
+        $this->assertNotNull($digest);
+        $this->assertSame('entity_digest', $digest->trigger_type);
+        $this->assertSame('draft', $digest->status);
+        $this->assertStringContainsString('Resto digest', $digest->body_html);
+        $this->assertStringContainsString('Concert digest build', $digest->body_html);
+
+        $this->assertDatabaseCount('newsletters', 3);
+        $this->assertSame(0, Newsletter::where('status', 'draft')->where('trigger_type', '!=', 'entity_digest')->count());
+        $this->assertSame(2, Newsletter::where('status', 'merged')->count());
+    }
+
+    public function test_entity_digest_sender_returns_null_when_nothing_pending(): void
+    {
+        $this->assertNull(app(EntityDigestSender::class)->build());
+    }
+
+    /** Une fiche dépubliée avant le passage du digest ne doit jamais bloquer les suivants. */
+    public function test_entity_digest_sender_merges_but_skips_items_unpublished_since(): void
+    {
+        $listing = Listing::create(['title' => 'Resto dépublié', 'tier' => 'free', 'status' => 'published']);
+        $listing->update(['status' => 'pending']);
+
+        $this->assertNull(app(EntityDigestSender::class)->build());
+        $this->assertSame('merged', Newsletter::firstOrFail()->status);
+    }
+
+    public function test_send_entity_digest_command_auto_sends_when_enabled(): void
+    {
+        config(['services.newsletter.sending_enabled' => true]);
+        Mail::fake();
+        NewsletterSubscriber::create(['email' => 'abonne-digest@example.com', 'status' => 'active']);
+        Listing::create(['title' => 'Resto auto-envoi', 'tier' => 'free', 'status' => 'published']);
+
+        Artisan::call('newsletter:send-entity-digest');
+
+        $digest = Newsletter::where('trigger_type', 'entity_digest')->firstOrFail();
+        $this->assertSame('sent', $digest->status);
+        $this->assertSame(1, $digest->recipient_count);
+        Mail::assertQueued(NewsletterMail::class, 1);
+    }
+
+    public function test_send_entity_digest_command_leaves_digest_as_draft_when_sending_disabled(): void
+    {
+        Mail::fake();
+        Listing::create(['title' => 'Resto sans go', 'tier' => 'free', 'status' => 'published']);
+
+        Artisan::call('newsletter:send-entity-digest');
+
+        $digest = Newsletter::where('trigger_type', 'entity_digest')->firstOrFail();
+        $this->assertSame('draft', $digest->status);
+        Mail::assertNothingQueued();
     }
 
     /**

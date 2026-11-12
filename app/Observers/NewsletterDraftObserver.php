@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\Classified;
+use App\Models\Event;
 use App\Models\Listing;
 use App\Models\News;
 use App\Models\Newsletter;
@@ -10,20 +11,28 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Génère un BROUILLON de newsletter à chaque publication d'une fiche
- * annuaire/actualité/annonce (demande client, 12/09/2026, voir
- * TECHNICAL_DOCUMENTATION.md §36).
+ * annuaire/actualité/annonce/événement déposé (demande client, 12/09/2026,
+ * étendue aux événements le 12/11/2026, voir TECHNICAL_DOCUMENTATION.md
+ * §36).
  *
- * ⚠️ Ne déclenche JAMAIS d'envoi — crée uniquement une ligne
- * `newsletters` en `status = draft`, laissée à la validation d'un
- * administrateur dans Filament (voir NewsletterResource). Deux raisons :
- * 1) demande explicite du client le 12/09/2026 : "n'envoie à personne
- *    d'autre que moi avant mon GO" — s'applique à TOUTES les entités,
- *    donc aussi à ces déclenchements automatiques ;
- * 2) un envoi réellement automatique et immédiat, à CHAQUE publication,
- *    enverrait potentiellement plusieurs emails par jour aux mêmes
- *    abonnés (plusieurs fiches annuaire publiées la même journée, etc.) —
- *    un risque de fatigue/désabonnement en masse qui mérite un arbitrage
- *    éditorial du client, pas une décision technique unilatérale.
+ * ⚠️ Ne déclenche JAMAIS d'envoi ICI — crée uniquement une ligne
+ * `newsletters` en `status = draft`. Un email par fiche publiée
+ * spammerait les abonnés si plusieurs fiches sortent la même journée ;
+ * à la place, `App\Services\Newsletter\EntityDigestSender` regroupe
+ * UNE FOIS PAR JOUR (déclenché par `webcron:run`, voir
+ * `App\Console\Commands\Newsletter\SendEntityDigest`) tous les brouillons
+ * encore `draft` de cet observer en UN SEUL email récapitulatif, envoyé
+ * automatiquement à tous les abonnés (sans intervention manuelle, demande
+ * client 12/11/2026) — sous réserve de `NEWSLETTER_SENDING_ENABLED`, qui
+ * reste le coupe-circuit général. Les brouillons individuels sont ensuite
+ * marqués `status = merged` (jamais envoyés tels quels, jamais supprimés —
+ * traçabilité dans l'admin).
+ *
+ * Événements : seuls ceux `source = 'user_submitted'` génèrent un
+ * brouillon (filtré dans `maybeCreateDraft()`, pas via la liste de modèles
+ * de `AppServiceProvider`) — les événements scrapés (plusieurs par jour,
+ * voir `GOOGLE_INDEXING_MODELS`/`SUBMITTER_SUBSCRIPTION_MODELS` pour la
+ * même distinction ailleurs) ne doivent jamais en générer.
  *
  * Se déclenche quand le statut PASSE à "published" — soit par transition
  * (`updated()`, `wasChanged('status')`, ex. pending -> published via
@@ -53,12 +62,14 @@ class NewsletterDraftObserver
         Listing::class => 'listing_published',
         News::class => 'news_published',
         Classified::class => 'classified_published',
+        Event::class => 'event_published',
     ];
 
     protected const LABELS = [
         Listing::class => 'Nouveau sur l\'annuaire ToulouseWeb',
         News::class => 'Actualité ToulouseWeb',
         Classified::class => 'Nouvelle annonce ToulouseWeb',
+        Event::class => 'Nouvel événement ToulouseWeb',
     ];
 
     public function created(Model $model): void
@@ -78,11 +89,16 @@ class NewsletterDraftObserver
             return;
         }
 
+        if ($model instanceof Event && $model->source !== 'user_submitted') {
+            return;
+        }
+
         $title = $model->title;
         $excerpt = match (true) {
             $model instanceof News => $model->excerpt,
             $model instanceof Listing => $model->short_description,
             $model instanceof Classified => $model->description,
+            $model instanceof Event => $model->description,
             default => null,
         };
         $excerpt = $excerpt ? \Illuminate\Support\Str::limit(strip_tags((string) $excerpt), 200) : null;
