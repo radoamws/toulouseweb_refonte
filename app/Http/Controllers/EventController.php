@@ -253,6 +253,12 @@ class EventController extends Controller
             'description' => ['nullable', 'string', 'max:5000'],
             'price' => ['nullable', 'string', 'max:255'],
             'booking_url' => ['nullable', 'url', 'max:255'],
+            // Ajouté le 12/11/2026 (demande client) — jusque-là le seul des 4
+            // formulaires de dépôt public à ne collecter aucun email, ce qui
+            // empêchait à la fois "Proposé par" dans la notification admin
+            // (voir plus bas) ET l'abonnement newsletter automatique à la
+            // validation (voir App\Observers\SubmitterSubscriptionObserver).
+            'submitter_email' => ['required', 'email', 'max:255'],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             // Upload d'image sécurisé (demande client, voir App\Rules\GenuineImage
@@ -277,6 +283,7 @@ class EventController extends Controller
             'description' => $validated['description'] ?? null,
             'price' => $validated['price'] ?? null,
             'booking_url' => $validated['booking_url'] ?? null,
+            'submitter_email' => $validated['submitter_email'],
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'] ?? null,
             'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
@@ -303,6 +310,7 @@ class EventController extends Controller
                 'Titre' => $event->title,
                 'Lieu' => $area->name,
                 'Date de début' => $event->start_date->format('d/m/Y'),
+                'Proposé par' => $event->submitter_email,
             ],
             route('filament.admin.resources.events.edit', $event),
             "Valider ou refuser cet événement",

@@ -23,7 +23,7 @@ class Event extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUr
 
     protected $fillable = [
         'area_id', 'venue_name', 'venue_address', 'title', 'slug', 'subtitle', 'description', 'image', 'price',
-        'start_date', 'end_date', 'schedule', 'booking_url', 'status', 'source',
+        'start_date', 'end_date', 'schedule', 'booking_url', 'submitter_email', 'status', 'source',
         'external_ref', 'legacy_id',
     ];
 

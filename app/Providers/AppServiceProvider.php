@@ -17,6 +17,7 @@ use App\Observers\CloudflarePurgeObserver;
 use App\Observers\GoogleIndexingObserver;
 use App\Observers\NewsletterDraftObserver;
 use App\Observers\RegeneratesSitemapObserver;
+use App\Observers\SubmitterSubscriptionObserver;
 use App\Services\Cache\CloudflareCachePurger;
 use App\Services\Seo\GoogleIndexingService;
 use Illuminate\Support\Facades\Mail;
@@ -73,6 +74,20 @@ class AppServiceProvider extends ServiceProvider
      */
     protected const NEWSLETTER_DRAFT_MODELS = [
         Listing::class, News::class, Classified::class,
+    ];
+
+    /**
+     * Modèles dont le passage au statut "published" doit abonner
+     * automatiquement l'auteur du dépôt à la newsletter (demande client,
+     * 12/11/2026, voir App\Observers\SubmitterSubscriptionObserver) — Event
+     * y figure ici mais PAS dans NEWSLETTER_DRAFT_MODELS ci-dessus : un
+     * brouillon d'annonce par événement publié serait beaucoup trop
+     * fréquent (plusieurs scrapés par jour), alors que l'abonnement, lui,
+     * est filtré par l'observer sur `source = 'user_submitted'` et ne
+     * concerne donc jamais les événements scrapés.
+     */
+    protected const SUBMITTER_SUBSCRIPTION_MODELS = [
+        Listing::class, News::class, Classified::class, Event::class,
     ];
 
     /**
@@ -137,6 +152,10 @@ class AppServiceProvider extends ServiceProvider
 
         foreach (self::NEWSLETTER_DRAFT_MODELS as $model) {
             $model::observe(NewsletterDraftObserver::class);
+        }
+
+        foreach (self::SUBMITTER_SUBSCRIPTION_MODELS as $model) {
+            $model::observe(SubmitterSubscriptionObserver::class);
         }
 
         // Envoi des newsletters via l'API Brevo (demande client, 14/09/2026,

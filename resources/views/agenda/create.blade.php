@@ -95,6 +95,14 @@
                 <x-ui.field-error name="image" />
             </div>
 
+            <div>
+                <label for="submitter_email" class="block text-sm font-medium text-ink-700">Votre email *</label>
+                <input type="email" name="submitter_email" id="submitter_email" required value="{{ old('submitter_email') }}"
+                    class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                <p class="mt-1 text-xs text-ink-500">Non publié — sert uniquement à notre équipe pour vous recontacter si besoin.</p>
+                <x-ui.field-error name="submitter_email" />
+            </div>
+
             <x-ui.button type="submit" variant="primary" size="lg">Envoyer mon événement</x-ui.button>
         </form>
     </div>

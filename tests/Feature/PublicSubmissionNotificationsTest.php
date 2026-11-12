@@ -120,6 +120,7 @@ class PublicSubmissionNotificationsTest extends TestCase
             'title' => 'Concert de jazz',
             'venue_name' => 'Salle des fêtes',
             'start_date' => now()->addWeek()->format('Y-m-d H:i:s'),
+            'submitter_email' => 'proposant@example.com',
             'image' => UploadedFile::fake()->image('concert.png', 300, 200),
             'website' => '',
         ])->assertRedirect(route('agenda.index'));
@@ -144,6 +145,7 @@ class PublicSubmissionNotificationsTest extends TestCase
             'title' => 'Concert de jazz',
             'venue_name' => 'Salle des fêtes',
             'start_date' => now()->addWeek()->format('Y-m-d H:i:s'),
+            'submitter_email' => 'proposant@example.com',
             'image' => UploadedFile::fake()->create('malware.png', 10, 'image/png'),
             'website' => '',
         ])->assertSessionHasErrors('image');

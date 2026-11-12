@@ -35,6 +35,7 @@ class PublicEventSubmissionTest extends TestCase
             'title' => 'Ma pièce de théâtre',
             'venue_name' => 'Salle des Fêtes de Test',
             'start_date' => now()->addWeek()->format('Y-m-d\TH:i'),
+            'submitter_email' => 'visiteur@example.com',
             'website' => '', // honeypot vide = humain
         ]);
 
@@ -61,6 +62,7 @@ class PublicEventSubmissionTest extends TestCase
             'title' => 'Tentative de contournement',
             'venue_name' => 'Un lieu',
             'start_date' => now()->addWeek()->format('Y-m-d\TH:i'),
+            'submitter_email' => 'visiteur@example.com',
             'status' => 'published', // ne doit jamais être pris en compte
             'source' => 'scraped', // idem
             'website' => '',
@@ -80,6 +82,7 @@ class PublicEventSubmissionTest extends TestCase
             'title' => 'Spam bot',
             'venue_name' => 'Un lieu',
             'start_date' => now()->addWeek()->format('Y-m-d\TH:i'),
+            'submitter_email' => 'bot@example.com',
             'website' => 'http://spam.example', // honeypot rempli = bot
         ])->assertSessionHasErrors('website');
 
@@ -96,6 +99,7 @@ class PublicEventSubmissionTest extends TestCase
             'title' => 'Un évènement',
             'venue_name' => 'Salle Déjà Connue',
             'start_date' => now()->addWeek()->format('Y-m-d\TH:i'),
+            'submitter_email' => 'visiteur@example.com',
             'website' => '',
         ]);
 
@@ -114,6 +118,7 @@ class PublicEventSubmissionTest extends TestCase
             'venue_name' => 'Un lieu',
             'start_date' => now()->addWeek()->format('Y-m-d\TH:i'),
             'end_date' => now()->format('Y-m-d\TH:i'),
+            'submitter_email' => 'visiteur@example.com',
             'website' => '',
         ])->assertSessionHasErrors('end_date');
 

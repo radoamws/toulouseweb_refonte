@@ -6,6 +6,7 @@ use App\Mail\NewsletterMail;
 use App\Models\Category;
 use App\Models\Classified;
 use App\Models\ClassifiedCategory;
+use App\Models\Event;
 use App\Models\Listing;
 use App\Models\News;
 use App\Models\NewsCategory;
@@ -181,6 +182,107 @@ class NewsletterTest extends TestCase
 
         $newsletter = Newsletter::firstOrFail();
         $this->assertSame('classified_published', $newsletter->trigger_type);
+    }
+
+    /**
+     * Demande client (12/11/2026) : "ceux qui ont fait des dépositions
+     * d'annonces, annuaires, événements et actualités et qui ont été
+     * validés à partir de cette refonte, les inclure automatiquement dans
+     * les newsletters" — voir App\Observers\SubmitterSubscriptionObserver.
+     */
+    public function test_publishing_a_listing_subscribes_its_email_to_the_newsletter(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants-sub', 'level' => 0, 'is_active' => true]);
+        $listing = Listing::create([
+            'title' => 'Le Bon Resto Sub', 'tier' => 'free', 'status' => 'pending', 'email' => 'resto@example.com',
+        ]);
+        $listing->categories()->attach($category->id);
+
+        $listing->update(['status' => 'published']);
+
+        $subscriber = NewsletterSubscriber::where('email', 'resto@example.com')->firstOrFail();
+        $this->assertSame('active', $subscriber->status);
+        $this->assertSame('listing_submission', $subscriber->source);
+    }
+
+    public function test_publishing_a_listing_without_an_email_does_not_crash(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants-no-email', 'level' => 0, 'is_active' => true]);
+        $listing = Listing::create(['title' => 'Resto sans email', 'tier' => 'free', 'status' => 'pending']);
+        $listing->categories()->attach($category->id);
+
+        $listing->update(['status' => 'published']);
+
+        $this->assertDatabaseCount('newsletter_subscribers', 0);
+    }
+
+    /** "À partir de cette refonte" exclut explicitement le contenu importé du legacy. */
+    public function test_publishing_a_legacy_imported_listing_does_not_subscribe_its_email(): void
+    {
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants-legacy', 'level' => 0, 'is_active' => true]);
+        $listing = Listing::create([
+            'title' => 'Resto legacy', 'tier' => 'free', 'status' => 'pending',
+            'email' => 'legacy@example.com', 'legacy_id' => 987,
+        ]);
+        $listing->categories()->attach($category->id);
+
+        $listing->update(['status' => 'published']);
+
+        $this->assertDatabaseCount('newsletter_subscribers', 0);
+    }
+
+    public function test_publishing_a_news_article_subscribes_its_submitter_email(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-sub']);
+        $news = News::create([
+            'category_id' => $category->id, 'title' => 'Une actu sub', 'slug' => 'une-actu-sub',
+            'body' => 'Contenu', 'status' => 'pending', 'submitter_email' => 'auteur@example.com',
+        ]);
+
+        $news->update(['status' => 'published', 'published_at' => now()]);
+
+        $subscriber = NewsletterSubscriber::where('email', 'auteur@example.com')->firstOrFail();
+        $this->assertSame('news_submission', $subscriber->source);
+    }
+
+    public function test_publishing_a_classified_subscribes_its_contact_email(): void
+    {
+        $category = ClassifiedCategory::create(['name' => 'Véhicules', 'slug' => 'vehicules-sub', 'is_active' => true]);
+        $classified = Classified::create([
+            'category_id' => $category->id, 'title' => 'Vélo à vendre sub',
+            'description' => 'Bon état', 'status' => 'pending', 'contact_email' => 'vendeur@example.com',
+        ]);
+
+        $classified->update(['status' => 'published']);
+
+        $subscriber = NewsletterSubscriber::where('email', 'vendeur@example.com')->firstOrFail();
+        $this->assertSame('classified_submission', $subscriber->source);
+    }
+
+    public function test_publishing_a_user_submitted_event_subscribes_its_submitter_email(): void
+    {
+        $event = Event::create([
+            'title' => 'Concert sub', 'status' => 'pending', 'source' => 'user_submitted',
+            'start_date' => now()->addWeek(), 'submitter_email' => 'organisateur@example.com',
+        ]);
+
+        $event->update(['status' => 'published']);
+
+        $subscriber = NewsletterSubscriber::where('email', 'organisateur@example.com')->firstOrFail();
+        $this->assertSame('event_submission', $subscriber->source);
+    }
+
+    /** Les événements scrapés n'ont de toute façon aucun email, mais le filtre sur `source` est vérifié explicitement ici. */
+    public function test_publishing_a_scraped_event_does_not_subscribe_anyone(): void
+    {
+        $event = Event::create([
+            'title' => 'Concert scrapé', 'status' => 'pending', 'source' => 'scraped',
+            'start_date' => now()->addWeek(), 'submitter_email' => 'ne-devrait-pas@example.com',
+        ]);
+
+        $event->update(['status' => 'published']);
+
+        $this->assertDatabaseCount('newsletter_subscribers', 0);
     }
 
     public function test_scraping_digest_builder_creates_a_draft_only_when_something_changed(): void
