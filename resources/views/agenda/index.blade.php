@@ -1,4 +1,27 @@
+@php
+    // ItemList schema.org (demande client, 13/11/2026, même raisonnement que
+    // cinema/index.blade.php) — cette même vue sert aussi /agenda/theatre
+    // (voir EventController::renderIndex()), donc le théâtre en bénéficie
+    // automatiquement sans code séparé.
+    $jsonLd = $events->isEmpty() ? null : [
+        '@context' => 'https://schema.org',
+        '@type' => 'ItemList',
+        'itemListElement' => collect($events->items())->values()->map(fn ($event, $i) => array_filter([
+            '@type' => 'ListItem',
+            'position' => $i + 1,
+            'url' => url('/agenda/'.$event->slug),
+            'name' => $event->title,
+        ]))->all(),
+    ];
+@endphp
+
 <x-layouts.app :seo="$seo">
+    @if ($jsonLd)
+        @push('head')
+            <script type="application/ld+json">{!! json_encode($jsonLd) !!}</script>
+        @endpush
+    @endif
+
     <div class="mx-auto max-w-[96rem] px-4 py-10 sm:px-6 lg:px-6">
         <x-ui.breadcrumb :items="$category
             ? [['label' => 'Agenda', 'href' => '/agenda'], ['label' => $category->name]]

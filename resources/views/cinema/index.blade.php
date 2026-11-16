@@ -1,4 +1,32 @@
+@php
+    // ItemList schema.org (demande client, 13/11/2026 : les pages de
+    // catégorie — exactement celles visées par des requêtes comme "cinéma à
+    // Toulouse" — n'avaient jusqu'ici AUCUNE donnée structurée, contrairement
+    // aux fiches détail (salle/film). Liste les salles de cinéma (pas les
+    // films) : c'est l'intention de recherche réelle derrière "cinéma à
+    // Toulouse" (trouver UNE SALLE), confirmée en comparant aux pages
+    // concurrentes qui ressortent sur cette requête (toulouse-tourisme.com,
+    // evous.fr, petitfute.com : toutes des annuaires de salles, pas de films).
+    $allCinemas = $complexeCinemas->concat($banlieueCinemas);
+    $jsonLd = $allCinemas->isEmpty() ? null : [
+        '@context' => 'https://schema.org',
+        '@type' => 'ItemList',
+        'itemListElement' => $allCinemas->values()->map(fn ($cinema, $i) => array_filter([
+            '@type' => 'ListItem',
+            'position' => $i + 1,
+            'url' => url('/cinema/salles/'.$cinema->slug),
+            'name' => $cinema->name,
+        ]))->all(),
+    ];
+@endphp
+
 <x-layouts.app :seo="$seo">
+    @if ($jsonLd)
+        @push('head')
+            <script type="application/ld+json">{!! json_encode($jsonLd) !!}</script>
+        @endpush
+    @endif
+
     <div class="mx-auto max-w-[96rem] px-4 py-10 sm:px-6 lg:px-6">
         <x-ui.breadcrumb :items="[['label' => 'Cinéma']]" />
 

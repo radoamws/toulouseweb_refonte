@@ -1,4 +1,26 @@
+@php
+    // ItemList schema.org (demande client, 13/11/2026, même raisonnement
+    // que cinema/index.blade.php).
+    $allLines = $lines->flatten(1);
+    $jsonLd = $allLines->isEmpty() ? null : [
+        '@context' => 'https://schema.org',
+        '@type' => 'ItemList',
+        'itemListElement' => $allLines->values()->map(fn ($line, $i) => array_filter([
+            '@type' => 'ListItem',
+            'position' => $i + 1,
+            'url' => url('/transports/'.$line->slug),
+            'name' => $line->name,
+        ]))->all(),
+    ];
+@endphp
+
 <x-layouts.app :seo="$seo">
+    @if ($jsonLd)
+        @push('head')
+            <script type="application/ld+json">{!! json_encode($jsonLd) !!}</script>
+        @endpush
+    @endif
+
     <div class="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
         <x-ui.breadcrumb :items="[['label' => 'Transports']]" />
 

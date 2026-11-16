@@ -1,4 +1,25 @@
+@php
+    // ItemList schema.org (demande client, 13/11/2026, même raisonnement
+    // que cinema/index.blade.php).
+    $jsonLd = $news->isEmpty() ? null : [
+        '@context' => 'https://schema.org',
+        '@type' => 'ItemList',
+        'itemListElement' => collect($news->items())->values()->map(fn ($item, $i) => array_filter([
+            '@type' => 'ListItem',
+            'position' => $i + 1,
+            'url' => $item->publicUrl(),
+            'name' => $item->title,
+        ]))->all(),
+    ];
+@endphp
+
 <x-layouts.app :seo="$seo">
+    @if ($jsonLd)
+        @push('head')
+            <script type="application/ld+json">{!! json_encode($jsonLd) !!}</script>
+        @endpush
+    @endif
+
     <div class="mx-auto max-w-[96rem] px-4 py-10 sm:px-6 lg:px-6">
         <x-ui.breadcrumb :items="$category
             ? [['label' => 'Actualités', 'href' => '/actualites'], ['label' => $category->name]]

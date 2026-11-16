@@ -114,6 +114,34 @@ class SeoAuditFixesTest extends TestCase
     }
 
     /**
+     * ⚠️ Bug réel trouvé et corrigé (13/11/2026, audit SEO/GEO) : reproduit
+     * en direct sur /cinema en production. Le titre personnalisé "Cinémas à
+     * Toulouse et Environs | Films, Horaires & Salles - ToulouseWeb" (71
+     * caractères, 1 de plus que la limite) donnait, une fois tronqué par
+     * `Str::limit(..., preserveWords: true)`, "...Salles -…" : le dernier
+     * "mot" avant la coupe était le simple tiret séparateur, qui restait
+     * donc collé juste avant l'ellipse — perdant entièrement le suffixe de
+     * marque "ToulouseWeb" ET terminant sur une ponctuation orpheline,
+     * directement dans le <title> affichable en résultat de recherche.
+     * Concerne 114 des 1294 titres personnalisés en base au moment du
+     * constat, dont la quasi-totalité des pages de catégorie principales
+     * (cinéma, agenda, annuaire...) — voir TECHNICAL_DOCUMENTATION.md §71.
+     */
+    public function test_seo_title_truncation_never_leaves_dangling_punctuation_before_the_ellipsis(): void
+    {
+        $original = 'Cinémas à Toulouse et Environs | Films, Horaires & Salles - ToulouseWeb'; // 71 caractères
+        $page = Page::create(['key' => 'seo-menu-cinema-regression', 'title' => 'Cinéma', 'slug' => 'cinema-menu-regression']);
+        $page->seoMeta()->create(['title' => $original]);
+
+        $title = $page->resolveSeo()['title'];
+
+        $this->assertStringEndsWith('…', $title);
+        $this->assertStringNotContainsString('-…', $title);
+        $this->assertStringNotContainsString('|…', $title);
+        $this->assertStringNotContainsString(' …', $title);
+    }
+
+    /**
      * ⚠️ Bug réel trouvé et corrigé (11/09/2026, audit SEO/GEO) : la
      * troncature s'appliquait INCONDITIONNELLEMENT, y compris à un titre déjà
      * personnalisé et déjà sous la limite recommandée — constaté en direct

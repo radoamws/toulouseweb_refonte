@@ -25,6 +25,7 @@ class LlmsTxtTest extends TestCase
         $response->assertSee('/cinema', false);
         $response->assertSee('/actualites', false);
         $response->assertSee('/annonces', false);
+        $response->assertSee('/transports', false);
         $response->assertSee('sitemap.xml', false);
     }
 

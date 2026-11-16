@@ -45,6 +45,7 @@ class LlmsTxtController
             "- [Cinéma]({$baseUrl}/cinema) : films et horaires de séances des salles toulousaines.",
             "- [Actualités]({$baseUrl}/actualites) : actualité locale.",
             "- [Annonces]({$baseUrl}/annonces) : petites annonces entre particuliers.",
+            "- [Transports]({$baseUrl}/transports) : lignes de bus/métro/tramway/téléphérique et recherche d'itinéraire entre 2 arrêts à Toulouse.",
             '',
             '## Notes pour les agents',
             '',

@@ -14,7 +14,26 @@
                 $isLast = $i === count($ancestors) - 1;
                 $breadcrumbItems[] = $isLast ? ['label' => $ancestor->name] : ['label' => $ancestor->name, 'href' => '/annuaire/'.$ancestor->slug];
             }
+
+            // ItemList schema.org (demande client, 13/11/2026, même
+            // raisonnement que cinema/index.blade.php) — couvre aussi bien
+            // /annuaire que /annuaire/{categorie}.
+            $jsonLd = $listings->isEmpty() ? null : [
+                '@context' => 'https://schema.org',
+                '@type' => 'ItemList',
+                'itemListElement' => collect($listings->items())->values()->map(fn ($listing, $i) => array_filter([
+                    '@type' => 'ListItem',
+                    'position' => $i + 1,
+                    'url' => $listing->publicUrl(),
+                    'name' => $listing->title,
+                ]))->all(),
+            ];
         @endphp
+        @if ($jsonLd)
+            @push('head')
+                <script type="application/ld+json">{!! json_encode($jsonLd) !!}</script>
+            @endpush
+        @endif
         <x-ui.breadcrumb :items="$breadcrumbItems" />
 
         <div class="flex flex-col gap-8 lg:flex-row">

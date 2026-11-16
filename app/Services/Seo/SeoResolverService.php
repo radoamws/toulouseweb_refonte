@@ -51,9 +51,29 @@ class SeoResolverService
         ];
     }
 
+    /**
+     * ⚠️ Bug réel trouvé et corrigé (13/11/2026, audit SEO/GEO — 114 titres
+     * personnalisés sur 1294 dépassent 70 caractères, dont la QUASI-TOTALITÉ
+     * des pages de catégorie principales : "Cinémas à Toulouse et Environs |
+     * Films, Horaires & Salles - ToulouseWeb" ne dépasse 70 que d'1
+     * caractère, mais `Str::limit(..., preserveWords: true)` recule alors au
+     * dernier mot ENTIER avant la coupe — qui tombe ici juste après le tiret
+     * séparateur, produisant "...Salles -…" : le suffixe de marque
+     * "ToulouseWeb" disparaît intégralement et le titre se termine sur une
+     * ponctuation orpheline, dans le <title> ET potentiellement le snippet
+     * affiché par Google. Reproduit en direct sur /cinema. Corrigé en
+     * retirant toute ponctuation de séparation résiduelle (-, |, :, &, ,)
+     * juste avant d'ajouter l'ellipse, quel que soit le motif d'origine.
+     */
     protected function limitIfNeeded(string $text, int $max): string
     {
-        return mb_strlen($text) > $max ? Str::limit($text, $max, '…', preserveWords: true) : $text;
+        if (mb_strlen($text) <= $max) {
+            return $text;
+        }
+
+        $limited = rtrim(Str::limit($text, $max, '', preserveWords: true), " \t\n\r\0\x0B-|:,&");
+
+        return $limited.'…';
     }
 
     protected function generateTitle(Model $model): string
