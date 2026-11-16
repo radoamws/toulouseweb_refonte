@@ -28,7 +28,7 @@
         ['label' => 'Restaurants', 'href' => '/annuaire/restaurants'],
         ['label' => 'Enfants', 'href' => '/annuaire/enfants'],
         ['label' => 'Sports', 'href' => '/annuaire/sports'],
-        ['label' => 'Mariages', 'href' => '/annuaire/mariages'],
+        ['label' => 'Mariages', 'href' => '/annuaire/mariage'],
         ['label' => 'Spectacles', 'href' => '/annuaire/spectacles'],
         ['label' => 'Sorties & Loisirs', 'href' => '/annuaire/sorties'],
     ];
