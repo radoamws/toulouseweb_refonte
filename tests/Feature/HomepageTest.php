@@ -110,6 +110,41 @@ class HomepageTest extends TestCase
     }
 
     /**
+     * ⚠️ Bug réel trouvé et corrigé (20/11/2026, signalé par le client :
+     * "Agenda & sorties doit afficher les agendas avec des dates
+     * supérieures à la date du jour") — confirmé en direct en production :
+     * un spectacle à résidence longue durée commencé il y a plusieurs mois
+     * (`start_date` passé, `end_date` encore à venir — toujours "upcoming"
+     * à raison pour `Event::scopeUpcoming()`, voir /agenda) remontait EN
+     * PREMIER sur cette vignette d'accueil (`orderBy('start_date')` ASC
+     * favorise le spectacle commencé le plus tôt), masquant un événement
+     * réellement à venir juste en-dessous. Voir HomeController::index().
+     */
+    public function test_homepage_agenda_section_excludes_an_already_started_long_running_show(): void
+    {
+        $area = Area::create(['name' => 'Salle de test', 'slug' => 'salle-de-test']);
+
+        // Déjà commencé il y a 3 mois, mais toujours en cours (comme
+        // "Obstinées" en production : start_date 03/08/2026, end_date
+        // 05/12/2026 pour un "aujourd'hui" au 20/11/2026).
+        Event::create([
+            'area_id' => $area->id, 'title' => 'Spectacle en résidence longue durée',
+            'slug' => 'spectacle-residence', 'status' => 'published',
+            'start_date' => now()->subMonths(3), 'end_date' => now()->addMonth(),
+        ]);
+
+        $event = Event::create([
+            'area_id' => $area->id, 'title' => 'Concert la semaine prochaine',
+            'slug' => 'concert-semaine-prochaine', 'status' => 'published',
+            'start_date' => now()->addWeek(),
+        ]);
+
+        $response = $this->get('/')->assertOk();
+        $response->assertSee('Concert la semaine prochaine');
+        $response->assertDontSee('Spectacle en résidence longue durée');
+    }
+
+    /**
      * Icône de catégorie définie dans l'admin (demande client) — voir
      * home.blade.php, section "Catégories populaires". Repli sur l'icône
      * générique par défaut si non renseignée (2e assertion).

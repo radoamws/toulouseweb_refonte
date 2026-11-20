@@ -48,7 +48,29 @@ class HomeController extends Controller
             // MySQL), peu importe son ancienneté réelle — repli sur
             // `created_at` dans ce cas précis.
             'latestNews' => News::query()->published()->orderByRaw('COALESCE(published_at, created_at) DESC')->limit(4)->get(),
-            'upcomingEvents' => Event::query()->published()->upcoming()->with(['area', 'categories'])
+            // ⚠️ Bug réel trouvé et corrigé (20/11/2026, signalé par le
+            // client : "Agenda & sorties" doit afficher des dates
+            // supérieures à aujourd'hui) — confirmé en direct en production :
+            // la section affichait "Obstinées" daté du 03 août 2026 alors
+            // qu'on était le 20 novembre. `Event::scopeUpcoming()` (utilisé
+            // tel quel sur /agenda) filtre correctement sur `end_date`, pas
+            // sur `start_date` — un spectacle à residence longue durée
+            // ("Obstinées", `start_date` = 03/08/2026, `end_date` =
+            // 05/12/2026) y reste donc légitimement "à venir" tant que sa
+            // dernière date n'est pas passée. Problème spécifique à CETTE
+            // vignette d'accueil : `orderBy('start_date')` ASC fait
+            // remonter en premier le spectacle qui a commencé le PLUS TÔT
+            // (donc le plus ancien), avant les événements qui n'ont pas
+            // encore commencé — l'inverse de l'effet "nouveauté" recherché
+            // ici. `where('start_date', '>=', now())` restreint CETTE
+            // requête aux événements pas encore commencés (947 en
+            // production au moment du correctif, largement suffisant) —
+            // volontairement PAS un changement de `scopeUpcoming()` lui-même
+            // (/agenda doit continuer à lister aussi les spectacles en
+            // cours de residence, eux bien "à venir" pour qui n'y est pas
+            // encore allé).
+            'upcomingEvents' => Event::query()->published()->upcoming()->where('start_date', '>=', now())
+                ->with(['area', 'categories'])
                 ->orderBy('start_date')->limit(4)->get(),
             'featuredListings' => Listing::query()->where('status', 'published')->where('tier', 'paid')
                 ->with('categories')->latest()->limit(6)->get(),
