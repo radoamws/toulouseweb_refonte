@@ -47,7 +47,24 @@ class HomeController extends Controller
             // liste (NULL trié comme la plus petite valeur en DESC sur
             // MySQL), peu importe son ancienneté réelle — repli sur
             // `created_at` dans ce cas précis.
-            'latestNews' => News::query()->published()->orderByRaw('COALESCE(published_at, created_at) DESC')->limit(4)->get(),
+            // Demande client (20/11/2026, voir §82) : "les news ne sont pas
+            // à jour" + "prioriser les news publiés manuellement... et
+            // validés" + "n'affichera que les news supérieures à la date
+            // du jour". Une actu déjà publiée n'a jamais de date FUTURE —
+            // confirmé avec le client qu'il s'agit en fait de fraîcheur
+            // (publiée aujourd'hui/récemment), pas d'un filtre "date >
+            // maintenant" qui viderait systématiquement la section.
+            // Fenêtre glissante de 24h, cohérente avec le scraping
+            // quotidien (`scrape:news`, 05h45) : au-delà, la section
+            // resterait vide entre deux passages.
+            'latestNews' => News::query()->published()
+                ->whereRaw('COALESCE(published_at, created_at) >= ?', [now()->subDay()])
+                // `source != 'scraped'` (soumission publique validée OU
+                // saisie admin) toujours avant une actu scrapée, jamais
+                // l'inverse — voir App\Services\Scraping\News\LeJournalToulousainDriver.
+                ->orderByRaw("source = 'scraped' asc")
+                ->orderByRaw('COALESCE(published_at, created_at) DESC')
+                ->limit(4)->get(),
             // ⚠️ Bug réel trouvé et corrigé (20/11/2026, signalé par le
             // client : "Agenda & sorties" doit afficher des dates
             // supérieures à aujourd'hui) — confirmé en direct en production :

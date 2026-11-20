@@ -31,6 +31,10 @@ Schedule::command('scrape:cinema')->dailyAt('05:00')->withoutOverlapping();
 // cron de production fournie par le client), voir TECHNICAL_DOCUMENTATION.md §13.
 Schedule::command('scrape:events')->dailyAt('05:30')->withoutOverlapping();
 
+// Actualités locales (demande client, 20/11/2026) — quotidien, voir
+// TECHNICAL_DOCUMENTATION.md §82.
+Schedule::command('scrape:news')->dailyAt('05:45')->withoutOverlapping();
+
 // Repérage des 404 fréquentes sans redirection (brief §15) — hebdomadaire,
 // laisse le temps aux occurrences ponctuelles/scanners de se distinguer
 // des vrais chemins legacy manquants.

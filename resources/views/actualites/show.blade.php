@@ -71,7 +71,7 @@
 
         {{-- Informations pratiques de l'événement décrit par l'article (demande
         client, 03/09/2026) — chaque ligne n'apparaît que si elle a une valeur. --}}
-        @if ($news->start_date || $news->schedule || $news->address || $news->price || $news->phone || $news->email || $news->website)
+        @if ($news->start_date || $news->schedule || $news->address || $news->price || $news->phone || $news->email || ($news->website && $news->source !== 'scraped'))
             <dl class="mt-6 grid gap-4 rounded-2xl border border-ink-100 bg-white p-6 shadow-sm sm:grid-cols-2">
                 @if ($news->start_date)
                     <div>
@@ -114,7 +114,10 @@
                         <dd><a href="mailto:{{ $news->email }}" class="text-brand-700 hover:underline">{{ $news->email }}</a></dd>
                     </div>
                 @endif
-                @if ($news->website)
+                {{-- Scrapée : le lien vers la source est déjà mis en avant
+                juste après le corps de l'article (voir plus bas), pas la
+                peine de le répéter ici. --}}
+                @if ($news->website && $news->source !== 'scraped')
                     <div>
                         <dt class="text-sm font-medium text-ink-500">Site web</dt>
                         <dd><a href="{{ $news->clean_website }}" target="_blank" rel="noopener" class="text-brand-700 hover:underline" data-track="news:{{ $news->id }}:website_click">Visiter le site</a></dd>
@@ -124,6 +127,22 @@
         @endif
 
         <div class="prose prose-ink mt-6 max-w-none">{!! $news->body !!}</div>
+
+        {{-- Actualité scrapée (demande client, 20/11/2026, voir
+        App\Services\Scraping\News\LeJournalToulousainDriver) : seul un
+        extrait est repris ici (évite le contenu dupliqué et tout risque de
+        droits d'auteur) — l'article complet reste sur le site source,
+        jamais republié ici. --}}
+        @if ($news->source === 'scraped' && $news->website)
+            <div class="mt-6 rounded-2xl border border-brand-100 bg-brand-50 p-6">
+                <p class="text-sm text-ink-600">Cet article est un extrait — la suite est à lire sur le site source.</p>
+                <a href="{{ $news->clean_website }}" target="_blank" rel="noopener"
+                    class="mt-3 inline-flex items-center gap-1 font-semibold text-brand-700 hover:underline"
+                    data-track="news:{{ $news->id }}:read_more_external">
+                    Lire l'article complet →
+                </a>
+            </div>
+        @endif
 
         @if ($news->youtube_embed_url)
             <div class="mt-8">

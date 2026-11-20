@@ -28,11 +28,12 @@ use Illuminate\Database\Eloquent\Model;
  * marqués `status = merged` (jamais envoyés tels quels, jamais supprimés —
  * traçabilité dans l'admin).
  *
- * Événements : seuls ceux `source = 'user_submitted'` génèrent un
- * brouillon (filtré dans `maybeCreateDraft()`, pas via la liste de modèles
- * de `AppServiceProvider`) — les événements scrapés (plusieurs par jour,
- * voir `GOOGLE_INDEXING_MODELS`/`SUBMITTER_SUBSCRIPTION_MODELS` pour la
- * même distinction ailleurs) ne doivent jamais en générer.
+ * Événements ET actualités : seuls ceux `source = 'user_submitted'`
+ * génèrent un brouillon (filtré dans `maybeCreateDraft()`, pas via la liste
+ * de modèles de `AppServiceProvider`) — les événements/actualités scrapés
+ * (plusieurs par jour, voir `GOOGLE_INDEXING_MODELS`/
+ * `SUBMITTER_SUBSCRIPTION_MODELS` pour la même distinction ailleurs) ne
+ * doivent jamais en générer.
  *
  * Se déclenche quand le statut PASSE à "published" — soit par transition
  * (`updated()`, `wasChanged('status')`, ex. pending -> published via
@@ -90,6 +91,20 @@ class NewsletterDraftObserver
         }
 
         if ($model instanceof Event && $model->source !== 'user_submitted') {
+            return;
+        }
+
+        // Actualités scrapées (demande client, 20/11/2026, voir
+        // App\Services\Scraping\News\LeJournalToulousainDriver) — plusieurs
+        // par jour, jamais "déposées" par quelqu'un, ne doivent jamais
+        // générer de brouillon individuel (uniquement
+        // `ScrapingDigestBuilder`, voir ScrapeNews::handle()).
+        // ⚠️ Volontairement `=== 'scraped'` ici, PAS `!== 'user_submitted'`
+        // (contrairement à Event ci-dessus) : une actualité `source =
+        // 'manual'` (saisie admin, valeur par défaut de la colonne, tout le
+        // contenu créé avant l'ajout de ce champ) doit continuer à générer
+        // un brouillon comme avant — seul le scraping est nouveau ici.
+        if ($model instanceof News && $model->source === 'scraped') {
             return;
         }
 

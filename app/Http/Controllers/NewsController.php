@@ -197,6 +197,10 @@ class NewsController extends Controller
             ...collect($validated)->except(['url_verification', 'image', 'recaptcha_token'])->all(),
             'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
             'editor_id' => $editor->id,
+            // Distingue des actus scrapées (demande client, 20/11/2026, voir
+            // App\Services\Scraping\News\LeJournalToulousainDriver) —
+            // priorisées sur la home.
+            'source' => 'user_submitted',
         ]);
 
         if ($request->hasFile('image')) {

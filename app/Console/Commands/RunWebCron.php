@@ -46,6 +46,9 @@ class RunWebCron extends Command
         $this->call('sitemap:generate');
         $this->call('scrape:cinema');
         $this->call('scrape:events');
+        // Actualités locales (demande client, 20/11/2026 — voir
+        // App\Services\Scraping\News\LeJournalToulousainDriver).
+        $this->call('scrape:news');
         // Doublons agenda (demande client, 19-23/09/2026, voir
         // TECHNICAL_DOCUMENTATION.md §47/§55) — trouvé le 23/09/2026 : ce
         // n'est PAS un artefact ponctuel de migration, OpenAgenda republie

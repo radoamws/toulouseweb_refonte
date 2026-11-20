@@ -68,6 +68,23 @@ class NewsResource extends Resource
                     ->required()
                     ->default('draft'),
                 Forms\Components\DateTimePicker::make('published_at')->label('Date de publication'),
+                // Priorisation sur la home (demande client, 20/11/2026, voir
+                // App\Services\Scraping\News\LeJournalToulousainDriver et
+                // HomeController) — même convention qu'EventResource.
+                Forms\Components\Select::make('source')
+                    ->options([
+                        'manual' => 'Saisie manuelle',
+                        'scraped' => 'Import automatique',
+                        'user_submitted' => 'Proposée par un visiteur',
+                    ])
+                    ->required()
+                    ->default('manual'),
+                Forms\Components\TextInput::make('external_ref')
+                    ->label('Référence externe (dédup scraper)')
+                    ->helperText("Identifiant unique côté site source, utilisé par le scraper d'actualités (scrape:news) pour reconnaître un article déjà importé et le mettre à jour plutôt que le dupliquer. Sans objet pour une actualité saisie à la main — laisser vide.")
+                    ->maxLength(255)
+                    ->default(null)
+                    ->disabled(fn (string $operation) => $operation === 'edit'),
 
                 Forms\Components\Section::make("Informations de l'événement")
                     ->description("Si l'article décrit un événement (salon, brocante, animation...) — laissez vide sinon. L'article ne s'affiche plus sur le site public une fois la date de fin dépassée, quel que soit son statut.")
@@ -134,6 +151,17 @@ class NewsResource extends Resource
                 Tables\Columns\TextColumn::make('title')->label('Titre')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('category.name')->label('Catégorie')->badge()->sortable(),
                 Tables\Columns\TextColumn::make('author.name')->label('Auteur')->sortable(),
+                Tables\Columns\TextColumn::make('source')
+                    ->label('Origine')
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'manual' => 'Saisie manuelle',
+                        'scraped' => 'Import automatique',
+                        'user_submitted' => 'Proposée par un visiteur',
+                        default => $state,
+                    })
+                    ->badge()
+                    ->sortable()
+                    ->toggleable(),
                 // Modifiable directement dans la liste (demande client,
                 // 16/09/2026, "pour toutes les entités confondues" — voir
                 // aussi ListingResource/ClassifiedResource/EventResource).

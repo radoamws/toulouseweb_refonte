@@ -227,7 +227,10 @@ class HomepageTest extends TestCase
     public function test_homepage_news_is_sorted_by_most_recent_publication_first(): void
     {
         $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-home-tri']);
-        News::create(['category_id' => $category->id, 'title' => 'Actu ancienne', 'slug' => 'actu-ancienne', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subDays(10)]);
+        // Les deux restent dans la fenêtre de fraîcheur de 24h (voir §82) —
+        // seul l'ORDRE relatif est testé ici, pas le filtre de fraîcheur
+        // lui-même (son propre test plus bas).
+        News::create(['category_id' => $category->id, 'title' => 'Actu ancienne', 'slug' => 'actu-ancienne', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subHours(20)]);
         News::create(['category_id' => $category->id, 'title' => 'Actu recente', 'slug' => 'actu-recente', 'body' => 'x', 'status' => 'published', 'published_at' => now()]);
 
         $this->get('/')->assertOk()->assertSeeInOrder(['Actu recente', 'Actu ancienne']);
@@ -242,12 +245,46 @@ class HomepageTest extends TestCase
     public function test_homepage_news_without_published_at_does_not_jump_to_the_top(): void
     {
         $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-home-tri2']);
-        // created_at nettement plus ancien, sans published_at.
+        // created_at plus ancien que l'autre actu, sans published_at — mais
+        // reste dans la fenêtre de fraîcheur de 24h (voir §82), sinon le
+        // filtre de fraîcheur l'exclurait avant même de tester l'ordre.
         $withoutPublishedAt = News::create(['category_id' => $category->id, 'title' => 'Sans date de publication', 'slug' => 'sans-date-publication', 'body' => 'x', 'status' => 'published']);
-        $withoutPublishedAt->forceFill(['created_at' => now()->subDays(30)])->save();
+        $withoutPublishedAt->forceFill(['created_at' => now()->subHours(20)])->save();
         News::create(['category_id' => $category->id, 'title' => 'Actu recente', 'slug' => 'actu-recente-2', 'body' => 'x', 'status' => 'published', 'published_at' => now()]);
 
         $this->get('/')->assertOk()->assertSeeInOrder(['Actu recente', 'Sans date de publication']);
+    }
+
+    /**
+     * ⚠️ Demande client (20/11/2026, voir §82) : "les news ne sont pas à
+     * jour" — la vignette d'accueil ne doit plus afficher une actu de
+     * plusieurs jours, même publiée (rejoint le même esprit que le
+     * correctif §81 sur l'agenda).
+     */
+    public function test_homepage_excludes_news_older_than_24_hours(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-fraicheur']);
+        News::create(['category_id' => $category->id, 'title' => 'Actu de la semaine dernière', 'slug' => 'actu-semaine-derniere', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subDays(5)]);
+        News::create(['category_id' => $category->id, 'title' => 'Actu fraiche', 'slug' => 'actu-fraiche', 'body' => 'x', 'status' => 'published', 'published_at' => now()]);
+
+        $response = $this->get('/')->assertOk();
+        $response->assertSee('Actu fraiche');
+        $response->assertDontSee('Actu de la semaine dernière');
+    }
+
+    /**
+     * Demande client (20/11/2026, voir §82) : "prioriser les news publiés
+     * manuellement... et validés" — une soumission publique validée
+     * (`source = 'user_submitted'`) passe avant une actu scrapée
+     * (`source = 'scraped'`), même si cette dernière est plus récente.
+     */
+    public function test_homepage_prioritizes_user_submitted_news_over_scraped_ones(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-priorite']);
+        News::create(['category_id' => $category->id, 'title' => 'Actu scrapée plus récente', 'slug' => 'actu-scrapee', 'body' => 'x', 'status' => 'published', 'source' => 'scraped', 'published_at' => now()]);
+        News::create(['category_id' => $category->id, 'title' => 'Actu validée manuellement', 'slug' => 'actu-validee', 'body' => 'x', 'status' => 'published', 'source' => 'user_submitted', 'published_at' => now()->subHours(1)]);
+
+        $this->get('/')->assertOk()->assertSeeInOrder(['Actu validée manuellement', 'Actu scrapée plus récente']);
     }
 
     public function test_homepage_news_card_shows_event_date_range_when_set(): void

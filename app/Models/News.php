@@ -37,7 +37,7 @@ class News extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUrl
 
     protected $fillable = [
         'category_id', 'author_id', 'editor_id', 'title', 'slug', 'excerpt', 'body', 'image',
-        'status', 'published_at', 'legacy_id', 'submitter_email', 'edit_token', 'pending_changes',
+        'status', 'published_at', 'legacy_id', 'source', 'external_ref', 'submitter_email', 'edit_token', 'pending_changes',
         'start_date', 'end_date', 'schedule', 'address', 'price', 'phone', 'email', 'website', 'youtube_url',
     ];
 
