@@ -10,6 +10,8 @@
         <form method="POST" action="{{ route('contact.store') }}" data-recaptcha-action="contact" class="mt-8 space-y-5">
             @csrf
 
+            <x-ui.form-errors />
+
             <div class="absolute -left-[9999px]" aria-hidden="true">
                 <label for="website">Laisser vide</label>
                 <input type="text" name="website" id="website" tabindex="-1" autocomplete="off">

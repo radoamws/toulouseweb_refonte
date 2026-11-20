@@ -10,6 +10,8 @@
         <form method="POST" action="{{ route('annonces.store') }}" enctype="multipart/form-data" data-recaptcha-action="annonce" class="mt-8 space-y-5">
             @csrf
 
+            <x-ui.form-errors />
+
             {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}
             <div class="absolute -left-[9999px]" aria-hidden="true">
                 <label for="website">Laisser vide</label>
@@ -60,7 +62,7 @@
             <div class="grid gap-5 sm:grid-cols-2">
                 <div>
                     <label for="contact_email" class="block text-sm font-medium text-ink-700">Email de contact *</label>
-                    <input type="email" name="contact_email" id="contact_email" required value="{{ old('contact_email') }}"
+                    <input type="email" name="contact_email" id="contact_email" required value="{{ old('contact_email', auth('editor')->user()?->email) }}"
                         class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
                     <x-ui.field-error name="contact_email" />
                 </div>

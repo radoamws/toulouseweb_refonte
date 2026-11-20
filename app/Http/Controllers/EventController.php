@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Area;
+use App\Models\Editor;
 use App\Models\Event;
 use App\Models\EventCategory;
 use App\Models\Page;
@@ -13,6 +14,7 @@ use App\Support\AdminNotifier;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Throwable;
@@ -277,6 +279,10 @@ class EventController extends Controller
             ['address' => $validated['venue_address'] ?? null]
         );
 
+        // Rattachement automatique (demande client, 17/11/2026) — voir
+        // ClassifiedController::store().
+        $editor = Auth::guard('editor')->user() ?? Editor::findOrInviteByEmail($validated['submitter_email']);
+
         $event = Event::create([
             'area_id' => $area->id,
             'title' => $validated['title'],
@@ -288,6 +294,7 @@ class EventController extends Controller
             'end_date' => $validated['end_date'] ?? null,
             'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
             'source' => 'user_submitted',
+            'editor_id' => $editor->id,
         ]);
         $event->categories()->attach($validated['event_category_id']);
 
@@ -316,8 +323,128 @@ class EventController extends Controller
             "Valider ou refuser cet événement",
         );
 
+        // Comptes éditeur (demande client, 17/11/2026) — voir
+        // ClassifiedController::store() et
+        // Controller::notifySubmitterToManageTheirAccount().
+        if (! Auth::guard('editor')->check()) {
+            $this->notifySubmitterToManageTheirAccount($editor, $event->title, 'Votre événement a bien été reçu');
+        }
+
         return redirect()
             ->route('agenda.index')
             ->with('status', 'Votre événement a bien été reçu et sera publié après validation par notre équipe.');
+    }
+
+    /**
+     * Espace client (demande client, 16/11/2026, voir
+     * TECHNICAL_DOCUMENTATION.md) — même mécanisme que
+     * ClassifiedController::editSpace()/updateEditSpace() (étape 1).
+     */
+    public function editSpace(string $token): View
+    {
+        $event = Event::where('edit_token', $token)->firstOrFail();
+
+        return view('agenda.edit-space', ['event' => $event, 'seo' => []]);
+    }
+
+    public function updateEditSpace(Request $request, string $token): RedirectResponse
+    {
+        $event = Event::where('edit_token', $token)->firstOrFail();
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'price' => ['nullable', 'string', 'max:255'],
+            'booking_url' => ['nullable', 'url', 'max:255'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'website' => ['size:0'],
+        ]);
+
+        // N'écrit JAMAIS directement sur les colonnes publiées — voir
+        // docblock de la migration d'espace client et Event::applyPendingChanges().
+        $event->update([
+            'pending_changes' => collect($validated)->except('website')->all(),
+        ]);
+
+        AdminNotifier::send(
+            'Modification d\'événement en attente de validation',
+            ['Titre actuel' => $event->title, 'Déposant' => $event->submitter_email ?? ''],
+            route('filament.admin.resources.events.edit', $event),
+            'Voir la modification proposée',
+        );
+
+        return redirect()
+            ->route('agenda.editSpace', $token)
+            ->with('status', 'Votre modification a bien été enregistrée et sera visible après validation par notre équipe.');
+    }
+
+    /**
+     * Espace éditeur authentifié ("Grande modification", demande client
+     * 17/11/2026, point 4) — mêmes principes que
+     * ClassifiedController::editOwned()/updateOwned() (voir son docblock) :
+     * ownership par `editor_id`, champs complets (comme `agenda/create.blade.php`).
+     *
+     * `event_category_id` (relation many-to-many `categories()`, pas une
+     * colonne) : gardé sous la clé spéciale `_pending_category_id` dans
+     * `pending_changes`, synchronisé seulement à l'application par l'admin
+     * (voir Event::applyPendingChanges()) — `venue_name`/`venue_address`
+     * n'ont pas ce problème, ce sont déjà de vraies colonnes sur `events`.
+     */
+    public function editOwned(Event $event): View
+    {
+        abort_unless($event->editor_id === Auth::guard('editor')->id(), 403);
+
+        $categories = EventCategory::orderBy('order')->orderBy('name')->get();
+
+        return view('editeur.agenda.modifier', ['event' => $event, 'categories' => $categories, 'seo' => []]);
+    }
+
+    public function updateOwned(Request $request, Event $event): RedirectResponse
+    {
+        abort_unless($event->editor_id === Auth::guard('editor')->id(), 403);
+
+        $validated = $request->validate([
+            'event_category_id' => ['required', 'exists:event_categories,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'venue_name' => ['required', 'string', 'max:255'],
+            'venue_address' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'price' => ['nullable', 'string', 'max:255'],
+            'booking_url' => ['nullable', 'url', 'max:255'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'image' => ['nullable', 'file', 'image', 'mimes:jpeg,png,webp', 'max:4096', new GenuineImage()],
+            'website' => ['size:0'],
+        ]);
+
+        $pendingChanges = collect($validated)->except(['website', 'image', 'event_category_id'])->all();
+        $pendingChanges['_pending_category_id'] = $validated['event_category_id'];
+
+        if ($request->hasFile('image')) {
+            try {
+                // `image` est une colonne texte simple sur `events` (pas une
+                // collection média comme Classified/Listing) — le chemin
+                // sanitisé peut être gardé tel quel dans `pending_changes`,
+                // appliqué par un `update()` générique, voir
+                // Event::applyPendingChanges().
+                $pendingChanges['image'] = ImageSanitizer::sanitizeAndStore($request->file('image'), 'events');
+            } catch (Throwable $e) {
+                Log::warning('Image en attente (espace éditeur) rejetée après validation', ['exception' => $e->getMessage()]);
+            }
+        }
+
+        $event->update(['pending_changes' => $pendingChanges]);
+
+        AdminNotifier::send(
+            'Modification d\'événement en attente de validation',
+            ['Titre actuel' => $event->title, 'Déposant' => $event->submitter_email ?? ''],
+            route('filament.admin.resources.events.edit', $event),
+            'Voir la modification proposée',
+        );
+
+        return redirect()
+            ->route('editeur.mes-publications')
+            ->with('status', 'Votre modification a bien été enregistrée et sera visible après validation par notre équipe.');
     }
 }

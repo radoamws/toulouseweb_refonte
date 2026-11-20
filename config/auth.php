@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Editor;
 use App\Models\User;
 
 return [
@@ -42,6 +43,15 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Comptes publics "éditeur" (demande client, 17/11/2026) —
+        // volontairement un guard/provider séparés de `web`/`users`, voir
+        // le docblock de la migration `create_editors_table` pour la
+        // raison (isolation complète de l'admin Filament).
+        'editor' => [
+            'driver' => 'session',
+            'provider' => 'editors',
+        ],
     ],
 
     /*
@@ -71,6 +81,11 @@ return [
         //     'driver' => 'database',
         //     'table' => 'users',
         // ],
+
+        'editors' => [
+            'driver' => 'eloquent',
+            'model' => Editor::class,
+        ],
     ],
 
     /*
@@ -96,6 +111,13 @@ return [
         'users' => [
             'provider' => 'users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+
+        'editors' => [
+            'provider' => 'editors',
+            'table' => 'editor_password_reset_tokens',
             'expire' => 60,
             'throttle' => 60,
         ],

@@ -166,6 +166,8 @@
             <form method="POST" action="{{ route('cinema.movie.comment', $movie->slug) }}" data-recaptcha-action="movie_comment" class="mt-4 space-y-4">
                 @csrf
 
+                <x-ui.form-errors />
+
                 {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}
                 <div class="absolute -left-[9999px]" aria-hidden="true">
                     <label for="website">Laisser vide</label>

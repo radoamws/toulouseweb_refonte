@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\Editor;
 use App\Models\Listing;
 use App\Models\Page;
 use App\Rules\GenuineImage;
@@ -10,6 +11,7 @@ use App\Rules\Recaptcha;
 use App\Services\Uploads\ImageSanitizer;
 use App\Support\AdminNotifier;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Throwable;
@@ -178,9 +180,23 @@ class ListingController extends Controller
             'recaptcha_token' => Recaptcha::rules('annuaire'),
         ]);
 
+        // Rattachement automatique (demande client, 17/11/2026) — voir
+        // ClassifiedController::store(). `email` restant facultatif ici
+        // (contrairement aux 3 autres entités), pas de compte à
+        // trouver/créer si le déposant ne l'a pas renseigné.
+        $editor = Auth::guard('editor')->user()
+            ?? (! empty($validated['email']) ? Editor::findOrInviteByEmail($validated['email']) : null);
+
         $listing = Listing::create([
             ...collect($validated)->except(['category_id', 'logo', 'url_verification', 'recaptcha_token'])->all(),
             'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
+            // Espace client (demande client, 16/11/2026 — voir
+            // TECHNICAL_DOCUMENTATION.md, étape 3) : distinct de `email`
+            // (champ métier affiché publiquement, modifiable ensuite par le
+            // déposant) — nullable, un dépôt sans email n'aura simplement
+            // pas d'espace client (voir Listing::booted()).
+            'submitter_email' => $validated['email'] ?? null,
+            'editor_id' => $editor?->id,
         ]);
         $listing->categories()->attach($validated['category_id']);
 
@@ -212,9 +228,140 @@ class ListingController extends Controller
             'Valider ou refuser cette fiche',
         );
 
+        // Comptes éditeur (demande client, 17/11/2026) — voir
+        // ClassifiedController::store() et
+        // Controller::notifySubmitterToManageTheirAccount(). Rien à
+        // envoyer sans email (voir `$editor` ci-dessus) ni si déjà connecté.
+        if ($editor && ! Auth::guard('editor')->check()) {
+            $this->notifySubmitterToManageTheirAccount($editor, $listing->title, 'Votre fiche annuaire a bien été reçue');
+        }
+
         return redirect()
             ->route('annuaire.index')
             ->with('status', 'Votre fiche a bien été reçue et sera publiée après validation par notre équipe.');
+    }
+
+    /**
+     * Espace client (demande client, 16/11/2026, voir
+     * TECHNICAL_DOCUMENTATION.md) — même mécanisme que
+     * ClassifiedController::editSpace()/updateEditSpace() (étape 1). Seules
+     * les fiches créées depuis le dépôt public ont un `edit_token` (voir
+     * Listing::booted()) — les fiches historiques migrées du legacy
+     * n'en auront jamais, volontairement (pas d'email de déposant fiable).
+     */
+    public function editSpace(string $token): View
+    {
+        $listing = Listing::where('edit_token', $token)->firstOrFail();
+
+        return view('annuaire.edit-space', ['listing' => $listing, 'seo' => []]);
+    }
+
+    public function updateEditSpace(Request $request, string $token): \Illuminate\Http\RedirectResponse
+    {
+        $listing = Listing::where('edit_token', $token)->firstOrFail();
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'postal_code' => ['nullable', 'string', 'max:10'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'short_description' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'website' => ['nullable', 'url', 'max:255'],
+            'reservation_url' => ['nullable', 'url', 'max:255'],
+            'url_verification' => ['size:0'],
+        ]);
+
+        // N'écrit JAMAIS directement sur les colonnes publiées — voir
+        // docblock de la migration d'espace client et Listing::applyPendingChanges().
+        $listing->update([
+            'pending_changes' => collect($validated)->except('url_verification')->all(),
+        ]);
+
+        AdminNotifier::send(
+            'Modification de fiche annuaire en attente de validation',
+            ['Titre actuel' => $listing->title, 'Déposant' => $listing->submitter_email ?? ''],
+            route('filament.admin.resources.listings.edit', $listing),
+            'Voir la modification proposée',
+        );
+
+        return redirect()
+            ->route('annuaire.editSpace', $token)
+            ->with('status', 'Votre modification a bien été enregistrée et sera visible après validation par notre équipe.');
+    }
+
+    /**
+     * Espace éditeur authentifié ("Grande modification", demande client
+     * 17/11/2026, point 4, puis précisé le même jour : *"tous les champs et
+     * informations saisies précédemment. Sauf le mail"*) — mêmes principes
+     * que ClassifiedController::editOwned()/updateOwned(). `tier`
+     * (gratuite/payante) EST modifiable ici (revenu sur la limite initiale
+     * "implication de facturation hors scope" : toute modification passe de
+     * toute façon par la modération admin avant d'être appliquée, voir
+     * Listing::applyPendingChanges() — même garde-fou qu'un changement de
+     * catégorie ou de logo). Seul `email` est volontairement ABSENT :
+     * identité du compte, jamais modifiable depuis un formulaire de contenu.
+     *
+     * `category_id` (relation many-to-many `categories()`) et `logo`
+     * (collection média `InteractsWithMedia`, pas une colonne) suivent le
+     * même principe de clé spéciale que
+     * EventController::updateOwned()/ClassifiedController::updateOwned() —
+     * voir Listing::applyPendingChanges().
+     */
+    public function editOwned(Listing $listing): View
+    {
+        abort_unless($listing->editor_id === Auth::guard('editor')->id(), 403);
+
+        $categories = Category::where('is_active', true)->orderBy('level')->orderBy('order')->orderBy('name')->get();
+
+        return view('editeur.annuaire.modifier', ['listing' => $listing, 'categories' => $categories, 'seo' => []]);
+    }
+
+    public function updateOwned(Request $request, Listing $listing): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless($listing->editor_id === Auth::guard('editor')->id(), 403);
+
+        $validated = $request->validate([
+            'category_id' => ['required', 'exists:categories,id'],
+            'tier' => ['required', 'in:free,paid'],
+            'title' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'postal_code' => ['nullable', 'string', 'max:10'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'short_description' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'website' => ['nullable', 'url', 'max:255'],
+            'reservation_url' => ['nullable', 'url', 'max:255'],
+            'logo' => ['nullable', 'file', 'image', 'mimes:jpeg,png,webp', 'max:4096', new GenuineImage()],
+            'url_verification' => ['size:0'],
+        ]);
+
+        $pendingChanges = collect($validated)->except(['url_verification', 'logo', 'category_id'])->all();
+        $pendingChanges['_pending_category_id'] = $validated['category_id'];
+
+        if ($request->hasFile('logo')) {
+            try {
+                $pendingChanges['_pending_logo_path'] = ImageSanitizer::sanitizeToTempFile($request->file('logo'));
+            } catch (Throwable $e) {
+                Log::warning('Logo en attente (espace éditeur) rejeté après validation', ['exception' => $e->getMessage()]);
+            }
+        }
+
+        $listing->update(['pending_changes' => $pendingChanges]);
+
+        AdminNotifier::send(
+            'Modification de fiche annuaire en attente de validation',
+            ['Titre actuel' => $listing->title, 'Déposant' => $listing->submitter_email ?? ''],
+            route('filament.admin.resources.listings.edit', $listing),
+            'Voir la modification proposée',
+        );
+
+        return redirect()
+            ->route('editeur.mes-publications')
+            ->with('status', 'Votre modification a bien été enregistrée et sera visible après validation par notre équipe.');
     }
 
     /** Inclut la catégorie elle-même + tous ses descendants (niveaux 1 et 2). */

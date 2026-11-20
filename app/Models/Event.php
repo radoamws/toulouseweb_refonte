@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use Spatie\Sluggable\HasSlug;
 use Spatie\Sluggable\SlugOptions;
 
@@ -23,15 +25,52 @@ class Event extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUr
 
     protected $fillable = [
         'area_id', 'venue_name', 'venue_address', 'title', 'slug', 'subtitle', 'description', 'image', 'price',
-        'start_date', 'end_date', 'schedule', 'booking_url', 'submitter_email', 'status', 'source',
-        'external_ref', 'legacy_id',
+        'start_date', 'end_date', 'schedule', 'booking_url', 'submitter_email', 'edit_token', 'pending_changes',
+        'editor_id', 'status', 'source', 'external_ref', 'legacy_id',
     ];
 
     protected $casts = [
         'schedule' => 'array',
         'start_date' => 'datetime',
         'end_date' => 'datetime',
+        'pending_changes' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $event) {
+            // Espace client (voir TECHNICAL_DOCUMENTATION.md) — uniquement
+            // pour les événements proposés par le public, seuls à disposer
+            // d'un submitter_email fiable (voir docblock de la migration).
+            if (! $event->edit_token && $event->submitter_email) {
+                $event->edit_token = Str::random(48);
+            }
+        });
+    }
+
+    /**
+     * Espace client : applique une modification en attente et l'efface,
+     * sans jamais toucher au statut de publication.
+     *
+     * `_pending_category_id` (espace éditeur, "Grande modification" du
+     * 17/11/2026) : `categories()` est une relation many-to-many, pas une
+     * colonne — retirée avant le `update()` générique, synchronisée à part.
+     */
+    public function applyPendingChanges(): void
+    {
+        if (! $this->pending_changes) {
+            return;
+        }
+
+        $changes = $this->pending_changes;
+        $categoryId = Arr::pull($changes, '_pending_category_id');
+
+        $this->update([...$changes, 'pending_changes' => null]);
+
+        if ($categoryId) {
+            $this->categories()->sync([$categoryId]);
+        }
+    }
 
     public function getSlugOptions(): SlugOptions
     {
@@ -120,6 +159,11 @@ class Event extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUr
     public function area(): BelongsTo
     {
         return $this->belongsTo(Area::class);
+    }
+
+    public function editor(): BelongsTo
+    {
+        return $this->belongsTo(Editor::class);
     }
 
     public function categories(): BelongsToMany

@@ -10,6 +10,8 @@
         <form method="POST" action="{{ route('agenda.store') }}" enctype="multipart/form-data" data-recaptcha-action="agenda" class="mt-8 space-y-5">
             @csrf
 
+            <x-ui.form-errors />
+
             {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}
             <div class="absolute -left-[9999px]" aria-hidden="true">
                 <label for="website">Laisser vide</label>
@@ -97,7 +99,7 @@
 
             <div>
                 <label for="submitter_email" class="block text-sm font-medium text-ink-700">Votre email *</label>
-                <input type="email" name="submitter_email" id="submitter_email" required value="{{ old('submitter_email') }}"
+                <input type="email" name="submitter_email" id="submitter_email" required value="{{ old('submitter_email', auth('editor')->user()?->email) }}"
                     class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
                 <p class="mt-1 text-xs text-ink-500">Non publié — sert uniquement à notre équipe pour vous recontacter si besoin.</p>
                 <x-ui.field-error name="submitter_email" />

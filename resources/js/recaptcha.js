@@ -54,10 +54,26 @@ document.addEventListener('submit', (event) => {
 
     event.preventDefault();
 
-    loadScript(key)
-        .then(() => window.grecaptcha.execute(key, { action }))
+    // Filet de sécurité (17/11/2026, bug réel trouvé en investiguant un
+    // rapport "je valide le formulaire, rien ne se passe" sur /mon-compte) :
+    // si `grecaptcha.execute()` ne résout NI ne rejette dans un délai
+    // raisonnable (script Google qui charge mais ne répond jamais,
+    // comportement observé en local), la Promise ci-dessous restait
+    // indéfiniment en attente — `.catch()` seul ne couvre que l'ÉCHEC
+    // explicite, pas l'absence de réponse. `Promise.race` avec un délai
+    // garantit que le formulaire part toujours, avec ou sans jeton (le
+    // serveur reste fail-open sans jeton si reCAPTCHA est injoignable, voir
+    // App\Rules\Recaptcha) — jamais bloquer un vrai visiteur indéfiniment.
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
+
+    Promise.race([
+        loadScript(key).then(() => window.grecaptcha.execute(key, { action })),
+        timeout,
+    ])
         .then((token) => {
-            setToken(form, token);
+            if (token) {
+                setToken(form, token);
+            }
             form.dataset.recaptchaVerified = 'true';
             form.submit();
         })

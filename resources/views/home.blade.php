@@ -185,6 +185,9 @@
                     </button>
                 </form>
                 <x-ui.field-error name="email" />
+                <div class="mx-auto mt-3 max-w-md text-left">
+                    <x-ui.form-errors />
+                </div>
                 <p class="mt-3 text-xs text-ink-400">Désinscription possible à tout moment en un clic.</p>
             </div>
         </section>

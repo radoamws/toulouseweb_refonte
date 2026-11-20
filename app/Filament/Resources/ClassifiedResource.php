@@ -74,6 +74,17 @@ class ClassifiedResource extends Resource
                     ->label('Motif de refus')
                     ->maxLength(255)
                     ->visible(fn (Forms\Get $get) => $get('status') === 'rejected'),
+                // Espace client (demande client, 16/11/2026) : lecture seule
+                // ici (l'action "Voir / appliquer la modification" de la
+                // table est le seul moyen de la valider, voir
+                // Classified::applyPendingChanges()) — évite qu'un
+                // enregistrement depuis ce formulaire écrase silencieusement
+                // la modification en attente sans l'appliquer.
+                Forms\Components\KeyValue::make('pending_changes')
+                    ->label('Modification du déposant en attente de validation')
+                    ->disabled()
+                    ->visible(fn (?Classified $record) => $record && ! empty($record->pending_changes))
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -101,6 +112,19 @@ class ClassifiedResource extends Resource
                     ->afterStateUpdated(fn () => Notification::make()->title('Statut mis à jour')->success()->send()),
                 Tables\Columns\IconColumn::make('is_featured')->label('Mise en avant')->boolean()->sortable(),
                 Tables\Columns\TextColumn::make('created_at')->label('Déposée le')->dateTime('d/m/Y H:i')->sortable(),
+                // Espace client (demande client, 16/11/2026) : une
+                // modification proposée par le déposant n'écrase jamais la
+                // fiche publiée directement — ce badge signale qu'une
+                // modification attend une relecture (voir
+                // Classified::applyPendingChanges()).
+                Tables\Columns\IconColumn::make('pending_changes')
+                    ->label('Modif. en attente')
+                    ->getStateUsing(fn (Classified $record) => ! empty($record->pending_changes))
+                    ->boolean()
+                    ->trueIcon('heroicon-o-pencil-square')
+                    ->trueColor('warning')
+                    ->falseIcon(null)
+                    ->sortable(false),
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
@@ -112,6 +136,23 @@ class ClassifiedResource extends Resource
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
+                // Espace client (demande client, 16/11/2026) : applique la
+                // modification proposée par le déposant sur la fiche
+                // publiée — voir Classified::applyPendingChanges() et le
+                // docblock de la migration d'espace client.
+                Tables\Actions\Action::make('applyPendingChanges')
+                    ->label('Voir / appliquer la modification')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('warning')
+                    ->visible(fn (Classified $record) => ! empty($record->pending_changes))
+                    ->requiresConfirmation()
+                    ->modalDescription(fn (Classified $record) => collect($record->pending_changes)
+                        ->map(fn ($value, $key) => "{$key} : {$value}")
+                        ->implode("\n"))
+                    ->action(function (Classified $record) {
+                        $record->applyPendingChanges();
+                        Notification::make()->title('Modification appliquée')->success()->send();
+                    }),
                 Tables\Actions\Action::make('approve')
                     ->label('Valider')
                     ->icon('heroicon-o-check-circle')

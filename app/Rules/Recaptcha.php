@@ -51,17 +51,31 @@ class Recaptcha implements ValidationRule
 {
     public function __construct(private readonly string $action) {}
 
-    /** @return array<int, string|self> */
+    /**
+     * @return array<int, string|self>
+     *
+     * Ignoré en local (demande client, 17/11/2026, suite au bug "rien ne se
+     * passe" du §78 : même une fois l'erreur rendue visible, reCAPTCHA reste
+     * une friction de test inutile en dev — les vraies clés de prod sont
+     * renseignées même en local dans ce projet, voir .env) : jamais
+     * `required`, et `validate()` ci-dessous ne vérifie rien non plus.
+     * Sans effet en production (`APP_ENV=production`), où la protection
+     * reste entière.
+     */
     public static function rules(string $action): array
     {
         return array_values(array_filter([
-            config('services.recaptcha.secret_key') ? 'required' : null,
+            (config('services.recaptcha.secret_key') && ! app()->isLocal()) ? 'required' : null,
             new self($action),
         ]));
     }
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
+        if (app()->isLocal()) {
+            return;
+        }
+
         $secretKey = config('services.recaptcha.secret_key');
         if (! $secretKey) {
             return;

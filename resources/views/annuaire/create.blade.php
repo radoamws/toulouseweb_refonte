@@ -12,6 +12,8 @@
             x-data="{ tier: '{{ old('tier', 'free') }}' }">
             @csrf
 
+            <x-ui.form-errors />
+
             {{-- Honeypot anti-spam : invisible pour un humain, un bot le remplit souvent --}}
             <div class="absolute -left-[9999px]" aria-hidden="true">
                 <label for="url_verification">Laisser vide</label>
@@ -90,7 +92,7 @@
                 </div>
                 <div>
                     <label for="email" class="block text-sm font-medium text-ink-700">Email</label>
-                    <input type="email" name="email" id="email" value="{{ old('email') }}"
+                    <input type="email" name="email" id="email" value="{{ old('email', auth('editor')->user()?->email) }}"
                         class="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
                     <x-ui.field-error name="email" />
                 </div>

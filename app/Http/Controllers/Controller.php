@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Editor;
 use App\Models\MissedRedirect;
 use App\Models\Redirect;
 use App\Services\Stats\PageViewService;
+use App\Support\SubmitterNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -51,5 +53,34 @@ abstract class Controller
         $redirect->increment('hits_count');
 
         return redirect($redirect->to_path, $redirect->status_code);
+    }
+
+    /**
+     * Partagée par les 4 contrôleurs de dépôt public (Classified/Event/News/
+     * Listing) — demande client, 17/11/2026 : *"après qu'un nouveau client a
+     * publié une entité... changer le mail [...] avec le lien pour pouvoir
+     * créer son compte pour qu'il administre toutes ses publications"*.
+     * Remplace l'ancien email pointant vers le lien par jeton propre à LA
+     * fiche qui vient d'être créée (§74-75, toujours fonctionnel pour les
+     * liens déjà envoyés) : un compte pas encore inscrit obtient le lien
+     * d'inscription, un compte déjà inscrit (un ancien dépôt, par exemple)
+     * obtient simplement un lien de connexion — jamais de double-compte.
+     * N'est appelée que pour un dépôt ANONYME (voir chaque `store()`) : un
+     * déposant déjà connecté a déjà accès à son tableau de bord, un email
+     * de plus n'apporterait rien.
+     */
+    protected function notifySubmitterToManageTheirAccount(Editor $editor, string $entityTitle, string $heading): void
+    {
+        $url = $editor->hasRegistered()
+            ? route('editeur.connexion')
+            : route('editeur.inscription', $editor->invitation_token);
+
+        SubmitterNotifier::send(
+            $editor->email,
+            $heading,
+            ['Titre' => $entityTitle],
+            $url,
+            $editor->hasRegistered() ? 'Se connecter à mon espace' : 'Créer mon espace',
+        );
     }
 }

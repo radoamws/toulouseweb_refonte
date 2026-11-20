@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 use Spatie\Sluggable\HasSlug;
 use Spatie\Sluggable\SlugOptions;
 
@@ -35,8 +36,8 @@ class News extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUrl
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, ResolvesImageUrl;
 
     protected $fillable = [
-        'category_id', 'author_id', 'title', 'slug', 'excerpt', 'body', 'image',
-        'status', 'published_at', 'legacy_id', 'submitter_email',
+        'category_id', 'author_id', 'editor_id', 'title', 'slug', 'excerpt', 'body', 'image',
+        'status', 'published_at', 'legacy_id', 'submitter_email', 'edit_token', 'pending_changes',
         'start_date', 'end_date', 'schedule', 'address', 'price', 'phone', 'email', 'website', 'youtube_url',
     ];
 
@@ -44,7 +45,30 @@ class News extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUrl
         'published_at' => 'datetime',
         'start_date' => 'date',
         'end_date' => 'date',
+        'pending_changes' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $news) {
+            // Espace client (voir TECHNICAL_DOCUMENTATION.md) — uniquement
+            // pour les actualités proposées par le public, seules à disposer
+            // d'un submitter_email fiable.
+            if (! $news->edit_token && $news->submitter_email) {
+                $news->edit_token = Str::random(48);
+            }
+        });
+    }
+
+    /** Espace client : applique une modification en attente et l'efface, sans jamais toucher au statut de publication. */
+    public function applyPendingChanges(): void
+    {
+        if (! $this->pending_changes) {
+            return;
+        }
+
+        $this->update([...$this->pending_changes, 'pending_changes' => null]);
+    }
 
     public function getSlugOptions(): SlugOptions
     {
@@ -116,6 +140,11 @@ class News extends Model implements HasCloudflarePurgeUrls, HasGoogleIndexingUrl
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'author_id');
+    }
+
+    public function editor(): BelongsTo
+    {
+        return $this->belongsTo(Editor::class);
     }
 
     public function comments(): HasMany

@@ -46,7 +46,7 @@
         ['label' => 'Proposer une actualité', 'href' => '/actualites/proposer'],
     ];
 @endphp
-<header x-data="{ mobileOpen: false, annuaireOpen: false, cinemaOpen: false, publishOpen: false }" class="sticky top-0 z-40 border-b border-ink-100 bg-white/95 backdrop-blur">
+<header x-data="{ mobileOpen: false, annuaireOpen: false, cinemaOpen: false, publishOpen: false, accountOpen: false }" class="sticky top-0 z-40 border-b border-ink-100 bg-white/95 backdrop-blur">
     <div class="mx-auto flex h-16 max-w-[96rem] items-center justify-between gap-1 px-4 sm:px-6 lg:px-6">
         <a href="{{ url('/') }}" class="flex shrink-0 items-stretch self-stretch gap-2 font-heading text-xl font-bold text-brand-600">
             @if ($siteSettings->logo_url)
@@ -187,6 +187,57 @@
             </div>
         </div>
 
+        {{-- Compte éditeur (demande client, 17/11/2026, point 3) — guard
+        `editor` dédié (voir config/auth.php), totalement indépendant de
+        l'auth admin Filament : un admin qui navigue sur le site public ne
+        voit "Se connecter" que s'il n'est PAS connecté sur CE guard précis. --}}
+        <div class="relative hidden shrink-0 nav:block" @mouseleave="accountOpen = false">
+            @auth('editor')
+                <button
+                    type="button"
+                    @click="accountOpen = !accountOpen"
+                    @mouseenter="accountOpen = true"
+                    class="inline-flex items-center gap-1 rounded-full border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+                    :aria-expanded="accountOpen.toString()"
+                >
+                    Mon compte
+                    <svg class="h-4 w-4 shrink-0 transition-transform" :class="{ 'rotate-180': accountOpen }" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <div x-show="accountOpen" x-transition x-cloak class="absolute right-0 top-full w-56 pt-1">
+                    <div class="rounded-xl border border-ink-100 bg-white p-2 shadow-lg">
+                        <a href="{{ route('editeur.mes-publications') }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50 hover:text-brand-700">Mes publications</a>
+                        <form method="POST" action="{{ route('editeur.deconnexion') }}">
+                            @csrf
+                            <button type="submit" class="block w-full rounded-lg px-3 py-2 text-left text-sm text-ink-700 hover:bg-brand-50 hover:text-brand-700">Déconnexion</button>
+                        </form>
+                    </div>
+                </div>
+            @else
+                {{-- Dropdown "Se connecter" / "S'inscrire" (demande client,
+                17/11/2026) — même pattern que "Mon compte" ci-dessus. --}}
+                <button
+                    type="button"
+                    @click="accountOpen = !accountOpen"
+                    @mouseenter="accountOpen = true"
+                    class="inline-flex items-center gap-1 rounded-full border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+                    :aria-expanded="accountOpen.toString()"
+                >
+                    Se connecter
+                    <svg class="h-4 w-4 shrink-0 transition-transform" :class="{ 'rotate-180': accountOpen }" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <div x-show="accountOpen" x-transition x-cloak class="absolute right-0 top-full w-56 pt-1">
+                    <div class="rounded-xl border border-ink-100 bg-white p-2 shadow-lg">
+                        <a href="{{ route('editeur.connexion') }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50 hover:text-brand-700">Se connecter</a>
+                        <a href="{{ route('editeur.inscription.libre') }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50 hover:text-brand-700">S'inscrire</a>
+                    </div>
+                </div>
+            @endauth
+        </div>
+
         <button
             type="button"
             @click="mobileOpen = !mobileOpen"
@@ -222,5 +273,17 @@
         @foreach ($publishNav as $item)
             <a href="{{ $item['href'] }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50">{{ $item['label'] }}</a>
         @endforeach
+        <div class="my-2 border-t border-ink-100"></div>
+        <p class="px-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Mon compte</p>
+        @auth('editor')
+            <a href="{{ route('editeur.mes-publications') }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50">Mes publications</a>
+            <form method="POST" action="{{ route('editeur.deconnexion') }}">
+                @csrf
+                <button type="submit" class="block w-full rounded-lg px-3 py-2 text-left text-sm text-ink-700 hover:bg-brand-50">Déconnexion</button>
+            </form>
+        @else
+            <a href="{{ route('editeur.connexion') }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50">Se connecter</a>
+            <a href="{{ route('editeur.inscription.libre') }}" class="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-brand-50">S'inscrire</a>
+        @endauth
     </nav>
 </header>

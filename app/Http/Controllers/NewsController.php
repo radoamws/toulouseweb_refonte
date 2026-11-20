@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Editor;
 use App\Models\News;
 use App\Models\NewsCategory;
 use App\Models\Page;
@@ -11,6 +12,7 @@ use App\Services\Uploads\ImageSanitizer;
 use App\Support\AdminNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
@@ -185,11 +187,16 @@ class NewsController extends Controller
             'recaptcha_token' => Recaptcha::rules('actualite'),
         ]);
 
+        // Rattachement automatique (demande client, 17/11/2026) — voir
+        // ClassifiedController::store().
+        $editor = Auth::guard('editor')->user() ?? Editor::findOrInviteByEmail($validated['submitter_email']);
+
         // Le slug est généré automatiquement depuis `title` par HasSlug
         // (voir App\Models\News) — pas besoin de le fournir ici.
         $news = News::create([
             ...collect($validated)->except(['url_verification', 'image', 'recaptcha_token'])->all(),
             'status' => 'pending', // jamais autre chose ici, voir docblock de la méthode
+            'editor_id' => $editor->id,
         ]);
 
         if ($request->hasFile('image')) {
@@ -218,8 +225,122 @@ class NewsController extends Controller
             'Valider ou refuser cette actualité',
         );
 
+        // Comptes éditeur (demande client, 17/11/2026) — voir
+        // ClassifiedController::store() et
+        // Controller::notifySubmitterToManageTheirAccount().
+        if (! Auth::guard('editor')->check()) {
+            $this->notifySubmitterToManageTheirAccount($editor, $news->title, 'Votre proposition d\'actualité a bien été reçue');
+        }
+
         return redirect()
             ->route('actualites.index')
             ->with('status', 'Votre proposition a bien été reçue et sera publiée après validation par notre équipe.');
+    }
+
+    /**
+     * Espace client (demande client, 16/11/2026, voir
+     * TECHNICAL_DOCUMENTATION.md) — même mécanisme que
+     * ClassifiedController::editSpace()/updateEditSpace() (étape 1).
+     */
+    public function editSpace(string $token): View
+    {
+        $news = News::where('edit_token', $token)->firstOrFail();
+
+        return view('actualites.edit-space', ['news' => $news, 'seo' => []]);
+    }
+
+    public function updateEditSpace(Request $request, string $token): RedirectResponse
+    {
+        $news = News::where('edit_token', $token)->firstOrFail();
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'excerpt' => ['nullable', 'string', 'max:255'],
+            'body' => ['required', 'string', 'max:5000'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'schedule' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'price' => ['nullable', 'string', 'max:255'],
+            'website' => ['nullable', 'url', 'max:255'],
+            'url_verification' => ['size:0'],
+        ]);
+
+        // N'écrit JAMAIS directement sur les colonnes publiées — voir
+        // docblock de la migration d'espace client et News::applyPendingChanges().
+        $news->update([
+            'pending_changes' => collect($validated)->except('url_verification')->all(),
+        ]);
+
+        AdminNotifier::send(
+            'Modification d\'actualité en attente de validation',
+            ['Titre actuel' => $news->title, 'Déposant' => $news->submitter_email ?? ''],
+            route('filament.admin.resources.news.edit', $news),
+            'Voir la modification proposée',
+        );
+
+        return redirect()
+            ->route('actualites.editSpace', $token)
+            ->with('status', 'Votre modification a bien été enregistrée et sera visible après validation par notre équipe.');
+    }
+
+    /**
+     * Espace éditeur authentifié ("Grande modification", demande client
+     * 17/11/2026, point 4) — mêmes principes que
+     * ClassifiedController::editOwned()/updateOwned(). `category_id` et
+     * `image` sont déjà de vraies colonnes sur `news` (contrairement à
+     * Event/Listing) : aucune clé spéciale nécessaire dans `pending_changes`,
+     * `News::applyPendingChanges()` reste le merge générique.
+     */
+    public function editOwned(News $news): View
+    {
+        abort_unless($news->editor_id === Auth::guard('editor')->id(), 403);
+
+        $categories = NewsCategory::orderBy('name')->get();
+
+        return view('editeur.actualites.modifier', ['news' => $news, 'categories' => $categories, 'seo' => []]);
+    }
+
+    public function updateOwned(Request $request, News $news): RedirectResponse
+    {
+        abort_unless($news->editor_id === Auth::guard('editor')->id(), 403);
+
+        $validated = $request->validate([
+            'category_id' => ['required', 'exists:news_categories,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'excerpt' => ['nullable', 'string', 'max:255'],
+            'body' => ['required', 'string', 'max:5000'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'schedule' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'price' => ['nullable', 'string', 'max:255'],
+            'website' => ['nullable', 'url', 'max:255'],
+            'image' => ['nullable', 'file', 'image', 'mimes:jpeg,png,webp', 'max:4096', new GenuineImage()],
+            'url_verification' => ['size:0'],
+        ]);
+
+        $pendingChanges = collect($validated)->except(['url_verification', 'image'])->all();
+
+        if ($request->hasFile('image')) {
+            try {
+                $pendingChanges['image'] = ImageSanitizer::sanitizeAndStore($request->file('image'), 'news');
+            } catch (Throwable $e) {
+                Log::warning('Image en attente (espace éditeur) rejetée après validation', ['exception' => $e->getMessage()]);
+            }
+        }
+
+        $news->update(['pending_changes' => $pendingChanges]);
+
+        AdminNotifier::send(
+            'Modification d\'actualité en attente de validation',
+            ['Titre actuel' => $news->title, 'Déposant' => $news->submitter_email ?? ''],
+            route('filament.admin.resources.news.edit', $news),
+            'Voir la modification proposée',
+        );
+
+        return redirect()
+            ->route('editeur.mes-publications')
+            ->with('status', 'Votre modification a bien été enregistrée et sera visible après validation par notre équipe.');
     }
 }

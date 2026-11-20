@@ -108,6 +108,15 @@ class EventResource extends Resource
                     ->maxLength(255)
                     ->default(null)
                     ->disabled(fn (string $operation) => $operation === 'edit'),
+                // Espace client (demande client, 16/11/2026) : lecture seule
+                // ici — seule l'action "Voir / appliquer la modification" de
+                // la table valide une modification, voir
+                // Event::applyPendingChanges().
+                Forms\Components\KeyValue::make('pending_changes')
+                    ->label('Modification du déposant en attente de validation')
+                    ->disabled()
+                    ->visible(fn (?Event $record) => $record && ! empty($record->pending_changes))
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -177,6 +186,18 @@ class EventResource extends Resource
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+                // Espace client (demande client, 16/11/2026) : une
+                // modification proposée par le déposant n'écrase jamais la
+                // fiche publiée directement — voir
+                // Event::applyPendingChanges().
+                Tables\Columns\IconColumn::make('pending_changes')
+                    ->label('Modif. en attente')
+                    ->getStateUsing(fn (Event $record) => ! empty($record->pending_changes))
+                    ->boolean()
+                    ->trueIcon('heroicon-o-pencil-square')
+                    ->trueColor('warning')
+                    ->falseIcon(null)
+                    ->sortable(false),
             ])
             ->defaultSort('start_date', 'desc')
             ->filters([
@@ -201,6 +222,21 @@ class EventResource extends Resource
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
+                // Espace client (demande client, 16/11/2026) — voir
+                // ClassifiedResource::table() pour le même pattern.
+                Tables\Actions\Action::make('applyPendingChanges')
+                    ->label('Voir / appliquer la modification')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('warning')
+                    ->visible(fn (Event $record) => ! empty($record->pending_changes))
+                    ->requiresConfirmation()
+                    ->modalDescription(fn (Event $record) => collect($record->pending_changes)
+                        ->map(fn ($value, $key) => "{$key} : {$value}")
+                        ->implode("\n"))
+                    ->action(function (Event $record) {
+                        $record->applyPendingChanges();
+                        Notification::make()->title('Modification appliquée')->success()->send();
+                    }),
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([

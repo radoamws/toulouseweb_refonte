@@ -10,13 +10,18 @@ use App\Services\Migration\LegacyCleaner;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Sluggable\HasSlug;
 use Spatie\Sluggable\SlugOptions;
+use Throwable;
 
 /**
  * Fiche annuaire (payante ou gratuite). Remplace t_article. Les fiches
@@ -33,13 +38,62 @@ class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoog
         'address', 'city', 'postal_code', 'lat', 'lng', 'phone', 'email', 'website',
         'opening_hours', 'social_links', 'reservation_url', 'click_collect_url',
         'cuisine_type', 'published_at', 'legacy_id',
+        'submitter_email', 'edit_token', 'pending_changes', 'editor_id',
     ];
 
     protected $casts = [
         'opening_hours' => 'array',
         'social_links' => 'array',
         'published_at' => 'datetime',
+        'pending_changes' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $listing) {
+            // Espace client (voir TECHNICAL_DOCUMENTATION.md) — uniquement
+            // pour les fiches créées depuis le dépôt public à partir de
+            // maintenant (submitter_email renseigné) : les ~2978 fiches
+            // historiques migrées du legacy n'en ont pas, voir docblock de
+            // la migration.
+            if (! $listing->edit_token && $listing->submitter_email) {
+                $listing->edit_token = Str::random(48);
+            }
+        });
+    }
+
+    /**
+     * Espace client : applique une modification en attente et l'efface,
+     * sans jamais toucher au statut de publication.
+     *
+     * `_pending_category_id` (relation many-to-many) et `_pending_logo_path`
+     * (collection média `logo`, pas une colonne) — même principe que
+     * Event::applyPendingChanges()/Classified::applyPendingChanges().
+     */
+    public function applyPendingChanges(): void
+    {
+        if (! $this->pending_changes) {
+            return;
+        }
+
+        $changes = $this->pending_changes;
+        $categoryId = Arr::pull($changes, '_pending_category_id');
+        $logoPath = Arr::pull($changes, '_pending_logo_path');
+
+        $this->update([...$changes, 'pending_changes' => null]);
+
+        if ($categoryId) {
+            $this->categories()->sync([$categoryId]);
+        }
+
+        if ($logoPath && file_exists($logoPath)) {
+            try {
+                $this->addMedia($logoPath)->toMediaCollection('logo');
+            } catch (Throwable $e) {
+                Log::warning('Logo en attente (espace éditeur) rejeté à l\'application', ['exception' => $e->getMessage()]);
+            }
+        }
+    }
 
     public function getSlugOptions(): SlugOptions
     {
@@ -147,6 +201,11 @@ class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoog
     public function amenities(): BelongsToMany
     {
         return $this->belongsToMany(Amenity::class, 'listing_amenity');
+    }
+
+    public function editor(): BelongsTo
+    {
+        return $this->belongsTo(Editor::class);
     }
 
     public function isPaid(): bool

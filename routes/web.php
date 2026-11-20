@@ -4,6 +4,8 @@ use App\Http\Controllers\CinemaController;
 use App\Http\Controllers\ClassifiedController;
 use App\Http\Controllers\ClickTrackingController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\EditorAuthController;
+use App\Http\Controllers\EditorDashboardController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ListingController;
@@ -38,6 +40,11 @@ Route::get('/annuaire/fiche/{slug}', [ListingController::class, 'show'])->name('
 // même piège que pour /annonces, voir commentaire plus bas.
 Route::get('/annuaire/deposer', [ListingController::class, 'create'])->name('annuaire.create');
 Route::post('/annuaire/deposer', [ListingController::class, 'store'])->middleware('throttle:5,1')->name('annuaire.store');
+// Espace client (demande client 16/11/2026, étape 3) — `mon-espace` avant
+// `{categorySlug}` (wildcard) pour ne pas être intercepté, même piège que
+// pour /annuaire/deposer ci-dessus.
+Route::get('/annuaire/mon-espace/{token}', [ListingController::class, 'editSpace'])->name('annuaire.editSpace');
+Route::put('/annuaire/mon-espace/{token}', [ListingController::class, 'updateEditSpace'])->middleware('throttle:10,1')->name('annuaire.updateEditSpace');
 Route::get('/annuaire/{categorySlug}', [ListingController::class, 'index'])->name('annuaire.category');
 
 // Agenda (brief §6) — une seule route par slug : résout catégorie (dont
@@ -47,6 +54,11 @@ Route::get('/annuaire/{categorySlug}', [ListingController::class, 'index'])->nam
 Route::get('/agenda', [EventController::class, 'index'])->name('agenda.index');
 Route::get('/agenda/proposer', [EventController::class, 'create'])->name('agenda.create');
 Route::post('/agenda/proposer', [EventController::class, 'store'])->middleware('throttle:5,1')->name('agenda.store');
+// Espace client (demande client 16/11/2026, étape 2) — `mon-espace` avant
+// `{slug}` (wildcard) pour ne pas être intercepté, même piège que pour
+// /agenda/proposer ci-dessus.
+Route::get('/agenda/mon-espace/{token}', [EventController::class, 'editSpace'])->name('agenda.editSpace');
+Route::put('/agenda/mon-espace/{token}', [EventController::class, 'updateEditSpace'])->middleware('throttle:10,1')->name('agenda.updateEditSpace');
 Route::get('/agenda/{slug}', [EventController::class, 'bySlug'])->name('agenda.bySlug');
 
 // Cinéma (brief §9).
@@ -69,6 +81,11 @@ Route::get('/cinema/panorama', [CinemaController::class, 'panorama'])->name('cin
 Route::get('/actualites', [NewsController::class, 'index'])->name('actualites.index');
 Route::get('/actualites/proposer', [NewsController::class, 'create'])->name('actualites.create');
 Route::post('/actualites/proposer', [NewsController::class, 'store'])->middleware('throttle:5,1')->name('actualites.store');
+// Espace client (demande client 16/11/2026, étape 2) — `mon-espace` avant
+// `{slug}` (wildcard) pour ne pas être intercepté, même piège que pour
+// /actualites/proposer ci-dessus.
+Route::get('/actualites/mon-espace/{token}', [NewsController::class, 'editSpace'])->name('actualites.editSpace');
+Route::put('/actualites/mon-espace/{token}', [NewsController::class, 'updateEditSpace'])->middleware('throttle:10,1')->name('actualites.updateEditSpace');
 Route::get('/actualites/{slug}', [NewsController::class, 'bySlug'])->name('actualites.bySlug');
 
 // Annonces (brief §8). `deposer` avant `{slug}` pour ne pas être intercepté
@@ -76,7 +93,50 @@ Route::get('/actualites/{slug}', [NewsController::class, 'bySlug'])->name('actua
 Route::get('/annonces', [ClassifiedController::class, 'index'])->name('annonces.index');
 Route::get('/annonces/deposer', [ClassifiedController::class, 'create'])->name('annonces.create');
 Route::post('/annonces', [ClassifiedController::class, 'store'])->middleware('throttle:5,1')->name('annonces.store');
+// Espace client (brief, demande client 16/11/2026) — `mon-espace` avant
+// `{slug}` (wildcard) pour ne pas être intercepté, même piège que pour
+// /annonces/deposer ci-dessus.
+Route::get('/annonces/mon-espace/{token}', [ClassifiedController::class, 'editSpace'])->name('annonces.editSpace');
+Route::put('/annonces/mon-espace/{token}', [ClassifiedController::class, 'updateEditSpace'])->middleware('throttle:10,1')->name('annonces.updateEditSpace');
 Route::get('/annonces/{slug}', [ClassifiedController::class, 'bySlug'])->name('annonces.bySlug');
+
+// Comptes "éditeur" (demande client, 17/11/2026) — gèrent les publications
+// du déposant (annonces/agenda/actualités/annuaire), voir
+// App\Http\Controllers\EditorAuthController et TECHNICAL_DOCUMENTATION.md.
+// Guard dédié `editor` (config/auth.php), séparé de l'auth admin Filament.
+Route::middleware('guest:editor')->group(function () {
+    // Inscription libre (demande client, 17/11/2026) — AVANT `{token}`
+    // ci-dessous (forme sans segment supplémentaire, pas de réelle
+    // ambiguïté de toute façon, mais même convention que le reste de ce
+    // fichier : le plus spécifique d'abord).
+    Route::get('/mon-compte/inscription', [EditorAuthController::class, 'showSignup'])->name('editeur.inscription.libre');
+    Route::post('/mon-compte/inscription', [EditorAuthController::class, 'signup'])->middleware('throttle:5,1')->name('editeur.inscription.libre.store');
+    Route::get('/mon-compte/inscription/{token}', [EditorAuthController::class, 'invitation'])->name('editeur.inscription');
+    Route::post('/mon-compte/inscription/{token}', [EditorAuthController::class, 'register'])->middleware('throttle:5,1')->name('editeur.inscription.store');
+    Route::get('/mon-compte/connexion', [EditorAuthController::class, 'showLogin'])->name('editeur.connexion');
+    Route::post('/mon-compte/connexion', [EditorAuthController::class, 'login'])->middleware('throttle:5,1')->name('editeur.connexion.store');
+    Route::get('/mon-compte/mot-de-passe-oublie', [EditorAuthController::class, 'showForgotPassword'])->name('editeur.mot-de-passe.oublie');
+    Route::post('/mon-compte/mot-de-passe-oublie', [EditorAuthController::class, 'sendResetLink'])->middleware('throttle:5,1')->name('editeur.mot-de-passe.oublie.store');
+    Route::get('/mon-compte/reinitialiser-mot-de-passe/{token}', [EditorAuthController::class, 'showResetPassword'])->name('editeur.mot-de-passe.reinitialiser');
+    Route::post('/mon-compte/reinitialiser-mot-de-passe', [EditorAuthController::class, 'resetPassword'])->middleware('throttle:5,1')->name('editeur.mot-de-passe.reinitialiser.store');
+});
+Route::middleware('auth:editor')->group(function () {
+    Route::post('/mon-compte/deconnexion', [EditorAuthController::class, 'logout'])->name('editeur.deconnexion');
+    Route::get('/mon-compte', [EditorDashboardController::class, 'index'])->name('editeur.mes-publications');
+
+    // Édition à champs complets (demande client, point 4) — par opposition
+    // aux liens par jeton /annonces/mon-espace/{token} etc. (étape
+    // antérieure, toujours valables pour les liens déjà envoyés, voir
+    // ClassifiedController::editSpace()).
+    Route::get('/mon-compte/annonces/{classified}/modifier', [ClassifiedController::class, 'editOwned'])->name('editeur.annonces.modifier');
+    Route::put('/mon-compte/annonces/{classified}/modifier', [ClassifiedController::class, 'updateOwned'])->name('editeur.annonces.modifier.store');
+    Route::get('/mon-compte/agenda/{event}/modifier', [EventController::class, 'editOwned'])->name('editeur.agenda.modifier');
+    Route::put('/mon-compte/agenda/{event}/modifier', [EventController::class, 'updateOwned'])->name('editeur.agenda.modifier.store');
+    Route::get('/mon-compte/actualites/{news}/modifier', [NewsController::class, 'editOwned'])->name('editeur.actualites.modifier');
+    Route::put('/mon-compte/actualites/{news}/modifier', [NewsController::class, 'updateOwned'])->name('editeur.actualites.modifier.store');
+    Route::get('/mon-compte/annuaire/{listing}/modifier', [ListingController::class, 'editOwned'])->name('editeur.annuaire.modifier');
+    Route::put('/mon-compte/annuaire/{listing}/modifier', [ListingController::class, 'updateOwned'])->name('editeur.annuaire.modifier.store');
+});
 
 // Contact (brief §11).
 Route::get('/contact', [ContactController::class, 'show'])->name('contact.show');

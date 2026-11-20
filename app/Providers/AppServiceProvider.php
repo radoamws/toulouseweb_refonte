@@ -20,6 +20,8 @@ use App\Observers\RegeneratesSitemapObserver;
 use App\Observers\SubmitterSubscriptionObserver;
 use App\Services\Cache\CloudflareCachePurger;
 use App\Services\Seo\GoogleIndexingService;
+use Illuminate\Auth\Middleware\Authenticate;
+use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -139,6 +141,25 @@ class AppServiceProvider extends ServiceProvider
         if (str_starts_with((string) config('app.url'), 'https://')) {
             URL::forceScheme('https');
         }
+
+        // `guest:editor` (routes/web.php, espace éditeur, demande client
+        // 17/11/2026) redirigerait par défaut vers `route('home')` (seule
+        // route "dashboard"/"home" existante) — un éditeur déjà connecté qui
+        // rouvre son lien d'invitation atterrit plutôt directement sur son
+        // tableau de bord.
+        RedirectIfAuthenticated::redirectUsing(fn () => route('editeur.mes-publications'));
+
+        // `auth:editor` (routes/web.php, /mon-compte) appelle la classe
+        // Laravel GÉNÉRIQUE `Illuminate\Auth\Middleware\Authenticate` —
+        // contrairement à l'admin Filament, qui utilise sa PROPRE sous-classe
+        // (Filament\Http\Middleware\Authenticate::redirectTo(), ignore ce
+        // callback statique) : aucun risque de collision entre les deux.
+        // Sans ce callback, `redirectTo()` renvoie null et le handler
+        // d'exceptions par défaut de Laravel retombe sur `route('login')`,
+        // qui n'existe pas dans ce projet (pas de Breeze/Fortify) — bug réel
+        // trouvé en testant `/mon-compte` sans session ("Route [login] not
+        // defined").
+        Authenticate::redirectUsing(fn () => route('editeur.connexion'));
 
         foreach (self::CLOUDFLARE_PURGE_MODELS as $model) {
             $model::observe(CloudflarePurgeObserver::class);
