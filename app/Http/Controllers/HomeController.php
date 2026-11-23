@@ -54,11 +54,18 @@ class HomeController extends Controller
             // confirmé avec le client qu'il s'agit en fait de fraîcheur
             // (publiée aujourd'hui/récemment), pas d'un filtre "date >
             // maintenant" qui viderait systématiquement la section.
-            // Fenêtre glissante de 24h, cohérente avec le scraping
-            // quotidien (`scrape:news`, 05h45) : au-delà, la section
-            // resterait vide entre deux passages.
+            //
+            // ⚠️ Revu suite à une remarque client (23/11/2026) : une fenêtre
+            // stricte de 24h (`WHERE ... >= now()->subDay()`) pouvait, un
+            // jour où Le Journal Toulousain ne publie rien de nouveau,
+            // laisser la section avec MOINS de 4 actus voire totalement
+            // vide — "affiche toujours les 4 derniers news". Remplacé par un
+            // simple tri (pas de `WHERE` d'exclusion) : les 4 actus les plus
+            // pertinentes sont toujours affichées, que leur date soit
+            // récente ou non — la fraîcheur ne joue plus que comme critère
+            // de TRI (`ORDER BY ... DESC`, "l'intervalle de date de
+            // publication"), jamais comme filtre qui viderait la section.
             'latestNews' => News::query()->published()
-                ->whereRaw('COALESCE(published_at, created_at) >= ?', [now()->subDay()])
                 // `source != 'scraped'` (soumission publique validée OU
                 // saisie admin) toujours avant une actu scrapée, jamais
                 // l'inverse — voir App\Services\Scraping\News\LeJournalToulousainDriver.

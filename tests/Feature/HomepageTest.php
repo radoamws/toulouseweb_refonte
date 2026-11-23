@@ -257,19 +257,37 @@ class HomepageTest extends TestCase
 
     /**
      * ⚠️ Demande client (20/11/2026, voir §82) : "les news ne sont pas à
-     * jour" — la vignette d'accueil ne doit plus afficher une actu de
-     * plusieurs jours, même publiée (rejoint le même esprit que le
-     * correctif §81 sur l'agenda).
+     * jour" — une actu récente passe devant une plus ancienne (tri par
+     * fraîcheur), mais sans jamais EXCLURE les plus anciennes : revu suite à
+     * une remarque client (23/11/2026, "affiche toujours les 4 derniers
+     * news") — si Le Journal Toulousain ne publie rien un jour donné, la
+     * section ne doit jamais se retrouver vide ou avec moins de 4 actus.
      */
-    public function test_homepage_excludes_news_older_than_24_hours(): void
+    public function test_homepage_news_still_sorts_recent_first_without_excluding_older_ones(): void
     {
         $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-fraicheur']);
         News::create(['category_id' => $category->id, 'title' => 'Actu de la semaine dernière', 'slug' => 'actu-semaine-derniere', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subDays(5)]);
         News::create(['category_id' => $category->id, 'title' => 'Actu fraiche', 'slug' => 'actu-fraiche', 'body' => 'x', 'status' => 'published', 'published_at' => now()]);
 
+        $this->get('/')->assertOk()->assertSeeInOrder(['Actu fraiche', 'Actu de la semaine dernière']);
+    }
+
+    /**
+     * Demande client (23/11/2026) : "il est possible que le jour J, le site
+     * Le journal toulousain n'a pas de news, donc par défaut, affiche
+     * toujours les 4 derniers news" — même si TOUTES les actus disponibles
+     * sont anciennes (aucune publiée récemment), la section reste remplie
+     * plutôt que vide.
+     */
+    public function test_homepage_news_falls_back_to_older_articles_when_nothing_recent_exists(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-repli']);
+        News::create(['category_id' => $category->id, 'title' => 'Vieille actu 1', 'slug' => 'vieille-actu-1', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subMonths(2)]);
+        News::create(['category_id' => $category->id, 'title' => 'Vieille actu 2', 'slug' => 'vieille-actu-2', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subMonths(3)]);
+
         $response = $this->get('/')->assertOk();
-        $response->assertSee('Actu fraiche');
-        $response->assertDontSee('Actu de la semaine dernière');
+        $response->assertSee('Vieille actu 1');
+        $response->assertSee('Vieille actu 2');
     }
 
     /**
