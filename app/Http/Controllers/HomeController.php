@@ -55,21 +55,41 @@ class HomeController extends Controller
             // (publiée aujourd'hui/récemment), pas d'un filtre "date >
             // maintenant" qui viderait systématiquement la section.
             //
-            // ⚠️ Revu suite à une remarque client (23/11/2026) : une fenêtre
-            // stricte de 24h (`WHERE ... >= now()->subDay()`) pouvait, un
-            // jour où Le Journal Toulousain ne publie rien de nouveau,
-            // laisser la section avec MOINS de 4 actus voire totalement
-            // vide — "affiche toujours les 4 derniers news". Remplacé par un
-            // simple tri (pas de `WHERE` d'exclusion) : les 4 actus les plus
-            // pertinentes sont toujours affichées, que leur date soit
-            // récente ou non — la fraîcheur ne joue plus que comme critère
-            // de TRI (`ORDER BY ... DESC`, "l'intervalle de date de
-            // publication"), jamais comme filtre qui viderait la section.
+            // ⚠️ Revu deux fois suite aux remarques du client :
+            // 1. (23/11/2026, 1er retour) une fenêtre stricte de 24h
+            //    (`WHERE ... >= now()->subDay()`) pouvait, un jour où Le
+            //    Journal Toulousain ne publie rien de nouveau, laisser la
+            //    section avec MOINS de 4 actus voire totalement vide —
+            //    "affiche toujours les 4 derniers news". Retrait du `WHERE`
+            //    d'exclusion.
+            // 2. (23/11/2026, 2e retour) mais passer alors à un tri
+            //    `source != 'scraped'` INCONDITIONNEL faisait remonter de
+            //    très anciennes actus manuelles/legacy (parfois plusieurs
+            //    mois) devant des actus scrapées bien plus récentes — "tu as
+            //    mis des très anciens news... il faut toujours que ça soit
+            //    les derniers, scraping ou pas confondus". La priorité
+            //    source ne doit donc jouer QUE dans une fenêtre de fraîcheur
+            //    bornée (4 jours, "remettre les scrapings auto sur les 4
+            //    derniers jours s'il n'y a pas le jour J") ; au-delà, seule
+            //    la date compte, tous types confondus — jamais une actu
+            //    ancienne artificiellement promue juste parce qu'elle n'est
+            //    pas scrapée.
+            //
+            // 3 paliers (`CASE`, du plus prioritaire au moins prioritaire) :
+            //   0. manuelle/soumise-validée ET publiée dans les 4 derniers jours
+            //   1. scrapée ET publiée dans les 4 derniers jours
+            //   2. tout le reste (plus ancien que 4 jours, scraping ou pas
+            //      confondus) — jamais exclu (toujours 4 actus affichées),
+            //      juste trié par fraîcheur réelle, sans biais de source.
             'latestNews' => News::query()->published()
-                // `source != 'scraped'` (soumission publique validée OU
-                // saisie admin) toujours avant une actu scrapée, jamais
-                // l'inverse — voir App\Services\Scraping\News\LeJournalToulousainDriver.
-                ->orderByRaw("source = 'scraped' asc")
+                ->orderByRaw(
+                    "CASE
+                        WHEN COALESCE(published_at, created_at) >= ? AND source != 'scraped' THEN 0
+                        WHEN COALESCE(published_at, created_at) >= ? THEN 1
+                        ELSE 2
+                    END ASC",
+                    [now()->subDays(4), now()->subDays(4)]
+                )
                 ->orderByRaw('COALESCE(published_at, created_at) DESC')
                 ->limit(4)->get(),
             // ⚠️ Bug réel trouvé et corrigé (20/11/2026, signalé par le

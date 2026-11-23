@@ -294,7 +294,9 @@ class HomepageTest extends TestCase
      * Demande client (20/11/2026, voir §82) : "prioriser les news publiés
      * manuellement... et validés" — une soumission publique validée
      * (`source = 'user_submitted'`) passe avant une actu scrapée
-     * (`source = 'scraped'`), même si cette dernière est plus récente.
+     * (`source = 'scraped'`), même si cette dernière est plus récente — tant
+     * que les deux restent dans la fenêtre de fraîcheur de 4 jours (voir
+     * test suivant pour le cas où elle en sort).
      */
     public function test_homepage_prioritizes_user_submitted_news_over_scraped_ones(): void
     {
@@ -303,6 +305,24 @@ class HomepageTest extends TestCase
         News::create(['category_id' => $category->id, 'title' => 'Actu validée manuellement', 'slug' => 'actu-validee', 'body' => 'x', 'status' => 'published', 'source' => 'user_submitted', 'published_at' => now()->subHours(1)]);
 
         $this->get('/')->assertOk()->assertSeeInOrder(['Actu validée manuellement', 'Actu scrapée plus récente']);
+    }
+
+    /**
+     * ⚠️ Demande client (23/11/2026, 2e retour) : "tu as mis des très
+     * anciens news. Ce qui n'est pas bon. Il faut toujours que ça soit les
+     * derniers : scraping ou pas confondus" — la priorité "manuelle/validée
+     * avant scrapée" ne doit jouer QUE dans la fenêtre de fraîcheur de 4
+     * jours, jamais au-delà : une vieille actu manuelle/legacy ne doit
+     * jamais passer devant une actu scrapée bien plus récente simplement
+     * parce qu'elle n'est pas scrapée.
+     */
+    public function test_homepage_does_not_let_an_old_manual_news_outrank_a_recent_scraped_one(): void
+    {
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale-priorite-bornee']);
+        News::create(['category_id' => $category->id, 'title' => 'Vieille actu manuelle', 'slug' => 'vieille-actu-manuelle', 'body' => 'x', 'status' => 'published', 'source' => 'manual', 'published_at' => now()->subDays(10)]);
+        News::create(['category_id' => $category->id, 'title' => 'Actu scrapée du jour', 'slug' => 'actu-scrapee-du-jour', 'body' => 'x', 'status' => 'published', 'source' => 'scraped', 'published_at' => now()]);
+
+        $this->get('/')->assertOk()->assertSeeInOrder(['Actu scrapée du jour', 'Vieille actu manuelle']);
     }
 
     public function test_homepage_news_card_shows_event_date_range_when_set(): void
