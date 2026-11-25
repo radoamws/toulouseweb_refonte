@@ -168,16 +168,22 @@
                                             {{ $eventCategory->name }}
                                         </span>
                                     @endif
-                                    <h3 class="font-heading text-base font-semibold leading-snug text-ink-900 group-hover:text-brand-700">
+                                    {{-- Lieu affiché sous le titre, sur sa propre ligne — pas à
+                                    côté du titre (revu le 25/11/2026 : garder l'uniformité avec
+                                    les autres cartes, capture à l'appui) ni au milieu de la date
+                                    (demande client initiale, 05/10/2026 — la salle s'y repérait
+                                    mal). Même taille que le titre mais en rouge ToulouseWeb
+                                    (#CC0000, demande client explicite) pour rester clairement
+                                    distincte malgré la taille identique. --}}
+                                    <h3 class="font-heading text-lg font-bold leading-snug text-ink-900 group-hover:text-brand-700">
                                         {{ $event->title }}
                                     </h3>
-                                    {{-- Début ET fin de l'événement (demande client, 18/09/2026). Lieu
-                                    mis en évidence en gras (demande client, 05/10/2026 — capture à
-                                    l'appui : difficile à repérer au milieu de la date sinon). --}}
+                                    @if ($event->area)
+                                        <p class="text-lg font-semibold leading-snug" style="color: #CC0000;">{{ $event->area->name }}</p>
+                                    @endif
+                                    {{-- Début ET fin de l'événement (demande client, 18/09/2026). --}}
                                     <p class="mt-auto text-sm text-ink-500">
-                                        {{ $event->event_date_range }}@if ($event->area)
-                                            · <span class="font-semibold text-ink-700">{{ $event->area->name }}</span>
-                                        @endif
+                                        {{ $event->event_date_range }}
                                     </p>
                                 </div>
                             </a>
