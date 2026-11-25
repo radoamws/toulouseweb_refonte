@@ -135,7 +135,11 @@
                         @foreach ($listings as $listing)
                             <x-ui.card
                                 :href="'/annuaire/fiche/'.$listing->slug"
-                                :image="$listing->getFirstMediaUrl('logo')"
+                                {{-- Photo masquée hors essai gratuit/paiement
+                                (demande client, 24/11/2026) — voir
+                                Listing::hasPremiumFeatures() et le même
+                                principe sur annuaire/show.blade.php. --}}
+                                :image="$listing->hasPremiumFeatures() ? $listing->getFirstMediaUrl('logo') : null"
                                 :eyebrow="$listing->categories->first()?->name"
                                 :title="$listing->title"
                                 {{-- clean_phone, pas phone (bug réel corrigé le 08/09/2026, audit SEO final) — voir Listing::cleanPhone(). --}}

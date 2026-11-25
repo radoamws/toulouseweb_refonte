@@ -11,6 +11,52 @@
             </div>
         @endif
 
+        {{-- Paiement Stripe + essai gratuit (demande client, 24/11/2026,
+        rectifiée en abonnement annuel le 25/11/2026, voir
+        Listing::hasPremiumFeatures()/isPaid()/isTrialing()/isLapsedPaid() et
+        TECHNICAL_DOCUMENTATION.md §83). --}}
+        @if ($listing->isPaid())
+            <div class="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                <p>
+                    Fiche payante — merci pour votre confiance ! Vos options complètes (photo, description, site web,
+                    réservation) et votre référencement boosté sont actifs jusqu'au
+                    <strong>{{ $listing->premium_until->translatedFormat('d F Y') }}</strong>.
+                </p>
+                <form method="POST" action="{{ route('annuaire.listings.checkout', $listing->edit_token) }}" class="mt-3">
+                    @csrf
+                    <x-ui.button type="submit" variant="secondary" size="sm">Renouveler maintenant (+1 an)</x-ui.button>
+                </form>
+            </div>
+        @else
+            <div class="mt-4 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-ink-700">
+                @if ($listing->isLapsedPaid())
+                    <p>
+                        Votre abonnement annuel est arrivé à échéance : votre fiche est repassée en version
+                        simplifiée (nom, coordonnées, adresse) en attendant son renouvellement.
+                    </p>
+                @elseif ($listing->isTrialing())
+                    <p>
+                        Votre fiche profite de ses options complètes (photo, description, site web, réservation)
+                        jusqu'au <strong>{{ $listing->premium_until->translatedFormat('d F Y') }}</strong>. Passé ce
+                        délai, elles disparaîtront sauf passage à la formule payante.
+                    </p>
+                @else
+                    <p>
+                        Votre essai gratuit est terminé : votre fiche est actuellement en version simplifiée (nom,
+                        coordonnées, adresse).
+                    </p>
+                @endif
+                <p class="mt-2">
+                    <strong>100€ / an</strong> pour profiter de ces options en continu + un référencement boosté
+                    (votre fiche remonte en tête des résultats de recherche de l'annuaire).
+                </p>
+                <form method="POST" action="{{ route('annuaire.listings.checkout', $listing->edit_token) }}" class="mt-3">
+                    @csrf
+                    <x-ui.button type="submit" variant="primary" size="sm">Payer 100€ pour 1 an</x-ui.button>
+                </form>
+            </div>
+        @endif
+
         @if (session('status'))
             <div class="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
                 {{ session('status') }}

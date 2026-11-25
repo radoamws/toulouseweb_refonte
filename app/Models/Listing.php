@@ -26,12 +26,25 @@ use Throwable;
 /**
  * Fiche annuaire (payante ou gratuite). Remplace t_article. Les fiches
  * gratuites n'exposent volontairement que titre/adresse/téléphone côté
- * public (voir brief §5) — la richesse des champs ci-dessous ne s'applique
- * pleinement qu'au tier 'paid'.
+ * public (voir brief §5)... SAUF pendant leur essai gratuit temporaire
+ * (demande client, 24/11/2026, voir TRIAL_MONTHS/hasPremiumFeatures()
+ * ci-dessous et TECHNICAL_DOCUMENTATION.md §83) : la richesse des champs
+ * ci-dessous s'applique au tier 'paid' ET à toute fiche encore dans sa
+ * fenêtre d'essai, jamais aux fiches gratuites dont l'essai est expiré.
  */
 class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoogleIndexingUrl
 {
     use HasSlug, SoftDeletes, HasSeoMeta, Trackable, InteractsWithMedia;
+
+    /**
+     * Durée de l'essai gratuit (demande client, 24/11/2026, voir
+     * TECHNICAL_DOCUMENTATION.md §83) : toute NOUVELLE fiche, quelle que
+     * soit la formule choisie, profite des options payantes (photo,
+     * description, galerie, site web, réservation) pendant 3 mois sans
+     * avoir payé — passé ce délai, ces options disparaissent automatiquement
+     * (voir `hasPremiumFeatures()`) sauf passage effectif à `tier = 'paid'`.
+     */
+    public const TRIAL_MONTHS = 3;
 
     protected $fillable = [
         'title', 'slug', 'tier', 'status', 'short_description', 'description',
@@ -39,6 +52,14 @@ class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoog
         'opening_hours', 'social_links', 'reservation_url', 'click_collect_url',
         'cuisine_type', 'published_at', 'legacy_id',
         'submitter_email', 'edit_token', 'pending_changes', 'editor_id',
+        // Stripe/essai gratuit (voir TRIAL_MONTHS) — jamais dans les règles
+        // de validation des contrôleurs publics (ListingController), donc
+        // jamais atteignables depuis une requête visiteur malgré leur
+        // présence ici ; mass-assignables uniquement pour que
+        // ListingResource (admin) et StripePaymentService puissent les
+        // écrire simplement.
+        'premium_until', 'paid_at', 'stripe_checkout_session_id', 'trial_reminder_sent_at',
+        'renewal_reminder_sent_at', 'stripe_last_processed_session_id',
     ];
 
     protected $casts = [
@@ -46,6 +67,10 @@ class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoog
         'social_links' => 'array',
         'published_at' => 'datetime',
         'pending_changes' => 'array',
+        'premium_until' => 'datetime',
+        'paid_at' => 'datetime',
+        'trial_reminder_sent_at' => 'datetime',
+        'renewal_reminder_sent_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -58,6 +83,44 @@ class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoog
             // la migration.
             if (! $listing->edit_token && $listing->submitter_email) {
                 $listing->edit_token = Str::random(48);
+            }
+
+            // Essai gratuit (voir TRIAL_MONTHS ci-dessus) — jamais écrasé si
+            // déjà fixé explicitement (ex. migration de données), et
+            // jamais appliqué rétroactivement aux fiches historiques (cette
+            // logique ne s'exécute qu'à la CRÉATION).
+            if (! $listing->premium_until) {
+                $listing->premium_until = now()->addMonths(self::TRIAL_MONTHS);
+            }
+        });
+
+        static::saving(function (self $listing) {
+            // `paid_at` renseigné automatiquement dès que `tier` passe à
+            // 'paid' — que ce soit via le webhook Stripe
+            // (StripePaymentService::markListingAsPaid()) ou manuellement
+            // par un admin (ListingResource) : source unique de vérité,
+            // jamais recalculé si déjà présent (ne pas écraser la vraie
+            // date de paiement initiale lors d'une modification ultérieure).
+            //
+            // Rectification client (25/11/2026) : la fiche payante est
+            // acquise pour 1 an, pas définitivement — `premium_until` est
+            // donc aussi fixé à `now()->addYear()` ici au premier passage à
+            // 'paid' (y compris quand la fiche était encore en plein essai
+            // gratuit : le premier paiement repart d'une période payante
+            // pleine et propre, il n'y a pas de "reste d'essai" à conserver),
+            // sauf si un admin a lui-même explicitement renseigné une autre
+            // valeur dans le même formulaire (`isDirty('premium_until')`,
+            // ex. geste commercial sur une durée différente). Les VRAIS
+            // renouvellements (qui doivent prolonger à partir de l'échéance
+            // actuelle, pas la remplacer) passent exclusivement par
+            // StripePaymentService::markListingAsPaid(), jamais par ce hook
+            // qui ne s'exécute qu'une seule fois (`! $listing->paid_at`).
+            if ($listing->isDirty('tier') && $listing->tier === 'paid' && ! $listing->paid_at) {
+                $listing->paid_at = now();
+
+                if (! $listing->isDirty('premium_until')) {
+                    $listing->premium_until = now()->addYear();
+                }
             }
         });
     }
@@ -208,9 +271,58 @@ class Listing extends Model implements HasMedia, HasCloudflarePurgeUrls, HasGoog
         return $this->belongsTo(Editor::class);
     }
 
+    /**
+     * Fiche payante dont le règlement est ACTUELLEMENT actif (pas seulement
+     * déjà réglée un jour) — rectification client, 25/11/2026 : la fiche
+     * payante est acquise pour 1 an, pas définitivement (voir
+     * StripePaymentService::markListingAsPaid() et
+     * TECHNICAL_DOCUMENTATION.md §83). Redevient faux dès que `premium_until`
+     * est dépassé et non renouvelé, même si `tier` reste 'paid' en base
+     * (`tier` garde la trace qu'il s'agissait d'un payeur, pour distinguer
+     * côté admin une fiche "jamais payée" d'une fiche "payeur dont
+     * l'abonnement a expiré").
+     *
+     * Utilisé là où l'avantage DOIT rester strictement réservé à un paiement
+     * réel et actif, jamais à l'essai gratuit (badge "Partenaire", mise en
+     * avant homepage `HomeController::featuredListings`, tri
+     * `orderByDesc('tier')` de ListingController::index()) — ces avantages
+     * disparaissent donc aussi si l'abonnement n'est pas renouvelé, ce qui
+     * est la vraie incitation au renouvellement.
+     */
     public function isPaid(): bool
     {
-        return $this->tier === 'paid';
+        return $this->tier === 'paid' && $this->premium_until && $this->premium_until->isFuture();
+    }
+
+    /**
+     * Fiche payante, mais dont l'abonnement annuel est arrivé à échéance
+     * sans renouvellement — distingue, côté espace client, "jamais payé" de
+     * "payeur à relancer" (voir edit-space.blade.php).
+     */
+    public function isLapsedPaid(): bool
+    {
+        return $this->tier === 'paid' && ! $this->isPaid();
+    }
+
+    /**
+     * Vrai si la fiche profite actuellement des options "payantes" (photo,
+     * description, galerie, site web, réservation), qu'il s'agisse de
+     * l'essai gratuit ou d'un abonnement payant actif — `premium_until` est
+     * la SEULE source de vérité ici depuis la rectification du 25/11/2026
+     * (un paiement n'étant plus définitif, `tier = 'paid'` seul ne suffit
+     * plus à garantir ces options, voir `isPaid()` ci-dessus). Sans jamais
+     * supprimer les données (`$listing->description` etc. restent en base) —
+     * un (re)paiement les fait réapparaître instantanément.
+     */
+    public function hasPremiumFeatures(): bool
+    {
+        return (bool) ($this->premium_until && $this->premium_until->isFuture());
+    }
+
+    /** Essai gratuit en cours (ni expiré, ni déjà payé) — utilisé pour le compte à rebours affiché dans l'espace client. */
+    public function isTrialing(): bool
+    {
+        return $this->tier !== 'paid' && $this->premium_until && $this->premium_until->isFuture();
     }
 
     public function scopePublished(Builder $query): Builder

@@ -20,6 +20,13 @@
                 <input type="text" name="url_verification" id="url_verification" tabindex="-1" autocomplete="off">
             </div>
 
+            {{-- Comparatif gratuit/payant rendu plus explicite (demande
+            client, 24/11/2026, voir TECHNICAL_DOCUMENTATION.md §83) : avant,
+            la formule gratuite ne donnait AUCUN aperçu des options payantes.
+            Désormais les deux formules profitent des mêmes options (photo,
+            description, site web, réservation) — la différence réelle entre
+            les deux apparaît dans l'encart sous le formulaire, une fois une
+            formule sélectionnée. --}}
             <fieldset>
                 <legend class="block text-sm font-medium text-ink-700">Formule *</legend>
                 <div class="mt-2 grid gap-3 sm:grid-cols-2">
@@ -27,14 +34,14 @@
                         <input type="radio" name="tier" value="free" x-model="tier" class="mt-1" @checked(old('tier', 'free') === 'free')>
                         <span>
                             <span class="block text-sm font-medium text-ink-900">Gratuite</span>
-                            <span class="block text-xs text-ink-500">Fiche simplifiée : nom, coordonnées, adresse.</span>
+                            <span class="block text-xs text-ink-500">Fiche complète (photo, description, site web, réservation) offerte pendant 3 mois, puis fiche simplifiée (nom, coordonnées, adresse) sauf passage en formule payante.</span>
                         </span>
                     </label>
                     <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-ink-200 p-4 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50">
                         <input type="radio" name="tier" value="paid" x-model="tier" class="mt-1" @checked(old('tier') === 'paid')>
                         <span>
-                            <span class="block text-sm font-medium text-ink-900">Payante — 100€</span>
-                            <span class="block text-xs text-ink-500">Fiche complète : description, photo, site web, réservation… — soumise à validation comme la fiche gratuite.</span>
+                            <span class="block text-sm font-medium text-ink-900">Payante — 100€ / an</span>
+                            <span class="block text-xs text-ink-500">Fiche complète + référencement boosté tant que l'abonnement est actif : remonte en tête des résultats de recherche de l'annuaire, devant les fiches gratuites.</span>
                         </span>
                     </label>
                 </div>
@@ -98,20 +105,40 @@
                 </div>
             </div>
 
-            {{-- Champs de la fiche "complète" — visibles seulement pour la formule
-            payante (même répartition que ListingResource côté admin), mais
-            toujours envoyés/acceptés même si masqués (voir ListingController::store()). --}}
-            <div x-show="tier === 'paid'" x-cloak class="space-y-5 rounded-lg border border-brand-100 bg-brand-50/40 p-4">
+            {{-- Champs de la fiche "complète" — désormais communs aux deux
+            formules (demande client, 24/11/2026, voir
+            TECHNICAL_DOCUMENTATION.md §83) : la formule gratuite en profite
+            aussi, temporairement (voir l'encart ci-dessous). Toujours
+            envoyés/acceptés quelle que soit la formule (voir
+            ListingController::store()). --}}
+            <div class="space-y-5 rounded-lg border border-brand-100 bg-brand-50/40 p-4">
                 <p class="text-sm font-medium text-ink-700">Contenu de la fiche complète</p>
 
-                <div class="rounded-lg border border-brand-200 bg-white p-4 text-sm text-ink-700">
+                <div x-show="tier === 'free'" x-cloak class="rounded-lg border border-brand-200 bg-white p-4 text-sm text-ink-700">
                     <p>
-                        <strong>Tarif : 100€</strong>, à régler une fois votre fiche validée par notre équipe — c'est ce
-                        qui rend votre établissement visible sur cette page.
+                        <strong>Offert pendant 3 mois</strong>, sans engagement ni carte bancaire : votre fiche profite
+                        tout de suite de la photo, de la description et du site web ci-dessous.
                     </p>
                     <p class="mt-2">
-                        Une fois publiée, nous soumettons votre fiche à Google pour qu'elle apparaisse rapidement dans
-                        ses résultats de recherche — vos clients pourront ainsi vous trouver facilement.
+                        Passé ce délai, ces options disparaissent de votre fiche (elle redevient une fiche simple)
+                        sauf si vous passez à la formule payante avant — vous recevrez un rappel avant l'échéance.
+                    </p>
+                </div>
+
+                <div x-show="tier === 'paid'" x-cloak class="rounded-lg border border-brand-200 bg-white p-4 text-sm text-ink-700">
+                    <p>
+                        <strong>Tarif : 100€ / an</strong> — votre fiche conserve ces options tant que l'abonnement
+                        est actif ; un rappel vous est envoyé par email avant chaque échéance pour renouveler.
+                    </p>
+                    <p class="mt-2">
+                        <strong>Référencement boosté :</strong> votre fiche remonte en tête des résultats de recherche
+                        de l'annuaire, devant les fiches gratuites — et nous la soumettons à Google pour qu'elle
+                        apparaisse rapidement dans ses résultats de recherche.
+                    </p>
+                    <p class="mt-2 text-xs text-ink-500">
+                        Réglable tout de suite par carte bancaire (paiement sécurisé Stripe) dès l'envoi du
+                        formulaire, ou plus tard depuis votre espace de gestion si vous préférez — dans les deux cas,
+                        votre fiche est d'abord vérifiée par notre équipe comme indiqué plus haut.
                     </p>
                 </div>
 

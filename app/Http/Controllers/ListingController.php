@@ -77,7 +77,13 @@ class ListingController extends Controller
             // l'adresse legacy, ~39% de couverture).
             ->when($request->filled('city'), fn ($q) => $q->where('city', $request->string('city')))
             ->with('categories')
-            ->orderByDesc('tier') // payantes d'abord (brief §5)
+            // Payantes d'abord (brief §5), mais seulement tant que
+            // l'abonnement est réellement actif (rectification client,
+            // 25/11/2026 — l'abonnement payant est annuel, pas définitif,
+            // voir Listing::isPaid()/TECHNICAL_DOCUMENTATION.md §83) : une
+            // fiche payante expirée sans renouvellement ne doit plus
+            // remonter devant les fiches gratuites.
+            ->orderByRaw("CASE WHEN tier = 'paid' AND premium_until > ? THEN 0 ELSE 1 END ASC", [now()])
             ->orderBy('title')
             ->paginate(24)
             ->withQueryString();
@@ -234,6 +240,19 @@ class ListingController extends Controller
         // envoyer sans email (voir `$editor` ci-dessus) ni si déjà connecté.
         if ($editor && ! Auth::guard('editor')->check()) {
             $this->notifySubmitterToManageTheirAccount($editor, $listing->title, 'Votre fiche annuaire a bien été reçue');
+        }
+
+        // Paiement immédiat (demande client, 24/11/2026, voir
+        // App\Http\Controllers\ListingPaymentController et
+        // TECHNICAL_DOCUMENTATION.md §83) : "autoriser un choix de paiement
+        // immédiat aussi" — un déposant ayant choisi la formule payante part
+        // directement sur Stripe Checkout plutôt que d'attendre d'être
+        // recontacté. Nécessite un `edit_token` (donc un email renseigné,
+        // voir Listing::booted()) pour pouvoir revenir sur sa fiche ensuite
+        // — sans email, ou tant que STRIPE_PAYMENTS_ENABLED=false, le
+        // parcours reste inchangé (règlement manuel après validation).
+        if ($listing->tier === 'paid' && config('services.stripe.enabled') && $listing->edit_token) {
+            return redirect()->route('annuaire.listings.checkout', $listing->edit_token);
         }
 
         return redirect()

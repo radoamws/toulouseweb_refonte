@@ -34,6 +34,14 @@ return Application::configure(basePath: dirname(__DIR__))
         // (déjà en place sur la route) reste la protection contre l'abus.
         $middleware->validateCsrfTokens(except: [
             'track-click',
+            // Webhook Stripe (demande client, 24/11/2026, voir
+            // App\Http\Controllers\StripeWebhookController et
+            // TECHNICAL_DOCUMENTATION.md §83) — appelé par les serveurs
+            // Stripe, jamais par un navigateur avec session/jeton CSRF.
+            // Authenticité vérifiée autrement : signature HMAC du payload
+            // (en-tête Stripe-Signature) contre STRIPE_WEBHOOK_SECRET, voir
+            // StripePaymentService::verifyWebhookSignature().
+            'stripe/webhook',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

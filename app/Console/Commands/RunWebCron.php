@@ -61,6 +61,9 @@ class RunWebCron extends Command
         $this->call('content:dedupe-agenda-manual-entries');
         $this->call('content:dedupe-duplicate-events');
         $this->call('content:mark-expired');
+        // Rappel essai gratuit annuaire (demande client, 24/11/2026, voir
+        // App\Console\Commands\RemindListingTrialExpiring).
+        $this->call('listings:remind-trial-expiring');
 
         // Hebdomadaire (brief §15) : `Schedule::weekly()` ne peut plus matcher
         // un timing précis sans cron par minute (voir docblock ci-dessus) —

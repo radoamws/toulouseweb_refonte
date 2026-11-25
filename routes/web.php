@@ -9,10 +9,12 @@ use App\Http\Controllers\EditorDashboardController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ListingController;
+use App\Http\Controllers\ListingPaymentController;
 use App\Http\Controllers\LlmsTxtController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\NewsletterSubscriptionController;
 use App\Http\Controllers\RedirectFallbackController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TransportController;
 use App\Http\Controllers\WebCronController;
 use App\Http\Controllers\WebCronTransportController;
@@ -30,6 +32,13 @@ Route::post('/track-click', ClickTrackingController::class)
     ->middleware('throttle:60,1')
     ->name('track-click');
 
+// Webhook Stripe (demande client, 24/11/2026, voir
+// App\Http\Controllers\StripeWebhookController et
+// TECHNICAL_DOCUMENTATION.md §83) — exempté de CSRF (bootstrap/app.php),
+// authenticité vérifiée par signature HMAC, pas de throttle (Stripe retente
+// un webhook qui ne répond pas 2xx, un throttle ferait perdre des évènements).
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
+
 // Annuaire (brief §5). `fiche` avant `{categorySlug}` pour éviter toute
 // ambiguïté (chemins à segments différents, mais plus clair ainsi).
 // Slugs en paramètres simples (pas de route-model-binding) : voir docblock
@@ -45,6 +54,13 @@ Route::post('/annuaire/deposer', [ListingController::class, 'store'])->middlewar
 // pour /annuaire/deposer ci-dessus.
 Route::get('/annuaire/mon-espace/{token}', [ListingController::class, 'editSpace'])->name('annuaire.editSpace');
 Route::put('/annuaire/mon-espace/{token}', [ListingController::class, 'updateEditSpace'])->middleware('throttle:10,1')->name('annuaire.updateEditSpace');
+// Paiement Stripe (demande client, 24/11/2026, voir
+// App\Http\Controllers\ListingPaymentController et
+// TECHNICAL_DOCUMENTATION.md §83) — même piège de placement que
+// /annuaire/mon-espace ci-dessus (wildcard {categorySlug} plus bas).
+Route::post('/annuaire/mon-espace/{token}/paiement', [ListingPaymentController::class, 'checkout'])->middleware('throttle:10,1')->name('annuaire.listings.checkout');
+Route::get('/annuaire/mon-espace/{token}/paiement/succes', [ListingPaymentController::class, 'success'])->name('annuaire.listings.checkout.success');
+Route::get('/annuaire/mon-espace/{token}/paiement/annule', [ListingPaymentController::class, 'cancel'])->name('annuaire.listings.checkout.cancel');
 Route::get('/annuaire/{categorySlug}', [ListingController::class, 'index'])->name('annuaire.category');
 
 // Agenda (brief §6) — une seule route par slug : résout catégorie (dont

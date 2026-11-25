@@ -1,12 +1,17 @@
 @php
     // Schema.org LocalBusiness/Restaurant (brief §13) — uniquement pour les
-    // fiches payantes, qui seules portent une page détaillée indexable (§5).
+    // fiches payantes OU en essai gratuit en cours (demande client,
+    // 24/11/2026, voir Listing::hasPremiumFeatures() et
+    // TECHNICAL_DOCUMENTATION.md §83) : la structured data doit rester
+    // cohérente avec ce qui s'affiche réellement sur la page ci-dessous,
+    // jamais annoncer une photo/description à Google qui ne s'affiche plus.
+    $hasPremium = $listing->hasPremiumFeatures();
     $jsonLd = array_filter([
         '@context' => 'https://schema.org',
         '@type' => $listing->isRestaurant() ? 'Restaurant' : 'LocalBusiness',
         'name' => $listing->title,
-        'image' => $listing->getFirstMediaUrl('logo') ?: null,
-        'description' => $listing->short_description,
+        'image' => $hasPremium ? ($listing->getFirstMediaUrl('logo') ?: null) : null,
+        'description' => $hasPremium ? $listing->short_description : null,
         // `clean_phone`, pas `phone` : voir docblock de Listing::cleanPhone()
         // (bug réel corrigé le 08/09/2026, audit SEO final) — 5,5% des
         // fiches ont un `phone` legacy mélangeant téléphone/email/HTML brut.
@@ -64,16 +69,20 @@
         </div>
 
         <div class="mt-6 aspect-[16/9] w-full overflow-hidden rounded-2xl bg-ink-100 sm:aspect-[21/9]">
-            <x-ui.entity-image :src="$listing->getFirstMediaUrl('logo')" :alt="$listing->title" />
+            {{-- Photo masquée hors essai gratuit/paiement (demande client,
+            24/11/2026) : `x-ui.entity-image` affiche son visuel générique
+            par défaut dès que `src` est vide — comportement volontaire, pas
+            un bug, voir Listing::hasPremiumFeatures(). --}}
+            <x-ui.entity-image :src="$hasPremium ? $listing->getFirstMediaUrl('logo') : null" :alt="$listing->title" />
         </div>
 
         <div class="mt-8 grid gap-8 lg:grid-cols-3">
             <div class="lg:col-span-2">
-                @if ($listing->isPaid() && $listing->description)
+                @if ($hasPremium && $listing->description)
                     <div class="prose prose-ink max-w-none">{!! nl2br(e($listing->description)) !!}</div>
                 @endif
 
-                @if ($listing->getMedia('gallery')->isNotEmpty())
+                @if ($hasPremium && $listing->getMedia('gallery')->isNotEmpty())
                     {{-- Aperçu grand format en overlay avec navigation chevron
                     gauche/droite (demande client) — remplace l'ouverture en
                     nouvel onglet. `photos` : URLs en JSON pour Alpine.js
@@ -173,7 +182,7 @@
                         <h2 class="font-heading text-lg font-semibold text-ink-900">Dans la même catégorie</h2>
                         <div class="mt-4 grid gap-4 sm:grid-cols-2">
                             @foreach ($related as $item)
-                                <x-ui.card :href="'/annuaire/fiche/'.$item->slug" :image="$item->getFirstMediaUrl('logo')" :title="$item->title" :meta="$item->city" :track="'listing:'.$item->id.':annuaire_related'" />
+                                <x-ui.card :href="'/annuaire/fiche/'.$item->slug" :image="$item->hasPremiumFeatures() ? $item->getFirstMediaUrl('logo') : null" :title="$item->title" :meta="$item->city" :track="'listing:'.$item->id.':annuaire_related'" />
                             @endforeach
                         </div>
                     </div>
@@ -210,7 +219,7 @@
                             <dd><a href="tel:{{ $listing->clean_phone }}" class="text-brand-700 hover:underline" data-track="listing:{{ $listing->id }}:phone_click">{{ $listing->clean_phone }}</a></dd>
                         </div>
                     @endif
-                    @if ($listing->isPaid())
+                    @if ($hasPremium)
                         @if ($listing->email)
                             <div>
                                 <dt class="font-medium text-ink-500">Email</dt>

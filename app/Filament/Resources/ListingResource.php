@@ -54,7 +54,20 @@ class ListingResource extends Resource
                             ->options(['free' => 'Gratuite', 'paid' => 'Payante'])
                             ->required()
                             ->default('free')
-                            ->live(),
+                            ->live()
+                            ->helperText('Passer à "Payante" ici équivaut à un paiement reçu hors Stripe (virement, chèque...) — remplit `paid_at` automatiquement, et "Options payantes offertes jusqu\'au" à +1 an si ce champ est laissé vide (l\'abonnement payant est annuel, pas définitif).'),
+                        // Essai gratuit temporaire + paiement Stripe (demande
+                        // client, 24/11/2026, voir Listing::TRIAL_MONTHS et
+                        // TECHNICAL_DOCUMENTATION.md §83).
+                        Forms\Components\DateTimePicker::make('premium_until')
+                            ->label("Options payantes offertes jusqu'au")
+                            ->helperText('Modifiable pour prolonger/raccourcir manuellement un essai (ex. geste commercial).'),
+                        Forms\Components\DateTimePicker::make('paid_at')
+                            ->label('Payée le')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('stripe_checkout_session_id')
+                            ->label('Session Stripe Checkout')
+                            ->disabled(),
                         Forms\Components\Select::make('status')
                             ->label('Statut')
                             ->options([
@@ -85,9 +98,9 @@ class ListingResource extends Resource
                         Forms\Components\TextInput::make('postal_code')->label('Code postal')->maxLength(10),
                     ]),
 
-                Forms\Components\Section::make('Contenu enrichi (fiches payantes)')
+                Forms\Components\Section::make('Contenu enrichi (fiches payantes ou en essai gratuit)')
                     ->columns(2)
-                    ->visible(fn (Get $get) => $get('tier') === 'paid')
+                    ->visible(fn (Get $get) => $get('tier') === 'paid' || filled($get('premium_until')))
                     ->schema([
                         Forms\Components\TextInput::make('short_description')->label('Accroche')->maxLength(255)->columnSpanFull(),
                         Forms\Components\Textarea::make('description')->label('Description')->columnSpanFull(),
@@ -153,6 +166,14 @@ class ListingResource extends Resource
                     ->sortable()
                     ->color(fn (string $state) => $state === 'paid' ? 'success' : 'gray')
                     ->formatStateUsing(fn (string $state) => $state === 'paid' ? 'Payante' : 'Gratuite'),
+                // Essai gratuit (demande client, 24/11/2026, voir
+                // Listing::TRIAL_MONTHS) — masquée par défaut (surtout utile
+                // pour les fiches gratuites, pas pour les payantes).
+                Tables\Columns\TextColumn::make('premium_until')
+                    ->label('Options payantes offertes jusqu\'au')
+                    ->dateTime('d/m/Y')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 // Modifiable directement dans la liste (demande client,
                 // 16/09/2026) — plus besoin d'ouvrir la fiche pour changer
                 // uniquement le statut. Voir aussi ClassifiedResource/

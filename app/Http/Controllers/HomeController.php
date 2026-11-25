@@ -116,7 +116,13 @@ class HomeController extends Controller
             'upcomingEvents' => Event::query()->published()->upcoming()->where('start_date', '>=', now())
                 ->with(['area', 'categories'])
                 ->orderBy('start_date')->limit(4)->get(),
+            // `premium_until > now()` en plus de `tier = 'paid'` (rectification
+            // client, 25/11/2026 — l'abonnement payant est annuel, pas
+            // définitif, voir Listing::isPaid()/TECHNICAL_DOCUMENTATION.md
+            // §83) : une fiche payante dont l'abonnement a expiré sans
+            // renouvellement ne doit plus être mise en avant ici.
             'featuredListings' => Listing::query()->where('status', 'published')->where('tier', 'paid')
+                ->where('premium_until', '>', now())
                 ->with('categories')->latest()->limit(6)->get(),
             // ⚠️ Bug réel trouvé et corrigé (11/09/2026, audit UI/UX) :
             // `whereHas('screenings')` sans filtre acceptait n'importe quel

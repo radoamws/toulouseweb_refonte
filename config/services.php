@@ -150,4 +150,28 @@ return [
         'api_key' => env('BREVO_API_KEY'),
     ],
 
+    /*
+     * Paiement Stripe pour les fiches annuaire payantes (demande client,
+     * 24/11/2026, voir App\Services\Payments\StripePaymentService et
+     * TECHNICAL_DOCUMENTATION.md §83).
+     *
+     * ⚠️ `enabled` = false par défaut, ET DOIT LE RESTER tant que le client
+     * n'a pas créé son compte Stripe et renseigné ses vraies clés (voir le
+     * pas-à-pas dans TECHNICAL_DOCUMENTATION.md §83) — demande explicite du
+     * client le 24/11/2026 : "met juste une option STRIPE=false pour ne pas
+     * bloquer le paiement, le temps que le client crèera son compte. On
+     * mettra juste à true quand le compte sera prêt." Tant que ce flag est à
+     * false, le bouton de paiement affiche un message "paiement en ligne
+     * bientôt disponible" à la place (voir ListingPaymentController) — la
+     * fiche reste normalement soumise/validée comme avant, rien n'est
+     * bloqué. Ne PAS passer à true sans confirmation explicite du client.
+     */
+    'stripe' => [
+        'enabled' => (bool) env('STRIPE_PAYMENTS_ENABLED', false),
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'listing_price_cents' => (int) env('STRIPE_LISTING_PRICE_CENTS', 10000),
+    ],
+
 ];
