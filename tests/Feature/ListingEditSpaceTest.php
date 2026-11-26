@@ -121,4 +121,53 @@ class ListingEditSpaceTest extends TestCase
         $this->assertSame('Le Bistrot (fermé le dimanche)', $listing->fresh()->title);
         $this->assertNull($listing->fresh()->pending_changes);
     }
+
+    /**
+     * Retour client, 26/11/2026 (Innotech Diagnostics) : un déposant a
+     * égaré ses identifiants. Compte éditeur déjà inscrit (mot de passe
+     * choisi) -> un lien de RÉINITIALISATION du mot de passe est envoyé
+     * (Password::broker('editors'), voir Editor::sendPasswordResetNotification()).
+     */
+    public function test_admin_can_resend_a_login_link_to_a_listing_with_a_registered_editor(): void
+    {
+        Mail::fake();
+        $this->actingAs($this->authenticatedAdmin());
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);
+        $editor = Editor::create(['name' => 'Jérôme Casale', 'email' => 'contact@innotechetudes.fr', 'password' => bcrypt('un-mot-de-passe')]);
+        $listing = Listing::create([
+            'title' => 'Innotech Diagnostics', 'slug' => 'innotech-diagnostics', 'tier' => 'free', 'status' => 'published',
+            'submitter_email' => 'contact@innotechetudes.fr', 'editor_id' => $editor->id,
+        ]);
+        $listing->categories()->attach($category->id);
+
+        Livewire::test(ListListings::class)
+            ->callTableAction('resendLoginLink', $listing);
+
+        Mail::assertSent(SubmitterNotification::class, fn (SubmitterNotification $mail) => $mail->hasTo('contact@innotechetudes.fr')
+            && str_contains($mail->actionUrl, 'reinitialiser-mot-de-passe'));
+    }
+
+    /** Compte éditeur jamais inscrit (ou fiche jamais rattachée) -> lien d'INSCRIPTION, même mécanique que SendEditorInvitations. */
+    public function test_admin_can_resend_a_login_link_to_a_listing_without_a_linked_editor_yet(): void
+    {
+        Mail::fake();
+        $this->actingAs($this->authenticatedAdmin());
+        $category = Category::create(['name' => 'Restaurants', 'slug' => 'restaurants', 'level' => 0, 'is_active' => true]);
+        $listing = Listing::create([
+            'title' => 'Innotech Diagnostics', 'slug' => 'innotech-diagnostics', 'tier' => 'free', 'status' => 'published',
+            'submitter_email' => 'contact@innotechetudes.fr',
+        ]);
+        $listing->categories()->attach($category->id);
+        $this->assertNull($listing->editor_id);
+
+        Livewire::test(ListListings::class)
+            ->callTableAction('resendLoginLink', $listing);
+
+        $editor = Editor::where('email', 'contact@innotechetudes.fr')->firstOrFail();
+        $this->assertSame($editor->id, $listing->fresh()->editor_id);
+        $this->assertFalse($editor->hasRegistered());
+
+        Mail::assertSent(SubmitterNotification::class, fn (SubmitterNotification $mail) => $mail->hasTo('contact@innotechetudes.fr')
+            && str_contains($mail->actionUrl, route('editeur.inscription', $editor->invitation_token)));
+    }
 }
