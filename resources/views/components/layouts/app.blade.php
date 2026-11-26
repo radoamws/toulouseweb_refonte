@@ -7,6 +7,7 @@
     $seo = array_merge([
         'title' => $siteSettings->site_name.($siteSettings->tagline ? ' — '.$siteSettings->tagline : ' — Toulouse et sa région'),
         'description' => $siteSettings->description ?: "Actualités, agenda, cinéma, annuaire, annonces et sorties à Toulouse et dans sa région.",
+        'keywords' => 'Toulouse, '.$siteSettings->site_name.', actualités, agenda, cinéma, annuaire, annonces, sorties',
         'canonical_url' => url()->current(),
         'robots' => 'index,follow',
         // ⚠️ Bug réel trouvé et corrigé (08/09/2026, audit SEO final,
@@ -69,6 +70,9 @@
 
     <title>{{ $seo['title'] }}</title>
     <meta name="description" content="{{ $seo['description'] }}">
+    @if (! empty($seo['keywords']))
+        <meta name="keywords" content="{{ $seo['keywords'] }}">
+    @endif
     <meta name="robots" content="{{ $seo['robots'] }}">
     <link rel="canonical" href="{{ $seo['canonical_url'] }}">
 

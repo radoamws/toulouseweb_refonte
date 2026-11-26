@@ -115,6 +115,7 @@ class NewsController extends Controller
                 : (Page::where('key', 'seo-menu-actualites')->first()?->resolveSeo() ?? [
                     'title' => 'Actualités de Toulouse et sa région | ToulouseWeb',
                     'description' => "Toute l'actualité locale de Toulouse et sa région : événements, vie associative, culture, bons plans et informations pratiques.",
+                    'keywords' => 'actualités Toulouse, actu Toulouse, actualité locale, vie associative, culture, bons plans, ToulouseWeb',
                 ]),
         ]);
     }

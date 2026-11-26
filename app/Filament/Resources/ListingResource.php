@@ -137,6 +137,8 @@ class ListingResource extends Resource
                         Forms\Components\TextInput::make('title')->label('Titre SEO personnalisé')->maxLength(60)
                             ->helperText('Laisser vide pour une génération automatique (voir App\\Services\\Seo\\SeoResolverService).'),
                         Forms\Components\Textarea::make('description')->label('Meta description personnalisée')->maxLength(160),
+                        Forms\Components\TextInput::make('keywords')->label('Mots-clés (meta keywords) personnalisés')->maxLength(500)
+                            ->helperText('Séparés par des virgules. Laisser vide pour une génération automatique.'),
                     ]),
 
                 // Espace client (demande client, 16/11/2026) : lecture seule

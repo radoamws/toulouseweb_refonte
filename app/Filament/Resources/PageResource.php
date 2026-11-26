@@ -54,6 +54,8 @@ class PageResource extends Resource
                     ->schema([
                         Forms\Components\TextInput::make('title')->label('Titre SEO personnalisé')->maxLength(60),
                         Forms\Components\Textarea::make('description')->label('Meta description personnalisée')->maxLength(160),
+                        Forms\Components\TextInput::make('keywords')->label('Mots-clés (meta keywords) personnalisés')->maxLength(500)
+                            ->helperText('Séparés par des virgules. Laisser vide pour une génération automatique.'),
                     ]),
             ]);
     }

@@ -44,6 +44,7 @@ class SeoResolverService
         return [
             'title' => $this->limitIfNeeded($title, 70),
             'description' => $this->limitIfNeeded($description ?? '', 165),
+            'keywords' => $seo?->keywords ?: $this->generateKeywords($model),
             'canonical_url' => $seo?->canonical_url ?: $this->generateCanonical($model),
             'robots' => $seo?->robots ?: 'index,follow',
             'og_image' => $seo?->og_image ?: $this->generateImage($model),
@@ -97,6 +98,28 @@ class SeoResolverService
         }
 
         return trim(strip_tags($text));
+    }
+
+    /**
+     * Meta keywords (demande client, 26/11/2026) — sans effet sur le
+     * classement Google, mais demandé explicitement. Combine le nom de
+     * l'entité, sa catégorie/son lieu si disponibles, "Toulouse" et le nom
+     * du site, pour rester cohérent avec `generateTitle()`/`generateDescription()`.
+     */
+    protected function generateKeywords(Model $model): ?string
+    {
+        $siteName = SiteSetting::current()->site_name;
+        $name = $this->firstAttribute($model, ['title', 'name']);
+
+        $category = method_exists($model, 'categories')
+            ? $model->categories->first()?->name
+            : (method_exists($model, 'category') ? $model->category?->name : null);
+
+        $area = method_exists($model, 'area') ? $model->area?->name : null;
+
+        $parts = array_unique(array_filter([$name, $category, $area, 'Toulouse', $siteName]));
+
+        return $parts ? implode(', ', $parts) : null;
     }
 
     protected function generateCanonical(Model $model): ?string

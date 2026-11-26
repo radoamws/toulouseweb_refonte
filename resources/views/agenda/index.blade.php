@@ -29,12 +29,24 @@
 
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">
-                {{ $category?->name ?? 'Agenda de Toulouse' }}
+                {{ $category ? $category->name.' à Toulouse' : 'Agenda de Toulouse' }}
             </h1>
             <a href="/agenda/proposer" class="inline-block w-fit shrink-0 rounded-full border border-dashed border-brand-300 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50">
                 + Proposer un événement
             </a>
         </div>
+
+        {{-- Intro courte (demande client, 26/11/2026 — renforcer le contexte
+        "Toulouse" sur les pages agenda/catégories) : une phrase naturelle,
+        pas du bourrage de mots-clés (voir le même arbitrage sur
+        annuaire/index.blade.php). --}}
+        <p class="mt-3 max-w-3xl text-ink-600">
+            @if ($category)
+                Retrouvez tous les événements {{ mb_strtolower($category->name) }} à venir à Toulouse et dans son agglomération : dates, lieux et horaires pour ne rien manquer de vos prochaines sorties.
+            @else
+                Tout l'agenda des sorties à Toulouse et dans son agglomération : concerts, spectacles, expositions, événements culturels et sportifs à venir, jour par jour.
+            @endif
+        </p>
 
         {{-- Catégories — chaque rubrique a sa propre couleur (demande client,
         18/09/2026), reprise sur les fiches ci-dessous pour les distinguer

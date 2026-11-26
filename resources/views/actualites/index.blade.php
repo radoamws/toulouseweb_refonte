@@ -27,7 +27,7 @@
 
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">
-                {{ $category?->name ?? 'Actualités de Toulouse' }}
+                {{ $category ? $category->name.' à Toulouse' : 'Actualités de Toulouse' }}
             </h1>
             <div class="flex flex-wrap gap-2">
                 <form method="GET" class="flex gap-2">
@@ -47,6 +47,16 @@
                 <x-ui.button href="/actualites/proposer" variant="primary" size="sm">Proposer une actualité</x-ui.button>
             </div>
         </div>
+
+        {{-- Intro courte (demande client, 26/11/2026 — renforcer le contexte
+        "Toulouse" sur les pages actualités/catégories). --}}
+        <p class="mt-3 max-w-3xl text-ink-600">
+            @if ($category)
+                Toute l'actualité {{ mb_strtolower($category->name) }} à Toulouse et dans son agglomération, au fil de l'eau.
+            @else
+                Toute l'actualité locale de Toulouse et sa région : événements, vie associative, culture, bons plans et informations pratiques.
+            @endif
+        </p>
 
         @if ($categories->isNotEmpty())
             <div class="mt-6 flex flex-wrap gap-2">

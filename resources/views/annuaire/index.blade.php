@@ -70,7 +70,7 @@
             <div class="flex-1">
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <h1 class="font-heading text-2xl font-bold text-ink-900 sm:text-3xl">
-                        {{ $category?->name ?? 'Annuaire de Toulouse' }}
+                        {{ $category ? $category->name.' à Toulouse' : 'Annuaire de Toulouse' }}
                     </h1>
                     <form method="GET" class="flex flex-wrap gap-2">
                         <input
@@ -93,6 +93,19 @@
                         @endif
                     </form>
                 </div>
+
+                {{-- Intro courte (demande client, 26/11/2026 — renforcer le
+                contexte "Toulouse" sur les pages annuaire/catégories) : une
+                phrase naturelle écrite ici, à ne PAS confondre avec
+                `$category->description` ci-dessous (texte de bourrage de
+                mots-clés hérité du legacy, volontairement jamais affiché). --}}
+                <p class="mt-3 max-w-3xl text-ink-600">
+                    @if ($category)
+                        Toutes les adresses {{ mb_strtolower($category->name) }} à Toulouse et dans son agglomération : coordonnées, horaires et avis pour trouver facilement votre prochain établissement.
+                    @else
+                        L'annuaire des commerces, restaurants, services et loisirs de Toulouse et son agglomération : trouvez facilement l'adresse qu'il vous faut, quartier par quartier.
+                    @endif
+                </p>
 
                 {{-- `$category->description` (demande client, 22/09/2026 :
                 "cacher les descriptions longues entre le titre de la
