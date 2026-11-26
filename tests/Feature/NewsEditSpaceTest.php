@@ -105,4 +105,30 @@ class NewsEditSpaceTest extends TestCase
         $this->assertSame('Brocante du quartier (annulée)', $news->fresh()->title);
         $this->assertNull($news->fresh()->pending_changes);
     }
+
+    /**
+     * Retour client, 26/11/2026 (Innotech Diagnostics, même mécanique sur
+     * l'annuaire — voir ListingEditSpaceTest) — voir
+     * App\Filament\Concerns\ResendsLoginLink.
+     */
+    public function test_admin_can_resend_a_login_link_from_the_list_action(): void
+    {
+        Mail::fake();
+        $this->actingAs($this->authenticatedAdmin());
+        $category = NewsCategory::create(['name' => 'Vie locale', 'slug' => 'vie-locale']);
+        $news = News::create([
+            'category_id' => $category->id, 'title' => 'Brocante du quartier', 'slug' => 'brocante-du-quartier',
+            'body' => 'Une belle brocante.', 'submitter_email' => 'proposant@example.test', 'status' => 'published',
+        ]);
+        $this->assertNull($news->editor_id);
+
+        Livewire::test(ListNews::class)
+            ->filterTable('status', null)
+            ->callTableAction('resendLoginLink', $news);
+
+        $editor = Editor::where('email', 'proposant@example.test')->firstOrFail();
+        $this->assertSame($editor->id, $news->fresh()->editor_id);
+        Mail::assertSent(SubmitterNotification::class, fn (SubmitterNotification $mail) => $mail->hasTo('proposant@example.test')
+            && str_contains($mail->actionUrl, route('editeur.inscription', $editor->invitation_token)));
+    }
 }

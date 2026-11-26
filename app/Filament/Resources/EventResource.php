@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\ResendsLoginLink;
 use App\Filament\Resources\EventResource\Pages;
 use App\Filament\Resources\EventResource\RelationManagers;
 use App\Models\Event;
@@ -16,6 +17,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class EventResource extends Resource
 {
+    use ResendsLoginLink;
+
     protected static ?string $model = Event::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
@@ -237,6 +240,9 @@ class EventResource extends Resource
                         $record->applyPendingChanges();
                         Notification::make()->title('Modification appliquée')->success()->send();
                     }),
+                // Retour client, 26/11/2026 (Innotech Diagnostics) — voir
+                // App\Filament\Concerns\ResendsLoginLink.
+                static::resendLoginLinkAction(),
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([

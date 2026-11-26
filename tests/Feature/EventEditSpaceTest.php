@@ -101,4 +101,30 @@ class EventEditSpaceTest extends TestCase
         $this->assertSame('Concert de jazz (complet)', $event->fresh()->title);
         $this->assertNull($event->fresh()->pending_changes);
     }
+
+    /**
+     * Retour client, 26/11/2026 (Innotech Diagnostics, même mécanique sur
+     * l'annuaire — voir ListingEditSpaceTest) — voir
+     * App\Filament\Concerns\ResendsLoginLink.
+     */
+    public function test_admin_can_resend_a_login_link_from_the_list_action(): void
+    {
+        Mail::fake();
+        $this->actingAs($this->authenticatedAdmin());
+        $area = Area::create(['name' => 'Salle des fêtes']);
+        $event = Event::create([
+            'area_id' => $area->id, 'title' => 'Concert de jazz', 'slug' => 'concert-de-jazz',
+            'start_date' => now()->addWeek(), 'submitter_email' => 'proposant@example.test', 'status' => 'published',
+        ]);
+        $this->assertNull($event->editor_id);
+
+        Livewire::test(ListEvents::class)
+            ->filterTable('status', null)
+            ->callTableAction('resendLoginLink', $event);
+
+        $editor = Editor::where('email', 'proposant@example.test')->firstOrFail();
+        $this->assertSame($editor->id, $event->fresh()->editor_id);
+        Mail::assertSent(SubmitterNotification::class, fn (SubmitterNotification $mail) => $mail->hasTo('proposant@example.test')
+            && str_contains($mail->actionUrl, route('editeur.inscription', $editor->invitation_token)));
+    }
 }

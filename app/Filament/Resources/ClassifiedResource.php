@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\ResendsLoginLink;
 use App\Filament\Resources\ClassifiedResource\Pages;
 use App\Models\Classified;
 use Filament\Forms;
@@ -22,6 +23,8 @@ use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
  */
 class ClassifiedResource extends Resource
 {
+    use ResendsLoginLink;
+
     protected static ?string $model = Classified::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';
@@ -185,6 +188,9 @@ class ClassifiedResource extends Resource
                         ]);
                         Notification::make()->title('Annonce refusée')->warning()->send();
                     }),
+                // Retour client, 26/11/2026 (Innotech Diagnostics) — voir
+                // App\Filament\Concerns\ResendsLoginLink.
+                static::resendLoginLinkAction(),
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([

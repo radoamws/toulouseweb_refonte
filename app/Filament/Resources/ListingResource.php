@@ -2,10 +2,9 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\ResendsLoginLink;
 use App\Filament\Resources\ListingResource\Pages;
-use App\Models\Editor;
 use App\Models\Listing;
-use App\Support\SubmitterNotifier;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -16,7 +15,6 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 
@@ -27,6 +25,8 @@ use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
  */
 class ListingResource extends Resource
 {
+    use ResendsLoginLink;
+
     protected static ?string $model = Listing::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
@@ -243,51 +243,10 @@ class ListingResource extends Resource
                         $record->applyPendingChanges();
                         Notification::make()->title('Modification appliquée')->success()->send();
                     }),
-                // Retour client, 26/11/2026 (Innotech Diagnostics) : un
-                // déposant a égaré ses identifiants et demande par mail un
-                // lien pour se reconnecter. Réutilise le compte "éditeur"
-                // (App\Models\Editor) déjà rattaché à la fiche — ou en
-                // crée/rattache un via l'email du déposant si la fiche n'a
-                // jamais été migrée (voir
-                // App\Console\Commands\Migration\MigrateHistoricalSubmittersToEditors).
-                // Compte déjà inscrit (mot de passe choisi) -> lien de
-                // réinitialisation du mot de passe (même mécanique que
-                // EditorAuthController::sendResetLink()) ; compte jamais
-                // inscrit -> lien d'inscription (même mécanique que
-                // App\Console\Commands\Migration\SendEditorInvitations).
-                Tables\Actions\Action::make('resendLoginLink')
-                    ->label('Renvoyer un lien de connexion')
-                    ->icon('heroicon-o-key')
-                    ->color('gray')
-                    ->visible(fn (Listing $record) => filled($record->submitter_email))
-                    ->requiresConfirmation()
-                    ->modalHeading('Renvoyer un lien de connexion')
-                    ->modalDescription(fn (Listing $record) => "Envoyer un email permettant de se reconnecter à {$record->submitter_email} ?")
-                    ->action(function (Listing $record) {
-                        $editor = $record->editor ?? Editor::findOrInviteByEmail($record->submitter_email);
-
-                        if (! $record->editor_id) {
-                            $record->update(['editor_id' => $editor->id]);
-                        }
-
-                        if ($editor->hasRegistered()) {
-                            Password::broker('editors')->sendResetLink(['email' => $editor->email]);
-                        } else {
-                            if (! $editor->invitation_token) {
-                                $editor->update(['invitation_token' => Str::random(48)]);
-                            }
-
-                            SubmitterNotifier::send(
-                                $editor->email,
-                                'Gérez vos publications ToulouseWeb en ligne',
-                                [],
-                                route('editeur.inscription', $editor->invitation_token),
-                                'Créer mon espace',
-                            );
-                        }
-
-                        Notification::make()->title("Lien envoyé à {$editor->email}")->success()->send();
-                    }),
+                // Retour client, 26/11/2026 (Innotech Diagnostics) — voir
+                // App\Filament\Concerns\ResendsLoginLink, partagé par les 4
+                // ressources de dépôt public (Classified/Event/Listing/News).
+                static::resendLoginLinkAction(),
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([

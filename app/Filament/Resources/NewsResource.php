@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\ResendsLoginLink;
 use App\Filament\Resources\NewsResource\Pages;
 use App\Filament\Resources\NewsResource\RelationManagers;
 use App\Models\News;
@@ -16,6 +17,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class NewsResource extends Resource
 {
+    use ResendsLoginLink;
+
     protected static ?string $model = News::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-newspaper';
@@ -240,6 +243,9 @@ class NewsResource extends Resource
                     ->color('success')
                     ->visible(fn (News $record) => $record->status === 'pending')
                     ->action(fn (News $record) => $record->update(['status' => 'published', 'published_at' => now()])),
+                // Retour client, 26/11/2026 (Innotech Diagnostics) — voir
+                // App\Filament\Concerns\ResendsLoginLink.
+                static::resendLoginLinkAction(),
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([
