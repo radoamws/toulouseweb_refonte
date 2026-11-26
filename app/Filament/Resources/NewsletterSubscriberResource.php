@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\NewsletterSubscriberResource\Pages;
+use App\Models\Editor;
 use App\Models\NewsletterSubscriber;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -97,6 +98,17 @@ class NewsletterSubscriberResource extends Resource
                             ? $record->unsubscribe()
                             : $record->update(['status' => 'active', 'unsubscribed_at' => null]);
                         Notification::make()->title('Statut mis à jour')->success()->send();
+                    }),
+                Tables\Actions\Action::make('resendLoginLink')
+                    ->label('Renvoyer un lien de connexion')
+                    ->icon('heroicon-o-key')
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->modalHeading('Renvoyer un lien de connexion')
+                    ->modalDescription(fn (NewsletterSubscriber $record) => "Envoyer un email permettant de se reconnecter à {$record->email} ?")
+                    ->action(function (NewsletterSubscriber $record) {
+                        $editor = Editor::resendLoginLink($record->email);
+                        Notification::make()->title("Lien envoyé à {$editor->email}")->success()->send();
                     }),
                 Tables\Actions\EditAction::make(),
             ])

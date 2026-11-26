@@ -8,6 +8,7 @@ use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 
 /**
@@ -61,6 +62,35 @@ class Editor extends Authenticatable implements CanResetPasswordContract
             ['email' => mb_strtolower(trim($email))],
             ['invitation_token' => Str::random(48)],
         );
+    }
+
+    /**
+     * Renvoie un lien de connexion à un email de déposant (retour client,
+     * 26/11/2026, voir App\Filament\Concerns\ResendsLoginLink) : compte déjà
+     * inscrit -> lien de réinitialisation du mot de passe ; compte jamais
+     * inscrit (ou jamais créé) -> lien d'inscription.
+     */
+    public static function resendLoginLink(string $email): self
+    {
+        $editor = static::findOrInviteByEmail($email);
+
+        if ($editor->hasRegistered()) {
+            Password::broker('editors')->sendResetLink(['email' => $editor->email]);
+        } else {
+            if (! $editor->invitation_token) {
+                $editor->update(['invitation_token' => Str::random(48)]);
+            }
+
+            SubmitterNotifier::send(
+                $editor->email,
+                'Gérez vos publications ToulouseWeb en ligne',
+                [],
+                route('editeur.inscription', $editor->invitation_token),
+                'Créer mon espace',
+            );
+        }
+
+        return $editor;
     }
 
     /**

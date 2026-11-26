@@ -2,22 +2,28 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\NewsletterSubscriberResource\Pages\ListNewsletterSubscribers;
 use App\Mail\NewsletterMail;
+use App\Mail\SubmitterNotification;
 use App\Models\Category;
 use App\Models\Classified;
 use App\Models\ClassifiedCategory;
+use App\Models\Editor;
 use App\Models\Event;
 use App\Models\Listing;
 use App\Models\News;
 use App\Models\NewsCategory;
 use App\Models\Newsletter;
 use App\Models\NewsletterSubscriber;
+use App\Models\User;
 use App\Services\Newsletter\EntityDigestSender;
 use App\Services\Newsletter\NewsletterSender;
 use App\Services\Newsletter\ScrapingDigestBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
+use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -477,5 +483,31 @@ class NewsletterTest extends TestCase
         $this->assertSame('sent', $newsletter->status);
         $this->assertSame(2, $newsletter->recipient_count);
         $this->assertNotNull($newsletter->sent_at);
+    }
+
+    /**
+     * Retour client, 26/11/2026 : le bouton "Renvoyer un lien de connexion"
+     * (voir ClassifiedEditSpaceTest et App\Filament\Concerns\ResendsLoginLink)
+     * doit aussi être disponible depuis /admin/newsletter-subscribers — un
+     * abonné newsletter n'a pas forcément de fiche (annonce/événement/
+     * annuaire/actu) associée, donc pas d'action partagée possible ici, mais
+     * le même mécanisme (Editor::resendLoginLink()) s'applique par email.
+     */
+    public function test_admin_can_resend_a_login_link_from_the_newsletter_subscribers_list(): void
+    {
+        Mail::fake();
+        Role::findOrCreate('super_admin');
+        $admin = User::factory()->create();
+        $admin->assignRole('super_admin');
+        $this->actingAs($admin);
+
+        $subscriber = NewsletterSubscriber::create(['email' => 'abonne-nl@example.com', 'status' => 'active']);
+
+        Livewire::test(ListNewsletterSubscribers::class)
+            ->callTableAction('resendLoginLink', $subscriber);
+
+        $editor = Editor::where('email', 'abonne-nl@example.com')->firstOrFail();
+        Mail::assertSent(SubmitterNotification::class, fn (SubmitterNotification $mail) => $mail->hasTo('abonne-nl@example.com')
+            && str_contains($mail->actionUrl, route('editeur.inscription', $editor->invitation_token)));
     }
 }
